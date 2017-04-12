@@ -27,15 +27,21 @@ class BCYCore(object):
     def loginWithEmailAndPassWord(self,email,password):
         data=self.POST("user/login",{"user":email,"pass":password},timeout=self.Timeout).content
         data=json.loads(data)["data"]
-        if isinstance(data, basestring):
-            raise Exception('BCYCore LoginFailed:'+data)
-        self.UID=data["uid"]
-        self.Token = data["token"]
+        try:
+            self.UID=data["uid"]
+            self.Token = data["token"]
+        except:
+            print ("BCYLogin Error:"+str(data))
+            raise
     def EncryptData(self,Data):
         Data=self.pkcs7.encode(Data)
         return self.Crypto.encrypt(Data)
     def EncryptParam(self,Params):
-        ParamData=json.dumps(Params,separators=(',', ':'))
+        ParamData=None
+        try:
+            ParamData=json.dumps(Params,separators=(',', ':'),ensure_ascii=False, encoding='utf8')
+        except TypeError:
+            ParamData=json.dumps(Params,separators=(',', ':'),ensure_ascii=False)
         return {"data":base64.b64encode(self.EncryptData(ParamData))}
     def GET(self,URL,Params,**kwargs):
         try:
@@ -91,11 +97,15 @@ class BCYCore(object):
             return Content
 
     def imageDownload(self,ImageInfo,Callback=None):
+        ImageData=None
         URL=ImageInfo["url"]
         if URL.startswith("http")==False:
             return None
         OriginalImageURL=os.path.split(URL)[0]
-        ImageData=self.downloadWorker(OriginalImageURL,Callback=Callback)
+        try:
+            ImageData=self.downloadWorker(OriginalImageURL,Callback=Callback)
+        except:
+            pass
         if ImageData==None:#API Endpoint Bug Sometimes Results In Non-Existing URL In Detail Response
             return None
         try:
@@ -179,12 +189,12 @@ class BCYCore(object):
             return None
         return data["data"]
 
-    def illustDetail(self,InfoParams):
-        return self.detailWorker("illust/detail",InfoParams)
-    def cosDetail(self,InfoParams):
-        return self.detailWorker("coser/detail",InfoParams)
-    def dailyDetail(self,InfoParams):
-        return self.detailWorker("daily/detail",InfoParams)
+    def illustDetail(self,dp_id,rp_id):
+        return self.detailWorker("illust/detail",{"dp_id":str(dp_id),"rp_id":str(rp_id)})
+    def cosDetail(self,cp_id,rp_id):
+        return self.detailWorker("coser/detail",{"rp_id":str(rp_id),"cp_id":str(cp_id)})
+    def dailyDetail(self,ud_id):
+        return self.detailWorker("daily/detail",{"ud_id":str(ud_id)})
     def groupPostDetail(self,GroupID,PostID):
         return self.detailWorker("group/postDetail",{"gid":GroupID,"post_id":PostID})
     def circleList(self,CircleID,Filter,**kwargs):
@@ -220,38 +230,24 @@ class BCYCore(object):
             return data
         except:
             return None
+    def userRecommends(self,UID,Filter,**kwargs):
+        #{"filter":"tuijian","uid":"169851","source":"all","since":"814926","token":"XXXXX"}
+        Param={"uid":UID,"filter":"tuijian","source":Filter}
+        return self.ListIterator("timeline/userGrid",Param,SinceRetrieveKeyName="tl_id",**kwargs)
     def queryDetail(self,Info):
         try:
             Info=Info["detail"]
         except:
             pass
         if "ud_id" in Info.keys():
-            return self.dailyDetail(Info)
+            return self.dailyDetail(Info["ud_id"])
         elif "cp_id" in Info.keys():
-            return self.cosDetail(Info)
+            return self.cosDetail(Info["cp_id"],Info["rp_id"])
         elif "dp_id" in Info.keys():
-            return self.illustDetail(Info)
+            return self.illustDetail(Info["dp_id"],Info["rp_id"])
         elif "post_id" in Info.keys() and "gid" in Info.keys():
             return self.groupPostDetail(Info["gid"],Info["post_id"])
         else:
             with tempfile.NamedTemporaryFile(delete=False, suffix="PyBCYDetail-") as outfile:
                 json.dump(Info, outfile)
                 raise Exception('QueryDetail is called with unsupported Info. Written To:', outfile.name)
-    def ParseWebURL(self,URL):
-        Regex=r'(?P<Type>illust|coser|daily)\/detail\/(?P<Component>[0-9\/]*)'
-        R=re.compile(Regex)
-        m=R.search(URL)
-        if m==None:
-            return None
-        if m.group("Type")=="daily":
-            return {"ud_id":m.group("Component")}
-        elif m.group("Type")=="coser":
-            cpid=m.group("Component").split("/")[0]
-            rpid=m.group("Component").split("/")[1]
-            return {"cp_id":cpid,"rp_id":rpid}
-        elif m.group("Type")=="illust":
-            dpid=m.group("Component").split("/")[0]
-            rpid=m.group("Component").split("/")[1]
-            return {"dp_id":dpid,"rp_id":rpid}
-        else:
-            return None

@@ -1,1 +1,3 @@
-__all__ =["BCYDownloadUtils","BCYCore","BCYDownloadFilter"]
+from BCYCore import BCYCore
+from BCYDownloadUtils import BCYDownloadUtils
+from BCYDownloadFilter import *
