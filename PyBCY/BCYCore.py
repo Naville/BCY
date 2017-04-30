@@ -9,6 +9,15 @@ try:
 except:
     pass
 class BCYCore(object):
+    '''
+    Unless otherwise specified, these filters can be used in all methods that takes a filters:
+         - coser
+         - all
+         - drawer
+         - writer
+         - daily
+         - zhipin
+    '''
     APIBase="http://api.bcy.net/api/"
     Header={"User-Agent":"bcy/2.7.0 (iPad; iOS 10.1.1; Scale/2.00)","X-BCY-Version":"iOS-2.7.0"}
     NeedFollowServerResponse="阿拉，请先关注一下嘛"
@@ -31,8 +40,7 @@ class BCYCore(object):
             self.UID=data["uid"]
             self.Token = data["token"]
         except:
-            print ("BCYLogin Error:"+str(data))
-            raise
+            raise ValueError("BCYLogin Error:"+str(data))
     def EncryptData(self,Data):
         Data=self.pkcs7.encode(Data)
         return self.Crypto.encrypt(Data)
@@ -72,6 +80,9 @@ class BCYCore(object):
             json.loads(self.POST("coser/listallcore",{"face":"b"},timeout=self.Timeout).content)
         except:
             return None
+    def getReply(self,Filter,Params,**kwargs):
+        URL=Filter+"/getReply"
+        return self.ListIterator(URL,Params,**kwargs)
     def downloadWorker(self,URL,Callback=None):
         Content=None
         req=self.GET(URL,{},timeout=self.Timeout,stream=True)
@@ -123,7 +134,20 @@ class BCYCore(object):
         except:
             return None
         return None
-    def ListIterator(self,URL,Params,SinceRetrieveKeyName="ctime",SinceSetKeyName="since",Callback=None,since=int(time.time()),to=0):
+    def ListIterator(self,URL,Params,SinceRetrieveKeyName="ctime",SinceSetKeyName="since",Callback=None,since=int(time.time()),to=0,BodyBlock=None):
+        '''
+        URL and Params are the regular stuff for POST()
+        SinceRetrieveKeyName AND SinceSetKeyName are for getting/setting timestamps.
+        Callback is called each time a new item appears from the API response
+        BodyBlock is for performing custom iterating context, as some of the APIs store
+        content in ["data"], others not.
+        BodyBlock is called with(FetchedItemList,"data" value of current json response,CallbackFunction)
+            Return True in BodyBlock To Stop Iterating. Refer to search() for usage example
+
+        This over-complicate method only exists because the FUCKING STUPID BCY API Design
+
+        '''
+
         p=1
         items=list()
         while True:
@@ -136,16 +160,20 @@ class BCYCore(object):
             try:
                 data=self.POST(URL,pa,timeout=self.Timeout).content
                 inf=json.loads(data)["data"]
-                if len(inf)==0:
-                    return items
-                for item in inf:
-                    if int(item[SinceRetrieveKeyName])<to:
+                if BodyBlock==None:
+                    if len(inf)==0:
                         return items
-                    if int(item[SinceRetrieveKeyName])<since:
-                        since=int(item[SinceRetrieveKeyName])
-                    if Callback!=None:
-                        Callback(item)
-                items.extend(inf)
+                    for item in inf:
+                        if int(item[SinceRetrieveKeyName])<to:
+                            return items
+                        if int(item[SinceRetrieveKeyName])<since:
+                            since=int(item[SinceRetrieveKeyName])
+                        if Callback!=None:
+                            Callback(item)
+                    items.extend(inf)
+                else:
+                    if BodyBlock(items,inf,Callback)==True:
+                        return items
             except:
                 return items
         return items
@@ -161,8 +189,34 @@ class BCYCore(object):
             return int(data["status"])==1
         except:
             return False
+    def search(self,keyword,type,**kwargs):
+        '''
+        type is one of:
+                Cos
+                Tags
+                Works
+                Daily
+                Illust
+                Goods
+                Content
+        '''
+        def foo(items,Info,Callback):
+            inf=Info["results"]
+            if len(inf)==0:
+                return True
+            for item in inf:
+                if Callback!=None:
+                    Callback(item)
+            items.extend(inf)
+            return False
 
+        return self.ListIterator("search/search"+str(type),{"query":keyword},BodyBlock=foo,**kwargs)
     def detailWorker(self,URL,InfoParams):
+        '''
+        This is a wrapper around POST() to solve various overheads like:
+            Locked Work
+            Follower-Only Content
+        '''
         data=None
         try:
             data=json.loads(self.POST(URL,InfoParams,timeout=self.Timeout).content)
@@ -231,10 +285,16 @@ class BCYCore(object):
         except:
             return None
     def userRecommends(self,UID,Filter,**kwargs):
-        #{"filter":"tuijian","uid":"169851","source":"all","since":"814926","token":"XXXXX"}
         Param={"uid":UID,"filter":"tuijian","source":Filter}
         return self.ListIterator("timeline/userGrid",Param,SinceRetrieveKeyName="tl_id",**kwargs)
     def queryDetail(self,Info):
+        '''
+        This method:
+            1. Analyze Info
+            2. Extract Values and dispatch them to corresponding APIs
+            3. Return the result
+        It's usually better to call this method instead of directly using the underlying APIs
+        '''
         try:
             Info=Info["detail"]
         except:

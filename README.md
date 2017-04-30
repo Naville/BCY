@@ -115,3 +115,9 @@ InfoSQL.commit()
   **+** Much Faster(And More Stable) Querying
 
   This should have no effect on you unless you are not using the detail wrapper
+
+## 1.4.4
+  `since` and `to` keywords has been added to `BCYDownloadUtils` 's iterating methods using `**kwargs`. This would speed up list iterations
+
+## 1.6.1
+  Python3 compatible

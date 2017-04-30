@@ -87,7 +87,7 @@ class BCYDownloadUtils(object):
         So when you see a log message indicating something is being downloaded, that only means the AbstractInfo
         has been pushed to the queue.
     '''
-    def __init__(self,email,password,savepath,MaxDownloadThread=16,MaxQueryThread=64,Daemon=False,IP="127.0.0.1",Port=8081):
+    def __init__(self,email,password,savepath,MaxDownloadThread=16,MaxQueryThread=64,Daemon=False,IP="127.0.0.1",Port=8081,DownloadProgress=False):
         self.QueryQueue=Queue.Queue()
         self.DownloadQueue=Queue.Queue()
         self.SavePath=savepath
@@ -136,6 +136,7 @@ class BCYDownloadUtils(object):
         except OSError as exception:
             if exception.errno != errno.EEXIST:
                 raise
+        self.DownloadProgress=DownloadProgress
 
     def DownloadWorker(self):
         '''
@@ -160,7 +161,10 @@ class BCYDownloadUtils(object):
                 except OSError as exception:
                     if exception.errno != errno.EEXIST:
                         raise
-                ImageData=self.API.imageDownload({"url":URL,"id":ID,"type":WorkType},Callback=Logger)
+                if self.DownloadProgress==True:
+                    ImageData=self.API.imageDownload({"url":URL,"id":ID,"type":WorkType},Callback=Logger)
+                else:
+                    ImageData=self.API.imageDownload({"url":URL,"id":ID,"type":WorkType})
                 #Atomic Writing
                 if ImageData!=None:
                     f=tempfile.NamedTemporaryFile(dir=os.path.join(self.SavePath,"DownloadTemp/"),delete=False, suffix="PyBCY-")
@@ -230,24 +234,24 @@ class BCYDownloadUtils(object):
             if os.path.isfile(SavePath)==False:
                 self.DownloadQueue.put([URL,WorkID,WorkType,WritePathRoot,FileName])
 
-    def DownloadUser(self,UID,Filter):
+    def DownloadUser(self,UID,Filter,**kwargs):
         self.logger.warning("Downloading UID:"+str(UID)+" Filter:"+str(Filter))
-        self.API.userWorkList(UID,Filter,Callback=self.DownloadFromAbstractInfo)
-    def DownloadGroup(self,GID,Filter):
+        self.API.userWorkList(UID,Filter,Callback=self.DownloadFromAbstractInfo,**kwargs)
+    def DownloadGroup(self,GID,Filter,**kwargs):
         self.logger.warning("Downloading GroupGID:"+str(GID)+" Filter:"+str(Filter))
-        self.API.groupPostList(GID,Filter,Callback=self.DownloadFromAbstractInfo)
-    def DownloadCircle(self,CircleID,Filter):
+        self.API.groupPostList(GID,Filter,Callback=self.DownloadFromAbstractInfo,**kwargs)
+    def DownloadCircle(self,CircleID,Filter,**kwargs):
         self.logger.warning("Downloading CircleID:"+str(CircleID)+" Filter:"+str(Filter))
-        self.API.circleList(CircleID,Filter,Callback=self.DownloadFromAbstractInfo)
-    def DownloadTag(self,Tag,Filter):
+        self.API.circleList(CircleID,Filter,Callback=self.DownloadFromAbstractInfo,**kwargs)
+    def DownloadTag(self,Tag,Filter,**kwargs):
         self.logger.warning("Downloading Tag:"+str(Tag)+" Filter:"+str(Filter))
-        self.API.tagList(Tag,Filter,Callback=self.DownloadFromAbstractInfo)
-    def DownloadLikedList(self,Filter):
+        self.API.tagList(Tag,Filter,Callback=self.DownloadFromAbstractInfo,**kwargs)
+    def DownloadLikedList(self,Filter,**kwargs):
         self.logger.warning("Downloading likedList Filter:"+str(Filter))
-        self.API.likedList(Filter,Callback=self.DownloadFromAbstractInfo)
-    def DownloadUserRecommends(self,UID,Filter):
+        self.API.likedList(Filter,Callback=self.DownloadFromAbstractInfo,**kwargs)
+    def DownloadUserRecommends(self,UID,Filter,**kwargs):
         self.logger.warning("Downloading Recommends From UID:"+str(UID)+" And Filter:"+Filter)
-        self.API.userRecommends(UID,Filter,Callback=self.DownloadFromAbstractInfo)
+        self.API.userRecommends(UID,Filter,Callback=self.DownloadFromAbstractInfo,**kwargs)
     def DownloadFromAbstractInfo(self,AbstractInfo):
         '''
             Put AbstractInfo into QueryQueue.
