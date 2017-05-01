@@ -10,9 +10,6 @@ except:
     pass
 class BCYCore(object):
     '''
-    Overall,BCY.net 's API is very poorly designed and there are  obscure definitions all over the place.
-    It might worth do some HTTP capture and analyze those using the decryption methods below when you run into
-    some trouble
     Possible Filter Values:
          - coser
          - all
@@ -32,10 +29,6 @@ class BCYCore(object):
     Different WorkType of work has different set of used keys.Refer to queryDetail()'s code
     Most APIs use WorkType in URL to identifier WorkType and respond accordingly
     '''
-    #亲爱的站方开发者:
-    #   FUCK YOU
-    #   CYKA BLAYT
-    #   操你妈
     APIBase="http://api.bcy.net/api/"
     Header={"User-Agent":"bcy/2.7.0 (iPad; iOS 10.1.1; Scale/2.00)","X-BCY-Version":"iOS-2.7.0"}
     NeedFollowServerResponse="阿拉，请先关注一下嘛"
@@ -167,7 +160,6 @@ class BCYCore(object):
             Return True in BodyBlock To Stop Iterating. Refer to search() for usage example
 
         This over-complicate method only exists because the FUCKING STUPID BCY API Design
-        This method might be re-written in the future
 
         '''
 
@@ -175,7 +167,7 @@ class BCYCore(object):
         items=list()
         while True:
             pa=deepcopy(Params)
-            #pa["limit"]=20
+            pa["limit"]=20
             pa["token"]=self.Token
             pa["p"]=p
             if since!=None:
@@ -199,7 +191,6 @@ class BCYCore(object):
                     if BodyBlock(items,inf,Callback)==True:
                         return items
             except:
-                raise
                 return items
         return items
     def followUser(self,uid):
@@ -336,7 +327,6 @@ class BCYCore(object):
     def userRecommends(self,UID,Filter,Callback=None):
         '''
         Download User Recommends List
-        For now, seems like only "all" works as a filter
         '''
         #Implement our own iterator because ListIterator needs to have some hack to work with this
         retVal=list()
@@ -348,7 +338,6 @@ class BCYCore(object):
                 PA["since"]=nextSince
             Rval=self.POST("timeline/userGrid",PA).content
             Rval=json.loads(Rval)["data"]
-            #print Rval
             if len(Rval)==0:
                 return retVal
             for item in Rval:

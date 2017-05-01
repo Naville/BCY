@@ -144,7 +144,7 @@ And run python script:
 | **+** Much Faster(And More Stable) Querying
 
 This should have no effect on you unless you are not using the detail
-wrapper
+wrapper <<<<<<< HEAD
 
 1.4.4
 -----
@@ -158,4 +158,4 @@ iterations
 
 Python3 compatible ## 1.7.0 Add Like/Unlike Work. Report Work ## 1.7.1
 Fix a issue in EncryptParam() results in failed Non-ASCII string
-encoding
+encoding ======= >>>>>>> parent of fd518a4... Stash
