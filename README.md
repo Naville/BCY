@@ -121,3 +121,7 @@ InfoSQL.commit()
 
 ## 1.6.1
   Python3 compatible
+## 1.7.0
+  Add Like/Unlike Work. Report Work
+## 1.7.1
+  Fix a issue in EncryptParam() results in failed Non-ASCII string encoding

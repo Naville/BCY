@@ -249,9 +249,12 @@ class BCYDownloadUtils(object):
     def DownloadLikedList(self,Filter,**kwargs):
         self.logger.warning("Downloading likedList Filter:"+str(Filter))
         self.API.likedList(Filter,Callback=self.DownloadFromAbstractInfo,**kwargs)
-    def DownloadUserRecommends(self,UID,Filter,**kwargs):
+    def DownloadUserRecommends(self,UID,Filter):
         self.logger.warning("Downloading Recommends From UID:"+str(UID)+" And Filter:"+Filter)
-        self.API.userRecommends(UID,Filter,Callback=self.DownloadFromAbstractInfo,**kwargs)
+        self.API.userRecommends(UID,Filter,Callback=self.DownloadFromAbstractInfo)
+    def DownloadSearch(self,Keyword,Type,**kwargs):
+        self.logger.warning("Downloading Search Result From Keyword:"+str(Keyword)+" And Type:"+Type)
+        self.API.search(Keyword,Type,Callback=self.DownloadFromAbstractInfo,**kwargs)
     def DownloadFromAbstractInfo(self,AbstractInfo):
         '''
             Put AbstractInfo into QueryQueue.

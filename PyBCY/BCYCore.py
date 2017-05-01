@@ -10,14 +10,32 @@ except:
     pass
 class BCYCore(object):
     '''
-    Unless otherwise specified, these filters can be used in all methods that takes a filters:
+    Overall,BCY.net 's API is very poorly designed and there are  obscure definitions all over the place.
+    It might worth do some HTTP capture and analyze those using the decryption methods below when you run into
+    some trouble
+    Possible Filter Values:
          - coser
          - all
          - drawer
          - writer
          - daily
          - zhipin
+    Possible WorkType Values:
+         - illust
+         - coser
+         - daily
+         - group
+         - circle
+         - group
+
+    Each work,regardless of WorkType, is globally identified using a set of Keys & Values
+    Different WorkType of work has different set of used keys.Refer to queryDetail()'s code
+    Most APIs use WorkType in URL to identifier WorkType and respond accordingly
     '''
+    #亲爱的站方开发者:
+    #   FUCK YOU
+    #   CYKA BLAYT
+    #   操你妈
     APIBase="http://api.bcy.net/api/"
     Header={"User-Agent":"bcy/2.7.0 (iPad; iOS 10.1.1; Scale/2.00)","X-BCY-Version":"iOS-2.7.0"}
     NeedFollowServerResponse="阿拉，请先关注一下嘛"
@@ -42,6 +60,7 @@ class BCYCore(object):
         except:
             raise ValueError("BCYLogin Error:"+str(data))
     def EncryptData(self,Data):
+        Data=Data.encode("utf8")
         Data=self.pkcs7.encode(Data)
         return self.Crypto.encrypt(Data)
     def EncryptParam(self,Params):
@@ -80,8 +99,11 @@ class BCYCore(object):
             json.loads(self.POST("coser/listallcore",{"face":"b"},timeout=self.Timeout).content)
         except:
             return None
-    def getReply(self,Filter,Params,**kwargs):
-        URL=Filter+"/getReply"
+    def getReply(self,WorkType,Params,**kwargs):
+        '''
+        Params is WorkIdentifiers
+        '''
+        URL=WorkType+"/getReply"
         return self.ListIterator(URL,Params,**kwargs)
     def downloadWorker(self,URL,Callback=None):
         Content=None
@@ -145,6 +167,7 @@ class BCYCore(object):
             Return True in BodyBlock To Stop Iterating. Refer to search() for usage example
 
         This over-complicate method only exists because the FUCKING STUPID BCY API Design
+        This method might be re-written in the future
 
         '''
 
@@ -152,10 +175,11 @@ class BCYCore(object):
         items=list()
         while True:
             pa=deepcopy(Params)
-            pa["limit"]=20
+            #pa["limit"]=20
             pa["token"]=self.Token
             pa["p"]=p
-            pa[SinceSetKeyName]=since
+            if since!=None:
+                pa[SinceSetKeyName]=since
             p=p+1
             try:
                 data=self.POST(URL,pa,timeout=self.Timeout).content
@@ -175,6 +199,7 @@ class BCYCore(object):
                     if BodyBlock(items,inf,Callback)==True:
                         return items
             except:
+                raise
                 return items
         return items
     def followUser(self,uid):
@@ -199,6 +224,8 @@ class BCYCore(object):
                 Illust
                 Goods
                 Content
+                User
+                Group
         '''
         def foo(items,Info,Callback):
             inf=Info["results"]
@@ -277,16 +304,70 @@ class BCYCore(object):
     def likedList(self,Filter,**kwargs):
         return self.ListIterator("space/zanlist",{"sub":Filter},**kwargs)
     def WorkTypeCircle(self,name):
-        #name为绘画,COS,等等，即网站首页banner的分类
+        '''
+        name is the column name used on the website banner, possible values:
+            绘画
+            COS
+            写作
+            漫展
+            讨论
+        '''
         data=self.POST("tag/relaCircle",{"name":name},timeout=self.Timeout).content
         try:
             data=json.loads(data)
             return data
         except:
             return None
-    def userRecommends(self,UID,Filter,**kwargs):
-        Param={"uid":UID,"filter":"tuijian","source":Filter}
-        return self.ListIterator("timeline/userGrid",Param,SinceRetrieveKeyName="tl_id",**kwargs)
+    def reportWork(self,Info,WorkType,Reason):
+        '''
+        Info is the WorkInfo, containing WorkIdentifiers *ONLY*
+        Reason is the descriptive string used globally. For now there are:
+            不宜公开讨论的政治问题
+            广告等垃圾信息
+            不友善内容
+            色情／血腥／暴力等违规内容
+            盗用／抄袭他人作品
+            其他
+        '''
+        Args=dict()
+        Args.update(Info)
+        Args["type"]=Reason
+        return self.POST(WorkType+"/denouncePost",Args)
+    def userRecommends(self,UID,Filter,Callback=None):
+        '''
+        Download User Recommends List
+        For now, seems like only "all" works as a filter
+        '''
+        #Implement our own iterator because ListIterator needs to have some hack to work with this
+        retVal=list()
+        nextSince=None
+        Param={"uid":str(UID),"filter":"tuijian","source":Filter}
+        while True:
+            PA=deepcopy(Param)
+            if nextSince!=None:
+                PA["since"]=nextSince
+            Rval=self.POST("timeline/userGrid",PA).content
+            Rval=json.loads(Rval)["data"]
+            #print Rval
+            if len(Rval)==0:
+                return retVal
+            for item in Rval:
+                if Callback!=None:
+                    Callback(item)
+                if int(item["tl_id"])<nextSince or nextSince==None:
+                    nextSince=int(item["tl_id"])
+            retVal.extend(Rval)
+        return retVal
+    def likeWork(self,WorkType,Info):
+        '''
+        Info is the WorkInfo, containing WorkIdentifiers *ONLY*
+        '''
+        return self.POST(WorkType+"/doZan",Info)
+    def unlikeWork(self,WorkType,Info):
+        '''
+        Info is the WorkInfo, containing WorkIdentifiers *ONLY*
+        '''
+        return self.POST(undoZan+"/undoZan",Info)
     def queryDetail(self,Info):
         '''
         This method:
