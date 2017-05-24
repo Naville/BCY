@@ -115,7 +115,6 @@ InfoSQL.commit()
   **+** Much Faster(And More Stable) Querying
 
   This should have no effect on you unless you are not using the detail wrapper
-<<<<<<< HEAD
 
 ## 1.4.4
   `since` and `to` keywords has been added to `BCYDownloadUtils` 's iterating methods using `**kwargs`. This would speed up list iterations
@@ -126,5 +125,3 @@ InfoSQL.commit()
   Add Like/Unlike Work. Report Work
 ## 1.7.1
   Fix a issue in EncryptParam() results in failed Non-ASCII string encoding
-=======
->>>>>>> parent of fd518a4... Stash
