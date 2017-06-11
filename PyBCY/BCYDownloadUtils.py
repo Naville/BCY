@@ -214,10 +214,10 @@ class BCYDownloadUtils(object):
             UID=Info["uid"]
             GroupName=self.LoadOrSaveGroupName(Info["group"]["name"],GID)
             if(Title==None or len(Title)==0):
-                Title=GroupName+"-"+str(GID)
+                Title=GroupName+"-"+WorkID
         Title=self.LoadTitle(Title,Info)
         self.SaveInfo(Title,Info)
-        WritePathRoot=os.path.join(self.SavePath,CoserName.replace("/","-"),Title.replace("/","-"))
+        WritePathRoot=os.path.join(self.SavePath,str(CoserName).replace("/","-"),str(Title).replace("/","-"))
         for PathDict in Info["multi"]:
             URL=PathDict["path"]
             if len(URL)==0:
@@ -407,3 +407,11 @@ class BCYDownloadUtils(object):
             self.logger.warning ("QueryQueue Size:"+str(self.QueryQueue.qsize()))
             self.logger.warning ("DownloadQueue Size:"+str(self.DownloadQueue.qsize()))
             time.sleep(3)
+    def verify(self):
+        '''
+        Iterate all records in the specified SQL Table and download missing images
+        '''
+        Cursor=self.InfoSQL.execute("SELECT Info FROM WorkInfo")
+        for item in Cursor:
+            Info=json.loads(item[0])
+            self.DownloadFromInfo(Info)

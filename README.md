@@ -125,3 +125,38 @@ InfoSQL.commit()
   Add Like/Unlike Work. Report Work
 ## 1.7.1
   Fix a issue in EncryptParam() results in failed Non-ASCII string encoding
+## 1.7.5
+  Fix a issue in `BCYDownloadUtils` where GroupID is used to construct title instead of post id.
+
+  ```python
+import sqlite3,os,sys,json,base64,os
+savepath="/Volumes/Tardis/BCY/"
+InfoSQL=sqlite3.connect(os.path.join(savepath,"BCYInfo.db"))
+GroupNameList=list()
+GroupsCursor=InfoSQL.execute("SELECT GroupName from GroupInfo").fetchall()
+for item in GroupNameList:
+    print ("Found GroupName:"+item[0])
+    GroupNameList.append(item[0])
+Cursor=InfoSQL.execute("SELECT uid,Title,Info from WorkInfo").fetchall()
+for item in Cursor:
+    try:
+        print ("Re-encoding "+str(i)+"/"+str(len(Cursor)))
+        UserName=InfoSQL.execute("SELECT UserName FROM UserInfo WHERE uid=?",(item[0],)).next()[0]
+        Title=item[1]
+        DecodedInfo=json.loads(item[2])
+        for GName in GroupNameList:
+            if Title.beginsWith(GName+"-") and ("post_id" in DecodedInfo.keys()):
+                newTitle=GName+"-"+DecodedInfo["post_id"]
+                InfoSQL.execute("UPDATE WorkInfo SET Title=? Title=?",(newTitle,Title,))
+                print("Replaced "+UserName+"'s GroupWorkTitle:"+newTitle)
+                #Move Folders
+                PathRoot=os.path.join(savepath,UserName)
+                OldPath=os.path.join(PathRoot,Title)
+                newPath=os.path.join(PathRoot,newTitle)
+                os.rename(OldPath,newPath)
+    except:
+        raise
+
+InfoSQL.commit()
+
+  ```
