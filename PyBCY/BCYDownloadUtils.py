@@ -411,7 +411,10 @@ class BCYDownloadUtils(object):
         '''
         Iterate all records in the specified SQL Table and download missing images
         '''
-        Cursor=self.InfoSQL.execute("SELECT Info FROM WorkInfo")
+        i=0
+        Cursor=self.InfoSQL.execute("SELECT Info FROM WorkInfo").fetchall()
         for item in Cursor:
+            print ("Injecting "+str(i)+"/"+str(len(Cursor))+" Into Download Queue")
             Info=json.loads(item[0])
+            i=i+1
             self.DownloadFromInfo(Info)
