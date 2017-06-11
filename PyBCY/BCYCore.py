@@ -332,20 +332,23 @@ class BCYCore(object):
         retVal=list()
         nextSince=None
         Param={"uid":str(UID),"filter":"tuijian","source":Filter}
-        while True:
-            PA=deepcopy(Param)
-            if nextSince!=None:
-                PA["since"]=nextSince
-            Rval=self.POST("timeline/userGrid",PA).content
-            Rval=json.loads(Rval)["data"]
-            if len(Rval)==0:
-                return retVal
-            for item in Rval:
-                if Callback!=None:
-                    Callback(item)
-                if int(item["tl_id"])<nextSince or nextSince==None:
-                    nextSince=int(item["tl_id"])
-            retVal.extend(Rval)
+        try:
+            while True:
+                PA=deepcopy(Param)
+                if nextSince!=None:
+                    PA["since"]=nextSince
+                Rval=self.POST("timeline/userGrid",PA).content
+                Rval=json.loads(Rval)["data"]
+                if len(Rval)==0:
+                    return retVal
+                for item in Rval:
+                    if Callback!=None:
+                        Callback(item)
+                    if int(item["tl_id"])<nextSince or nextSince==None:
+                        nextSince=int(item["tl_id"])
+                retVal.extend(Rval)
+        except:
+            return retVal
         return retVal
     def likeWork(self,WorkType,Info):
         '''
