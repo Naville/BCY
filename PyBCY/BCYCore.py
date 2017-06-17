@@ -103,24 +103,20 @@ class BCYCore(object):
         req=self.GET(URL,{},timeout=self.Timeout,stream=True)
         if req==None:
             return None
+        if Callback==None:
+            return req.content
         total_length = req.headers.get('content-length')
-        if total_length==None or Callback==None: # no content length header
-            try:
-                return req.content
-            except:
-                return None
-        else:
-            Downloaded = 0
-            total_length = int(total_length)
-            for data in req.iter_content(chunk_size=204800):
-                Downloaded += len(data)
-                if Content==None:
-                    Content=data
-                else:
-                    Content+=data
-                Callback(URL,Downloaded,total_length)
+        Downloaded = 0
+        total_length = int(total_length)
+        for data in req.iter_content(chunk_size=204800):
+            Downloaded += len(data)
+            if Content==None:
+                Content=data
+            else:
+                Content+=data
             Callback(URL,Downloaded,total_length)
-            return Content
+        Callback(URL,Downloaded,total_length)
+        return Content
 
     def imageDownload(self,ImageInfo,Callback=None):
         ImageData=None

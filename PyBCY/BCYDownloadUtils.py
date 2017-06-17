@@ -2,10 +2,6 @@
 import os,errno,tempfile,sqlite3,sys,shutil,threading,time,json,struct
 from PyBCY.BCYDownloadFilter import *
 from PyBCY.BCYCore import *
-try:
-    from BaseHTTPServer import BaseHTTPRequestHandler, HTTPServer
-except:
-    from http.server import BaseHTTPRequestHandler, HTTPServer
 from sys import version as python_version
 from cgi import parse_header, parse_multipart
 
