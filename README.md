@@ -130,7 +130,7 @@ InfoSQL.commit()
 
   ```python
 import sqlite3,os,sys,json,base64,os
-savepath="/Volumes/Tardis/BCY/"
+savepath="/PATH/TO/FOLDER"
 InfoSQL=sqlite3.connect(os.path.join(savepath,"BCYInfo.db"))
 GroupNameList=list()
 GroupsCursor=InfoSQL.execute("SELECT GroupName from GroupInfo").fetchall()
