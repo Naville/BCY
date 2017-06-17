@@ -105,7 +105,7 @@ class BCYCore(object):
             return None
         if Callback==None:
             return req.content
-        total_length = req.headers.get('content-length')
+        total_length = req.headers.get('Content-Length')
         Downloaded = 0
         total_length = int(total_length)
         for data in req.iter_content(chunk_size=204800):
@@ -115,8 +115,11 @@ class BCYCore(object):
             else:
                 Content+=data
             Callback(URL,Downloaded,total_length)
-        Callback(URL,Downloaded,total_length)
-        return Content
+        if Downloaded==total_length:
+            Callback(URL,Downloaded,total_length)
+            return Content
+        else:
+            return None
 
     def imageDownload(self,ImageInfo,Callback=None):
         ImageData=None

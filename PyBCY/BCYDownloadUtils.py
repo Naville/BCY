@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-import os,errno,tempfile,sqlite3,sys,shutil,threading,time,json,struct
+import os,errno,tempfile,sqlite3,sys,shutil,threading,time,json,struct,requests
 from PyBCY.BCYDownloadFilter import *
 from PyBCY.BCYCore import *
 from sys import version as python_version
