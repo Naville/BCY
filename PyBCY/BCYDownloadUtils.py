@@ -7,10 +7,10 @@ from cgi import parse_header, parse_multipart
 
 if python_version.startswith('3'):
     from urllib.parse import parse_qs
-    from http.server import BaseHTTPRequestHandler
+    from http.server import BaseHTTPRequestHandler, HTTPServer
 else:
     from urlparse import parse_qs
-    from BaseHTTPServer import BaseHTTPRequestHandler
+    from BaseHTTPServer import BaseHTTPRequestHandler, HTTPServer
 try:
     reload(sys)
     sys.setdefaultencoding('utf8')
