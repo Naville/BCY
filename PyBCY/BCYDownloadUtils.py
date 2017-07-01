@@ -408,6 +408,7 @@ class BCYDownloadUtils(object):
             self.logger.warning ("QueryQueue Size:"+str(self.QueryQueue.qsize()))
             self.logger.warning ("DownloadQueue Size:"+str(self.DownloadQueue.qsize()))
             time.sleep(3)
+        self.logger.warning("QueryQueue and DownloadQueue Finished")
     def verify(self):
         '''
         Iterate all records in the specified SQL Table and download missing images

@@ -30,12 +30,13 @@ class BCYCore(object):
     Most APIs use WorkType in URL to identifier WorkType and respond accordingly
     '''
     APIBase="http://api.bcy.net/api/"
-    Header={"User-Agent":"bcy/2.7.0 (iPad; iOS 10.1.1; Scale/2.00)","X-BCY-Version":"iOS-2.7.0"}
+    Header={"User-Agent":"bcy/3.8.0 (iPad; iOS 9.3.3; Scale/2.00)","X-BCY-Version":"iOS-3.8.0"}
     NeedFollowServerResponse="阿拉，请先关注一下嘛"
     LockedServerResponse="该作品已被管理员锁定"
     APIErrorResponse="半次元不小心滑了一跤"
     GroupLockedResponse="该讨论已被管理员锁定"
     StatusMap={100:"请先登录半次元",
+               4000:"请先登录半次元",
                21:"半次元不小心滑了一跤"
                 }
     def __init__(self,Timeout=20):
@@ -52,7 +53,7 @@ class BCYCore(object):
         Login is not required.
         However certain operations like viewing Follower-Only content might fail in anonymous mode
         '''
-        data=self.POST("user/login",{"user":email,"pass":password},timeout=self.Timeout).content
+        data=self.POST("user/login",{"pass":password,"user":email},timeout=self.Timeout).content
         data=json.loads(data)["data"]
         try:
             self.UID=data["uid"]
@@ -71,12 +72,14 @@ class BCYCore(object):
             ParamData=json.dumps(Params,separators=(',', ':'),ensure_ascii=False)
         return {"data":base64.b64encode(self.EncryptData(ParamData))}
     def GET(self,URL,Params,**kwargs):
+        time.sleep(1)
         try:
             return self.session.get(URL,params=Params,**kwargs)
         except:
             return None
 
     def POST(self,URL,Params,Auth=True,**kwargs):
+        time.sleep(1)
         if URL.startswith(BCYCore.APIBase)==False:
                 URL=BCYCore.APIBase + URL
         if Auth==True:
