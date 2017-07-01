@@ -36,8 +36,8 @@ class BCYCore(object):
     APIErrorResponse="半次元不小心滑了一跤"
     GroupLockedResponse="该讨论已被管理员锁定"
     def __init__(self,Timeout=20):
-        self.UID=""
-        self.Token=""
+        self.UID=None
+        self.Token=None
         # Lack Support of PKCS7Padding.Solve it in actual crypto stage
         self.Crypto=AES.new('com_banciyuan_AI', AES.MODE_ECB)
         self.pkcs7=PKCS7Encoder()
@@ -45,6 +45,10 @@ class BCYCore(object):
         self.session=requests.Session()
         self.session.headers.update(BCYCore.Header)
     def loginWithEmailAndPassWord(self,email,password):
+        '''
+        Login is not required.
+        However certain operations like viewing Follower-Only content might fail in anonymous mode
+        '''
         data=self.POST("user/login",{"user":email,"pass":password},timeout=self.Timeout).content
         data=json.loads(data)["data"]
         try:
@@ -73,9 +77,9 @@ class BCYCore(object):
         if URL.startswith(BCYCore.APIBase)==False:
                 URL=BCYCore.APIBase + URL
         if Auth==True:
-            if 'uid' not in Params.keys():
+            if 'uid' not in Params.keys() and self.UID!=None:
                 Params['uid']=self.UID
-            if 'token' not in Params.keys():
+            if 'token' not in Params.keys() and self.Token!=None:
                 Params['token']=self.Token
         P=self.EncryptParam(Params)
         try:
@@ -101,13 +105,16 @@ class BCYCore(object):
     def downloadWorker(self,URL,Callback=None):
         Content=None
         req=self.GET(URL,{},timeout=self.Timeout,stream=True)
+        total_length = int(req.headers.get('Content-Length'))
         if req==None:
             return None
         if Callback==None:
-            return req.content
-        total_length = req.headers.get('Content-Length')
+            Data=req.content
+            if(len(Data)==total_length):
+                return Data
+            else:
+                return None
         Downloaded = 0
-        total_length = int(total_length)
         for data in req.iter_content(chunk_size=204800):
             Downloaded += len(data)
             if Content==None:
@@ -135,7 +142,7 @@ class BCYCore(object):
             return None
         try:
             rep=json.loads(ImageData)
-        except:
+        except ValueError:
             return ImageData
         ImageData=self.POST("image/download",ImageInfo,timeout=self.Timeout)
         if ImageData==None:#API Endpoint Bug Sometimes Results In Non-Existing URL In Detail Response
@@ -167,9 +174,8 @@ class BCYCore(object):
         while True:
             pa=deepcopy(Params)
             pa["limit"]=20
-            pa["token"]=self.Token
             pa["p"]=p
-            if since!=None:
+            if since!=None and SinceSetKeyName!=None:
                 pa[SinceSetKeyName]=since
             p=p+1
             try:
@@ -179,10 +185,11 @@ class BCYCore(object):
                     if len(inf)==0:
                         return items
                     for item in inf:
-                        if int(item[SinceRetrieveKeyName])<to:
-                            return items
-                        if int(item[SinceRetrieveKeyName])<since:
-                            since=int(item[SinceRetrieveKeyName])
+                        if SinceRetrieveKeyName!=None:
+                            if int(item[SinceRetrieveKeyName])<to:
+                                return items
+                            if int(item[SinceRetrieveKeyName])<since:
+                                since=int(item[SinceRetrieveKeyName])
                         if Callback!=None:
                             Callback(item)
                     items.extend(inf)
@@ -213,9 +220,12 @@ class BCYCore(object):
                 Daily
                 Illust
                 Goods
+                Novel
+                Post
                 Content
                 User
                 Group
+                All
         '''
         def foo(items,Info,Callback):
             inf=Info["results"]
@@ -227,7 +237,7 @@ class BCYCore(object):
             items.extend(inf)
             return False
 
-        return self.ListIterator("search/search"+str(type),{"query":keyword},BodyBlock=foo,**kwargs)
+        return self.ListIterator("search/search"+str(type),{"query":keyword},BodyBlock=foo,SinceRetrieveKeyName=None,SinceSetKeyName=None,**kwargs)
     def detailWorker(self,URL,InfoParams):
         '''
         This is a wrapper around POST() to solve various overheads like:

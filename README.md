@@ -121,14 +121,18 @@ InfoSQL.commit()
 
 ## 1.6.1
   Python3 compatible
+
 ## 1.7.0
   Add Like/Unlike Work. Report Work
+
 ## 1.7.1
   Fix a issue in EncryptParam() results in failed Non-ASCII string encoding
+
 ## 1.7.5
   Fix a issue in `BCYDownloadUtils` where GroupID is used to construct title instead of post id.
 
-  ```python
+
+```python
 import sqlite3,os,sys,json,base64,os
 savepath="/PATH/TO/FOLDER"
 InfoSQL=sqlite3.connect(os.path.join(savepath,"BCYInfo.db"))
@@ -159,4 +163,4 @@ for item in Cursor:
 
 InfoSQL.commit()
 
-  ```
+```

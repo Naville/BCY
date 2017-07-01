@@ -84,6 +84,10 @@ class BCYDownloadUtils(object):
         has been pushed to the queue.
     '''
     def __init__(self,email,password,savepath,MaxDownloadThread=16,MaxQueryThread=64,Daemon=False,IP="127.0.0.1",Port=8081,DownloadProgress=False):
+        '''
+        Argument names should be self-explained
+        pass None for email and password for anonymous browsing
+        '''
         self.QueryQueue=Queue.Queue()
         self.DownloadQueue=Queue.Queue()
         self.SavePath=savepath
@@ -92,7 +96,8 @@ class BCYDownloadUtils(object):
         self.Filter=BCYDownloadFilter()
         self.API=BCYCore()
         self.FailedInfoList=list()
-        self.API.loginWithEmailAndPassWord(email,password)
+        if email!=None and password!=None:
+            self.API.loginWithEmailAndPassWord(email,password)
         print ("Logged in...UID:"+str(self.API.UID))
         self.InfoSQL=sqlite3.connect(os.path.join(savepath,"BCYInfo.db"),check_same_thread=False)
         self.InfoSQL.text_factory = str
