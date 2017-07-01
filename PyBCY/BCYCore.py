@@ -35,6 +35,9 @@ class BCYCore(object):
     LockedServerResponse="该作品已被管理员锁定"
     APIErrorResponse="半次元不小心滑了一跤"
     GroupLockedResponse="该讨论已被管理员锁定"
+    StatusMap={100:"请先登录半次元",
+               21:"半次元不小心滑了一跤"
+                }
     def __init__(self,Timeout=20):
         self.UID=None
         self.Token=None
