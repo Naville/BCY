@@ -164,3 +164,20 @@ for item in Cursor:
 InfoSQL.commit()
 
 ```
+
+## 1.9.0
+  Add unique constraints to all tables. Better iterator status preservation
+
+```bash
+sqlite3 /PATH/TO/NEW/TABLE/BCYInfo.db
+CREATE TABLE IF NOT EXISTS UserInfo (uid STRING,UserName STRING,UNIQUE(uid) ON CONFLICT IGNORE);
+CREATE TABLE IF NOT EXISTS GroupInfo (gid STRING,GroupName STRING,UNIQUE(gid) ON CONFLICT IGNORE);
+CREATE TABLE IF NOT EXISTS WorkInfo (uid STRING NOT NULL DEFAULT '',Title STRING NOT NULL DEFAULT '',cp_id STRING NOT NULL DEFAULT '',rp_id STRING NOT NULL DEFAULT '',dp_id STRING NOT NULL DEFAULT '',ud_id STRING NOT NULL DEFAULT '',post_id STRING NOT NULL DEFAULT '',Info STRING NOT NULL DEFAULT '',Tags STRING,UNIQUE(UID,cp_id,rp_id,dp_id,ud_id,post_id) ON CONFLICT REPLACE);
+```
+
+Then apply dump of old table
+
+```bash
+sqlite3 /PATH/TO/OLD/TABLE/BCYInfo.db .dump >DUMP.SQL
+sqlite3 /PATH/TO/NEW/TABLE/BCYInfo.db < DUMP.SQL
+```

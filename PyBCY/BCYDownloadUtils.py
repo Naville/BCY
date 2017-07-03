@@ -74,6 +74,7 @@ class BCYDownloadUtils(object):
         self.Filter                     A BCYDownloadFilter() object used for filtering downloads
         self.API                        A BCYCore() object
         self.FailedInfoList             A list of DetailedInfo of failed downloads
+        self.Status                     A dictionary. Used for fast iteration by skipping iterated works
 
         BCYDownloadUtils is underlying powered by two FIFO Queues:
             QueryQueue          For Storing AbstractInfo
@@ -89,6 +90,7 @@ class BCYDownloadUtils(object):
         pass None for email and password for anonymous browsing
         '''
         self.QueryQueue=Queue.Queue()
+        self.Status=dict()
         self.DownloadQueue=Queue.Queue()
         self.SavePath=savepath
         self.logger=logging.getLogger(str(__name__)+"-"+str(hex(id(self))))
@@ -101,8 +103,8 @@ class BCYDownloadUtils(object):
         print ("Logged in...UID:"+str(self.API.UID))
         self.InfoSQL=sqlite3.connect(os.path.join(savepath,"BCYInfo.db"),check_same_thread=False)
         self.InfoSQL.text_factory = str
-        self.InfoSQL.execute("CREATE TABLE IF NOT EXISTS UserInfo (uid STRING,UserName STRING);")
-        self.InfoSQL.execute("CREATE TABLE IF NOT EXISTS GroupInfo (gid STRING,GroupName STRING);")
+        self.InfoSQL.execute("CREATE TABLE IF NOT EXISTS UserInfo (uid STRING,UserName STRING,UNIQUE(uid) ON CONFLICT IGNORE);")
+        self.InfoSQL.execute("CREATE TABLE IF NOT EXISTS GroupInfo (gid STRING,GroupName STRING,UNIQUE(gid) ON CONFLICT IGNORE);")
         self.InfoSQL.execute("CREATE TABLE IF NOT EXISTS WorkInfo (uid STRING NOT NULL DEFAULT '',Title STRING NOT NULL DEFAULT '',cp_id STRING NOT NULL DEFAULT '',rp_id STRING NOT NULL DEFAULT '',dp_id STRING NOT NULL DEFAULT '',ud_id STRING NOT NULL DEFAULT '',post_id STRING NOT NULL DEFAULT '',Info STRING NOT NULL DEFAULT '',Tags STRING,UNIQUE(UID,cp_id,rp_id,dp_id,ud_id,post_id) ON CONFLICT REPLACE);")
         self.InfoSQLLock=threading.Lock()
         self.InfoSQLLock=threading.Lock()
@@ -235,27 +237,27 @@ class BCYDownloadUtils(object):
             if os.path.isfile(SavePath)==False:
                 self.DownloadQueue.put([URL,WorkID,WorkType,WritePathRoot,FileName])
 
-    def DownloadUser(self,UID,Filter,**kwargs):
+    def DownloadUser(self,UID,Filter):
         self.logger.warning("Downloading UID:"+str(UID)+" Filter:"+str(Filter))
-        self.API.userWorkList(UID,Filter,Callback=self.DownloadFromAbstractInfo,**kwargs)
-    def DownloadGroup(self,GID,Filter,**kwargs):
-        self.logger.warning("Downloading GroupGID:"+str(GID)+" Filter:"+str(Filter))
-        self.API.groupPostList(GID,Filter,Callback=self.DownloadFromAbstractInfo,**kwargs)
-    def DownloadCircle(self,CircleID,Filter,**kwargs):
+        self.API.userWorkList(UID,Filter,Callback=self.DownloadFromAbstractInfo,Progress=self.Status)
+    def DownloadGroup(self,GID):
+        self.logger.warning("Downloading GroupGID:"+str(GID))
+        self.API.groupPostList(GID,Progress=self.Status,Callback=self.DownloadFromAbstractInfo)
+    def DownloadCircle(self,CircleID,Filter):
         self.logger.warning("Downloading CircleID:"+str(CircleID)+" Filter:"+str(Filter))
-        self.API.circleList(CircleID,Filter,Callback=self.DownloadFromAbstractInfo,**kwargs)
-    def DownloadTag(self,Tag,Filter,**kwargs):
+        self.API.circleList(CircleID,Filter,Callback=self.DownloadFromAbstractInfo,Progress=self.Status)
+    def DownloadTag(self,Tag,Filter):
         self.logger.warning("Downloading Tag:"+str(Tag)+" Filter:"+str(Filter))
-        self.API.tagList(Tag,Filter,Callback=self.DownloadFromAbstractInfo,**kwargs)
-    def DownloadLikedList(self,Filter,**kwargs):
+        self.API.tagList(Tag,Filter,Callback=self.DownloadFromAbstractInfo,Progress=self.Status)
+    def DownloadLikedList(self,Filter):
         self.logger.warning("Downloading likedList Filter:"+str(Filter))
-        self.API.likedList(Filter,Callback=self.DownloadFromAbstractInfo,**kwargs)
+        self.API.likedList(Filter,Callback=self.DownloadFromAbstractInfo,Progress=self.Status)
     def DownloadUserRecommends(self,UID,Filter):
         self.logger.warning("Downloading Recommends From UID:"+str(UID)+" And Filter:"+Filter)
-        self.API.userRecommends(UID,Filter,Callback=self.DownloadFromAbstractInfo)
-    def DownloadSearch(self,Keyword,Type,**kwargs):
+        self.API.userRecommends(UID,Filter,Callback=self.DownloadFromAbstractInfo,Progress=self.Status)
+    def DownloadSearch(self,Keyword,Type):
         self.logger.warning("Downloading Search Result From Keyword:"+str(Keyword)+" And Type:"+Type)
-        self.API.search(Keyword,Type,Callback=self.DownloadFromAbstractInfo,**kwargs)
+        self.API.search(Keyword,Type,Callback=self.DownloadFromAbstractInfo,Progress=self.Status)
     def DownloadFromAbstractInfo(self,AbstractInfo):
         '''
             Put AbstractInfo into QueryQueue.
@@ -408,7 +410,6 @@ class BCYDownloadUtils(object):
             self.logger.warning ("QueryQueue Size:"+str(self.QueryQueue.qsize()))
             self.logger.warning ("DownloadQueue Size:"+str(self.DownloadQueue.qsize()))
             time.sleep(3)
-        self.logger.warning("QueryQueue and DownloadQueue Finished")
     def verify(self):
         '''
         Iterate all records in the specified SQL Table and download missing images
@@ -416,7 +417,7 @@ class BCYDownloadUtils(object):
         i=0
         Cursor=self.InfoSQL.execute("SELECT Info FROM WorkInfo").fetchall()
         for item in Cursor:
-            print ("Injecting "+str(i)+"/"+str(len(Cursor))+" Into Download Queue")
+            self.logger.warning("Injecting "+str(i+1)+"/"+str(len(Cursor))+" Into Download Queue")
             Info=json.loads(item[0])
             i=i+1
             self.DownloadFromInfo(Info)
