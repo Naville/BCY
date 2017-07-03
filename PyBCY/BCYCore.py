@@ -278,18 +278,20 @@ class BCYCore(object):
         '''
         items=list()
         p=1
-        while True:
-            Par={"p":p}
-            Par.update(Params)
-            p=p+1
-            foo=json.loads(self.POST(WorkType+"/getReply",Par).content)["data"]
-            if Callback!=None:
-                for i in foo:
-                    Callback(i)
-            if len(foo)==0:
-                return items
-            items.extend(foo)
-        return items
+        try:
+            while True:
+                Par={"p":p}
+                Par.update(Params)
+                p=p+1
+                foo=json.loads(self.POST(WorkType+"/getReply",Par).content)["data"]
+                if Callback!=None:
+                    for i in foo:
+                        Callback(i)
+                if len(foo)==0:
+                    return items
+                items.extend(foo)
+        except:
+            return items
     def goodsList(self,CircleID,Progress=dict(),Callback=None):
         '''
         获取某个圈子相关的周边列表。
@@ -297,17 +299,19 @@ class BCYCore(object):
         '''
         items=list()
         p=1
-        while True:
-            Params={"id":str(GroupID),"p":p,"limit":20}
-            p=p+1
-            foo=json.loads(self.POST("goods/listHotCore",Params).content)["data"]
-            if Callback!=None:
-                for i in foo:
-                    Callback(i)
-            if len(foo)==0:
-                return items
-            items.extend(foo)
-        return items
+        try:
+            while True:
+                Params={"id":str(GroupID),"p":p,"limit":20}
+                p=p+1
+                foo=json.loads(self.POST("goods/listHotCore",Params).content)["data"]
+                if Callback!=None:
+                    for i in foo:
+                        Callback(i)
+                if len(foo)==0:
+                    return items
+                items.extend(foo)
+        except:
+            return items
     def tagDiscussionList(self,TagName,Progress=dict(),Callback=None):
         '''
         获取某个Tag相关的串列表。
@@ -315,17 +319,19 @@ class BCYCore(object):
         '''
         items=list()
         p=1
-        while True:
-            Params={"p":p,"filter":"group","name":TagName,"limit":20}
-            p=p+1
-            foo=json.loads(self.POST("tag/detail",Params).content)["data"]
-            if Callback!=None:
-                for i in foo:
-                    Callback(i)
-            if len(foo)==0:
-                return items
-            items.extend(foo)
-        return items
+        try:
+            while True:
+                Params={"p":p,"filter":"group","name":TagName,"limit":20}
+                p=p+1
+                foo=json.loads(self.POST("tag/detail",Params).content)["data"]
+                if Callback!=None:
+                    for i in foo:
+                        Callback(i)
+                if len(foo)==0:
+                    return items
+                items.extend(foo)
+        except:
+            return items
     def search(self,keyword,type,Progress=None,Callback=None,*kwargs):
         '''
         type的可能值:
@@ -365,24 +371,25 @@ class BCYCore(object):
             firstRun=True
             latestCTIME=0
         items=list()
-        while True:
-            Params={"id":CircleID,"filter":Filter,"since":since}
-            foo=json.loads(self.POST("circle/work",Params).content)["data"]
-            shouldBreak=False#if ctime <= our stop point,break
-            for i in foo:
-                if Callback!=None:
-                    Callback(i)
-                if firstRun==False and int(i["ctime"])<latestCTIME:
-                    shouldBreak=True
-                if int(i["ctime"])>latestCTIME:
-                    Progress["circle/work"+str(CircleID)+Filter]=int(i["ctime"])
-                if since==0 or int(i["ctime"])<since:
-                    since=int(i["ctime"])
-            if len(foo)==0 or shouldBreak:
-                return items
-            items.extend(foo)
-
-        return items
+        try:
+            while True:
+                Params={"id":CircleID,"filter":Filter,"since":since}
+                foo=json.loads(self.POST("circle/work",Params).content)["data"]
+                shouldBreak=False#if ctime <= our stop point,break
+                for i in foo:
+                    if Callback!=None:
+                        Callback(i)
+                    if firstRun==False and int(i["ctime"])<latestCTIME:
+                        shouldBreak=True
+                    if int(i["ctime"])>latestCTIME:
+                        Progress["circle/work"+str(CircleID)+Filter]=int(i["ctime"])
+                    if since==0 or int(i["ctime"])<since:
+                        since=int(i["ctime"])
+                if len(foo)==0 or shouldBreak:
+                    return items
+                items.extend(foo)
+        except:
+            return items
     def tagList(self,TagName,Filter,Progress=dict(),Callback=None):
         since=0
         firstRun=False
@@ -391,42 +398,44 @@ class BCYCore(object):
             firstRun=True
             latestCTIME=0
         items=list()
-        while True:
-            Params={"name":TagName,"filter":Filter,"since":since}
-            foo=json.loads(self.POST("circle/tag",Params).content)["data"]
-            shouldBreak=False#if ctime <= our stop point,break
-            for i in foo:
-                if Callback!=None:
-                    Callback(i)
-                if firstRun==False and int(i["ctime"])<latestCTIME:
-                    shouldBreak=True
-                if int(i["ctime"])>latestCTIME:
-                    Progress["circle/tag"+str(TagName)+Filter]=int(i["ctime"])
-                if since==0 or int(i["ctime"])<since:
-                    since=int(i["ctime"])
-            if len(foo)==0 or shouldBreak:
-                return items
-            items.extend(foo)
-
-        return items
+        try:
+            while True:
+                Params={"name":TagName,"filter":Filter,"since":since}
+                foo=json.loads(self.POST("circle/tag",Params).content)["data"]
+                shouldBreak=False#if ctime <= our stop point,break
+                for i in foo:
+                    if Callback!=None:
+                        Callback(i)
+                    if firstRun==False and int(i["ctime"])<latestCTIME:
+                        shouldBreak=True
+                    if int(i["ctime"])>latestCTIME:
+                        Progress["circle/tag"+str(TagName)+Filter]=int(i["ctime"])
+                    if since==0 or int(i["ctime"])<since:
+                        since=int(i["ctime"])
+                if len(foo)==0 or shouldBreak:
+                    return items
+                items.extend(foo)
+        except:
+            return items
     def groupPostList(self,GroupID,Progress=dict(),Callback=None):
         '''
         这个是用来给定一个讨论串用来获取所有回贴列表的。例如41709对应https://bcy.net/group/list/41709
         '''
         items=list()
         p=1
-        while True:
-            Params={"p":p,"gid":str(GroupID),"type":"ding","limit":20}
-            p=p+1
-            foo=json.loads(self.POST("group/listPosts",Params).content)["data"]
-            if Callback!=None:
-                for i in foo:
-                    Callback(i)
-            if len(foo)==0:
-                return items
-            items.extend(foo)
-
-        return items
+        try:
+            while True:
+                Params={"p":p,"gid":str(GroupID),"type":"ding","limit":20}
+                p=p+1
+                foo=json.loads(self.POST("group/listPosts",Params).content)["data"]
+                if Callback!=None:
+                    for i in foo:
+                        Callback(i)
+                if len(foo)==0:
+                    return items
+                items.extend(foo)
+        except:
+            return items
     def userWorkList(self,UID,Filter,Progress=dict(),Callback=None):
         since=0
         items=list()
