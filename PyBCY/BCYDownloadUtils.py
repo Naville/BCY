@@ -75,6 +75,7 @@ class BCYDownloadUtils(object):
         self.API                        A BCYCore() object
         self.FailedInfoList             A list of DetailedInfo of failed downloads
         self.Status                     A dictionary. Used for fast iteration by skipping iterated works
+        self.InfoSQL                    A sqlite3 connection object
 
         BCYDownloadUtils is underlying powered by two FIFO Queues:
             QueryQueue          For Storing AbstractInfo
@@ -84,7 +85,7 @@ class BCYDownloadUtils(object):
         So when you see a log message indicating something is being downloaded, that only means the AbstractInfo
         has been pushed to the queue.
     '''
-    def __init__(self,email,password,savepath,MaxDownloadThread=16,MaxQueryThread=64,Daemon=False,IP="127.0.0.1",Port=8081,DownloadProgress=False):
+    def __init__(self,email,password,savepath,MaxDownloadThread=16,MaxQueryThread=64,Daemon=False,IP="127.0.0.1",Port=8081,DownloadProgress=False,DatabaseFileName="BCYInfo.db"):
         '''
         Argument names should be self-explained
         pass None for email and password for anonymous browsing
@@ -101,11 +102,12 @@ class BCYDownloadUtils(object):
         if email!=None and password!=None:
             self.API.loginWithEmailAndPassWord(email,password)
         print ("Logged in...UID:"+str(self.API.UID))
-        self.InfoSQL=sqlite3.connect(os.path.join(savepath,"BCYInfo.db"),check_same_thread=False)
+        self.InfoSQL=sqlite3.connect(os.path.join(savepath,DatabaseFileName),check_same_thread=False)
         self.InfoSQL.text_factory = str
         self.InfoSQL.execute("CREATE TABLE IF NOT EXISTS UserInfo (uid STRING,UserName STRING,UNIQUE(uid) ON CONFLICT IGNORE);")
         self.InfoSQL.execute("CREATE TABLE IF NOT EXISTS GroupInfo (gid STRING,GroupName STRING,UNIQUE(gid) ON CONFLICT IGNORE);")
         self.InfoSQL.execute("CREATE TABLE IF NOT EXISTS WorkInfo (uid STRING NOT NULL DEFAULT '',Title STRING NOT NULL DEFAULT '',cp_id STRING NOT NULL DEFAULT '',rp_id STRING NOT NULL DEFAULT '',dp_id STRING NOT NULL DEFAULT '',ud_id STRING NOT NULL DEFAULT '',post_id STRING NOT NULL DEFAULT '',Info STRING NOT NULL DEFAULT '',Tags STRING,UNIQUE(UID,cp_id,rp_id,dp_id,ud_id,post_id) ON CONFLICT REPLACE);")
+        self.InfoSQL.execute("PRAGMA journal_mode=WAL;")
         self.InfoSQLLock=threading.Lock()
         self.InfoSQLLock=threading.Lock()
         self.DownloadProcesses=dict()
@@ -415,6 +417,7 @@ class BCYDownloadUtils(object):
         Iterate all records in the specified SQL Table and download missing images
         '''
         i=0
+        self.logger.warning("Verifying Local Cache")
         Cursor=self.InfoSQL.execute("SELECT Info FROM WorkInfo").fetchall()
         for item in Cursor:
             self.logger.warning("Injecting "+str(i+1)+"/"+str(len(Cursor))+" Into Download Queue")

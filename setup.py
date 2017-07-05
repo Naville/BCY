@@ -1,5 +1,10 @@
 from setuptools import setup,find_packages
 import os,sys,errno
+import unittest
+def my_test_suite(): #From https://stackoverflow.com/questions/17001010/how-to-run-unittest-discover-from-python-setup-py-test
+    test_loader = unittest.TestLoader()
+    test_suite = test_loader.discover('UnitTest', pattern='Test.py')
+    return test_suite
 def recursiveSearch(directory):
     return [os.path.join(root, name)
                  for root, dirs, files in os.walk(directory)
@@ -19,16 +24,13 @@ except OSError as exception:
         raise
 setup(
     name='PyBCY',
-    version='1.9.1',
+    version='1.9.5',
     packages=find_packages(),
     url = "https://github.com/Naville/PyBCY",
     license='GPL',
     author='Naville',
-    scripts=['PyBCY/bin/PyBCYDownloader.py'],
     author_email='admin@mayuyu.io',
     description='Python Interface For BCY.net API',
     install_requires=['pkcs7','PyCrypto',"requests"],
-    zip_safe = False,
-    include_package_data=True,
-    data_files=[(ChromeExtensionInstallPath, recursiveSearch('ChromeExtension/'))]
+    test_suite='setup.my_test_suite',
 )

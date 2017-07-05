@@ -437,6 +437,11 @@ class BCYCore(object):
         except:
             return items
     def userWorkList(self,UID,Filter,Progress=dict(),Callback=None):
+        '''
+        获取某个用户的所有作品
+        日常的Filter在这里用user
+        说真的WTF?
+        '''
         since=0
         items=list()
         LAST_TL_ID=Progress.get("timeline/latest"+str(UID)+Filter,None)
