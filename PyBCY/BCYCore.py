@@ -26,9 +26,7 @@ class BCYCore(object):
          - circle
          - group
 
-    Each work,regardless of WorkType, is globally identified using a set of Keys & Values
-    Different WorkType of work has different set of used keys.Refer to queryDetail()'s code
-    Most APIs use WorkType in URL to identifier WorkType and respond accordingly
+    所有的作品都由一组全局唯一的标识符标记。不同类型的作品所用的标识符Key不同
     '''
     APIBase="http://api.bcy.net/api/"
     Header={"User-Agent":"bcy/3.8.0 (iPad; iOS 9.3.3; Scale/2.00)","X-BCY-Version":"iOS-3.8.0"}
@@ -51,8 +49,8 @@ class BCYCore(object):
         self.session.headers.update(BCYCore.Header)
     def loginWithEmailAndPassWord(self,email,password):
         '''
-        Login is not required.
-        However certain operations like viewing Follower-Only content might fail in anonymous mode
+        登录并非必须。
+        但匿名模式下某些API无法使用
         '''
         data=self.POST("user/login",{"pass":password,"user":email},timeout=self.Timeout).content
         data=json.loads(data)["data"]
@@ -123,6 +121,10 @@ class BCYCore(object):
             return None
 
     def imageDownload(self,ImageInfo,Callback=None):
+        '''
+        从指定图片URL下载图片
+        默认情况下下载无水印大图。失败的情况从官方API下载有水印大图
+        '''
         ImageData=None
         URL=ImageInfo["url"]
         if URL.startswith("http")==False:
@@ -163,9 +165,9 @@ class BCYCore(object):
             return False
     def detailWorker(self,URL,InfoParams):
         '''
-        This is a wrapper around POST() to solve various overheads like:
-            Locked Work
-            Follower-Only Content
+        对POST的简单封装。用于解决:
+            - 关注可见
+            - 已锁定内容
         '''
         data=None
         try:
@@ -203,21 +205,19 @@ class BCYCore(object):
         return self.detailWorker("group/postDetail",{"gid":GroupID,"post_id":PostID})
     def likeWork(self,WorkType,Info):
         '''
-        Info is the WorkInfo, containing WorkIdentifiers *ONLY*
+        给某个作品点赞。Info为*只*包含标识符的字典
         '''
         return self.POST(WorkType+"/doZan",Info)
     def unlikeWork(self,WorkType,Info):
         '''
-        Info is the WorkInfo, containing WorkIdentifiers *ONLY*
+        取消给某个作品点赞。Info为*只*包含标识符的字典
         '''
         return self.POST(undoZan+"/undoZan",Info)
     def queryDetail(self,Info):
         '''
-        This method:
-            1. Analyze Info
-            2. Extract Values and dispatch them to corresponding APIs
-            3. Return the result
-        It's usually better to call this method instead of directly using the underlying APIs
+        这个方法为作品的详情查询封装。
+        分析Info后分发给相应类型的API并返回结果
+        大多数时候你应该调用这个而不是直接调用底层API
         '''
         try:
             Info=Info["detail"]
@@ -237,7 +237,7 @@ class BCYCore(object):
                 raise Exception('QueryDetail is called with unsupported Info. Written To:', outfile.name)
     def WorkTypeCircle(self,name):
         '''
-        name is the column name used on the website banner, possible values:
+        name是网站banner上的名称，目前有:
             绘画
             COS
             写作
@@ -451,8 +451,10 @@ class BCYCore(object):
             items.extend(Latest)
             if len(items)==0:
                 return items
-            if LAST_TL_ID!=None:
-                for x in items:
+            for x in items:
+                if Callback!=None:
+                    Callback(x)
+                if LAST_TL_ID!=None:
                     if int(x["tl_id"])<LAST_TL_ID:
                         Progress["timeline/latest"+str(UID)+Filter]=int(items[0]["tl_id"])
                         return items
@@ -464,8 +466,10 @@ class BCYCore(object):
                 if len(more)==0:
                     Progress["timeline/latest"+str(UID)+Filter]=int(items[0]["tl_id"])
                     return items
-                if LAST_TL_ID!=None:
-                    for x in more:
+                for x in more:
+                    if Callback!=None:
+                        Callback(x)
+                    if LAST_TL_ID!=None:
                         if int(x["tl_id"])<LAST_TL_ID:
                             Progress["timeline/latest"+str(UID)+Filter]=int(items[0]["tl_id"])
                             return items
@@ -505,8 +509,10 @@ class BCYCore(object):
             items.extend(Latest)
             if len(items)==0:
                 return items
-            if LAST_TL_ID!=None:
-                for x in items:
+            for x in items:
+                if Callback!=None:
+                    Callback(x)
+                if LAST_TL_ID!=None:
                     if int(x["tl_id"])<LAST_TL_ID:
                         Progress["timeline/userGrid"+str(UID)+Filter]=int(items[0]["tl_id"])
                         return items
@@ -518,8 +524,10 @@ class BCYCore(object):
                 if len(more)==0:
                     Progress["timeline/userGrid"+str(UID)+Filter]=int(items[0]["tl_id"])
                     return items
-                if LAST_TL_ID!=None:
-                    for x in more:
+                for x in more:
+                    if Callback!=None:
+                        Callback(x)
+                    if LAST_TL_ID!=None:
                         if int(x["tl_id"])<LAST_TL_ID:
                             Progress["timeline/userGrid"+str(UID)+Filter]=int(items[0]["tl_id"])
                             return items

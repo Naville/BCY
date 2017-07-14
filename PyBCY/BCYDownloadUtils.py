@@ -412,15 +412,30 @@ class BCYDownloadUtils(object):
             self.logger.warning ("QueryQueue Size:"+str(self.QueryQueue.qsize()))
             self.logger.warning ("DownloadQueue Size:"+str(self.DownloadQueue.qsize()))
             time.sleep(3)
+    def verifyWorker(self):
+        while self.verifyEvent.isSet()==True:
+            obj=self.verifyQueue.get()
+            Info=json.loads(obj)
+            self.DownloadFromInfo(Info)
+            self.verifyQueue.task_done()
+
     def verify(self):
         '''
         Iterate all records in the specified SQL Table and download missing images
         '''
+        self.verifyQueue=Queue.Queue()
+        self.verifyEvent=threading.Event()
+        self.verifyEvent.set()
+        for i in range(8):
+            t =  threading.Thread(target=self.verifyWorker)
+            t.daemon = False
+            t.start()
         i=0
         self.logger.warning("Verifying Local Cache")
         Cursor=self.InfoSQL.execute("SELECT Info FROM WorkInfo").fetchall()
         for item in Cursor:
-            self.logger.warning("Injecting "+str(i+1)+"/"+str(len(Cursor))+" Into Download Queue")
-            Info=json.loads(item[0])
+            self.verifyQueue.put(item[0])
             i=i+1
-            self.DownloadFromInfo(Info)
+        while self.verifyQueue.empty()==False:
+            time.sleep(5)
+            self.logger.warning ("Verify Queue Size"+str(self.verifyQueue.qsize()))
