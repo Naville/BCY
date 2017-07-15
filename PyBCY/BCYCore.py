@@ -183,7 +183,7 @@ class BCYCore(object):
         '''
         给某个作品点赞。Info为*只*包含标识符的字典
         '''
-        return self.POST(WorkType+"/doZan",Info),timeout=self.Timeout
+        return self.POST(WorkType+"/doZan",Info,timeout=self.Timeout)
     def unlikeWork(self,WorkType,Info):
         '''
         取消给某个作品点赞。Info为*只*包含标识符的字典
