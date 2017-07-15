@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-import requests,base64,logging,json,os,time,tempfile,sys,logging,re
+import requests,base64,logging,json,os,time,tempfile,sys,logging,re,threading
 from Crypto.Cipher import AES
 from pkcs7 import PKCS7Encoder
 from copy import deepcopy
@@ -27,9 +27,11 @@ class BCYCore(object):
          - group
 
     所有的作品都由一组全局唯一的标识符标记。不同类型的作品所用的标识符Key不同
+    自2017年7月左右起半次元API接口开启了同IP的并发请求限制。请求过快或过密会导致服务器不返回正文或者空正文。IP地址也会被Ban
+    前者会触发requests.exceptions.ConnectionError异常
     '''
     APIBase="http://api.bcy.net/api/"
-    Header={"User-Agent":"bcy/3.8.0 (iPad; iOS 9.3.3; Scale/2.00)","X-BCY-Version":"iOS-3.8.0"}
+    Header={"User-Agent":"bcy/3.8.0 (iPhone; iOS 10.0.1; Scale/1.00)","X-BCY-Version":"iOS-3.8.0"}
     NeedFollowServerResponse="阿拉，请先关注一下嘛"
     LockedServerResponse="该作品已被管理员锁定"
     APIErrorResponse="半次元不小心滑了一跤"
@@ -38,7 +40,10 @@ class BCYCore(object):
                4000:"请先登录半次元",
                21:"半次元不小心滑了一跤"
                 }
-    def __init__(self,Timeout=20):
+    def __init__(self,Timeout=20,Semaphore=4):
+        '''
+        Semaphore用于限制最大并发连接数。否则对服务器负载过大
+        '''
         self.UID=None
         self.Token=None
         # Lack Support of PKCS7Padding.Solve it in actual crypto stage
@@ -47,6 +52,7 @@ class BCYCore(object):
         self.Timeout=Timeout
         self.session=requests.Session()
         self.session.headers.update(BCYCore.Header)
+        self.Semaphore=threading.Semaphore(Semaphore)
     def loginWithEmailAndPassWord(self,email,password):
         '''
         登录并非必须。
@@ -57,7 +63,7 @@ class BCYCore(object):
         try:
             self.UID=data["uid"]
             self.Token = data["token"]
-        except:
+        except TypeError:
             raise ValueError("BCYLogin Error:"+str(data))
     def EncryptData(self,Data):
         Data=Data.encode("utf8")
@@ -71,12 +77,9 @@ class BCYCore(object):
             ParamData=json.dumps(Params,separators=(',', ':'),ensure_ascii=False)
         return {"data":base64.b64encode(self.EncryptData(ParamData))}
     def GET(self,URL,Params,**kwargs):
-        try:
-            return self.session.get(URL,params=Params,**kwargs)
-        except:
-            return None
-
+        return self.session.get(URL,params=Params,**kwargs)
     def POST(self,URL,Params,Auth=True,**kwargs):
+        self.Semaphore.acquire()
         if URL.startswith(BCYCore.APIBase)==False:
                 URL=BCYCore.APIBase + URL
         if Auth==True:
@@ -85,15 +88,11 @@ class BCYCore(object):
             if 'token' not in Params.keys() and self.Token!=None:
                 Params['token']=self.Token
         P=self.EncryptParam(Params)
-        try:
-            return self.session.post(URL,data=P,**kwargs)
-        except:
-            return None
+        foo=self.session.post(URL,data=P,**kwargs)
+        self.Semaphore.release()
+        return foo
     def userDetail(self,UID):
-        try:
-            return json.loads(self.POST("user/detail",{"face":"b","uid":UID},timeout=self.Timeout).content)
-        except:
-            return None
+        return json.loads(self.POST("user/detail",{"face":"b","uid":UID},timeout=self.Timeout).content)
     def downloadWorker(self,URL,Callback=None):
         Content=None
         req=self.GET(URL,{},timeout=self.Timeout,stream=True)
@@ -127,53 +126,34 @@ class BCYCore(object):
         '''
         ImageData=None
         URL=ImageInfo["url"]
-        if URL.startswith("http")==False:
-            return None
         OriginalImageURL=os.path.split(URL)[0]
         try:
             ImageData=self.downloadWorker(OriginalImageURL,Callback=Callback)
+        except requests.exceptions.MissingSchema: #API有Bug.有时图片列表会出现随机文本URL
+            return None
         except:
             pass
-        if ImageData==None:#API Endpoint Bug Sometimes Results In Non-Existing URL In Detail Response
-            return None
         try:
             rep=json.loads(ImageData)
-        except ValueError:
+        except ValueError:#否则说明是Document Not Found应答
             return ImageData
-        ImageData=self.POST("image/download",ImageInfo,timeout=self.Timeout)
-        if ImageData==None:#API Endpoint Bug Sometimes Results In Non-Existing URL In Detail Response
-            return None
-        ImageData=ImageData.content
-        try:
-            rep=json.loads(ImageData)
-            ActualURL=rep["data"]["cover"]
-            return self.downloadWorker(ActualURL,Callback=Callback)
-        except:
-            return None
-        return None
+        ImageData=self.POST("image/download",ImageInfo,timeout=self.Timeout).content
+        rep=json.loads(ImageData)
+        ActualURL=rep["data"]["cover"]
+        return self.downloadWorker(ActualURL,Callback=Callback)
     def followUser(self,uid):
-        try:
-            data=json.loads(self.POST("user/follow",{"uid":uid,"type":"dofollow"},timeout=self.Timeout).content)
-            return int(data["status"])==1
-        except:
-            return False
+        data=json.loads(self.POST("user/follow",{"uid":uid,"type":"dofollow"},timeout=self.Timeout).content)
+        return int(data["status"])==1
     def unfollowUser(self,uid):
-        try:
-            data=json.loads(self.POST("user/follow",{"uid":uid,"type":"unfollow"},timeout=self.Timeout).content)
-            return int(data["status"])==1
-        except:
-            return False
+        data=json.loads(self.POST("user/follow",{"uid":uid,"type":"unfollow"},timeout=self.Timeout).content)
+        return int(data["status"])==1
     def detailWorker(self,URL,InfoParams):
         '''
         对POST的简单封装。用于解决:
             - 关注可见
             - 已锁定内容
         '''
-        data=None
-        try:
-            data=json.loads(self.POST(URL,InfoParams,timeout=self.Timeout).content)
-        except:
-            return None
+        data=json.loads(self.POST(URL,InfoParams,timeout=self.Timeout).content)
         UnicodeStatus=None
         try:
             UnicodeStatus=unicode(data["data"]["data"]).encode('utf8')
@@ -185,11 +165,7 @@ class BCYCore(object):
         if UnicodeStatus==BCYCore.NeedFollowServerResponse:
             UID=int(data["data"]["profile"]["uid"])
             self.followUser(UID)
-            try:
-                data=json.loads(self.POST(URL,InfoParams,timeout=self.Timeout).content)
-            except:
-                self.unfollowUser(UID)
-                return None
+            data=json.loads(self.POST(URL,InfoParams,timeout=self.Timeout).content)
             self.unfollowUser(UID)
         if UnicodeStatus==BCYCore.LockedServerResponse:
             return None
@@ -207,12 +183,12 @@ class BCYCore(object):
         '''
         给某个作品点赞。Info为*只*包含标识符的字典
         '''
-        return self.POST(WorkType+"/doZan",Info)
+        return self.POST(WorkType+"/doZan",Info),timeout=self.Timeout
     def unlikeWork(self,WorkType,Info):
         '''
         取消给某个作品点赞。Info为*只*包含标识符的字典
         '''
-        return self.POST(undoZan+"/undoZan",Info)
+        return self.POST(WorkType+"/undoZan",Info,timeout=self.Timeout)
     def queryDetail(self,Info):
         '''
         这个方法为作品的详情查询封装。
@@ -244,10 +220,7 @@ class BCYCore(object):
             漫展
             讨论
         '''
-        try:
-            return json.loads(self.POST("tag/relaCircle",{"name":name},timeout=self.Timeout).content)
-        except:
-            return None
+        return json.loads(self.POST("tag/relaCircle",{"name":name},timeout=self.Timeout).content)
     def report(self,Info,reportType,WorkType,Reason):
         '''
         Reason 是全局使用的那些理由。目前有:
@@ -268,7 +241,7 @@ class BCYCore(object):
         Args["type"]=Reason
         return self.POST(WorkType+"/denounce"+str(reportType),Args)
     def tagStatus(self,TagName):
-        return json.loads(self.POST("tag/status",{"name":TagName}).content)
+        return json.loads(self.POST("tag/status",{"name":TagName},timeout=self.Timeout).content)
 
 # 以下都为列表类应答API
     def getReply(self,WorkType,Params,**kwargs):
@@ -278,20 +251,17 @@ class BCYCore(object):
         '''
         items=list()
         p=1
-        try:
-            while True:
-                Par={"p":p}
-                Par.update(Params)
-                p=p+1
-                foo=json.loads(self.POST(WorkType+"/getReply",Par).content)["data"]
-                if Callback!=None:
-                    for i in foo:
-                        Callback(i)
-                if len(foo)==0:
-                    return items
-                items.extend(foo)
-        except:
-            return items
+        while True:
+            Par={"p":p}
+            Par.update(Params)
+            p=p+1
+            foo=json.loads(self.POST(WorkType+"/getReply",Par,timeout=self.Timeout).content)["data"]
+            if Callback!=None:
+                for i in foo:
+                    Callback(i)
+            if len(foo)==0:
+                return items
+            items.extend(foo)
     def goodsList(self,CircleID,Progress=dict(),Callback=None):
         '''
         获取某个圈子相关的周边列表。
@@ -299,19 +269,16 @@ class BCYCore(object):
         '''
         items=list()
         p=1
-        try:
-            while True:
-                Params={"id":str(GroupID),"p":p,"limit":20}
-                p=p+1
-                foo=json.loads(self.POST("goods/listHotCore",Params).content)["data"]
-                if Callback!=None:
-                    for i in foo:
-                        Callback(i)
-                if len(foo)==0:
-                    return items
-                items.extend(foo)
-        except:
-            return items
+        while True:
+            Params={"id":str(GroupID),"p":p,"limit":20}
+            p=p+1
+            foo=json.loads(self.POST("goods/listHotCore",Params,timeout=self.Timeout).content)["data"]
+            if Callback!=None:
+                for i in foo:
+                    Callback(i)
+            if len(foo)==0:
+                return items
+            items.extend(foo)
     def tagDiscussionList(self,TagName,Progress=dict(),Callback=None):
         '''
         获取某个Tag相关的串列表。
@@ -319,19 +286,16 @@ class BCYCore(object):
         '''
         items=list()
         p=1
-        try:
-            while True:
-                Params={"p":p,"filter":"group","name":TagName,"limit":20}
-                p=p+1
-                foo=json.loads(self.POST("tag/detail",Params).content)["data"]
-                if Callback!=None:
-                    for i in foo:
-                        Callback(i)
-                if len(foo)==0:
-                    return items
-                items.extend(foo)
-        except:
-            return items
+        while True:
+            Params={"p":p,"filter":"group","name":TagName,"limit":20}
+            p=p+1
+            foo=json.loads(self.POST("tag/detail",Params,timeout=self.Timeout).content)["data"]
+            if Callback!=None:
+                for i in foo:
+                    Callback(i)
+            if len(foo)==0:
+                return items
+            items.extend(foo)
     def search(self,keyword,type,Progress=None,Callback=None,*kwargs):
         '''
         type的可能值:
@@ -352,17 +316,14 @@ class BCYCore(object):
         items=list()
         p=1
         while True:
-            try:
-                itemList=json.loads(self.POST("search/search"+str(type),{"query":keyword,"p":p}).content)["data"]["results"]
-                p=p+1
-                if len(itemList)==0:
-                    return items
-                items.extend(itemList)
-                if Callback!=None:
-                    for item in itemList:
-                        Callback(item)
-            except:
+            itemList=json.loads(self.POST("search/search"+str(type),{"query":keyword,"p":p},timeout=self.Timeout).content)["data"]["results"]
+            p=p+1
+            if len(itemList)==0:
                 return items
+            items.extend(itemList)
+            if Callback!=None:
+                for item in itemList:
+                    Callback(item)
     def circleList(self,CircleID,Filter,Progress=dict(),Callback=None):
         since=0
         firstRun=False
@@ -371,25 +332,22 @@ class BCYCore(object):
             firstRun=True
             latestCTIME=0
         items=list()
-        try:
-            while True:
-                Params={"id":CircleID,"filter":Filter,"since":since}
-                foo=json.loads(self.POST("circle/work",Params).content)["data"]
-                shouldBreak=False#if ctime <= our stop point,break
-                for i in foo:
-                    if Callback!=None:
-                        Callback(i)
-                    if firstRun==False and int(i["ctime"])<latestCTIME:
-                        shouldBreak=True
-                    if int(i["ctime"])>latestCTIME:
-                        Progress["circle/work"+str(CircleID)+Filter]=int(i["ctime"])
-                    if since==0 or int(i["ctime"])<since:
-                        since=int(i["ctime"])
-                if len(foo)==0 or shouldBreak:
-                    return items
-                items.extend(foo)
-        except:
-            return items
+        while True:
+            Params={"id":CircleID,"filter":Filter,"since":since}
+            foo=json.loads(self.POST("circle/work",Params,timeout=self.Timeout).content)["data"]
+            shouldBreak=False#if ctime <= our stop point,break
+            for i in foo:
+                if Callback!=None:
+                    Callback(i)
+                if firstRun==False and int(i["ctime"])<latestCTIME:
+                    shouldBreak=True
+                if int(i["ctime"])>latestCTIME:
+                    Progress["circle/work"+str(CircleID)+Filter]=int(i["ctime"])
+                if since==0 or int(i["ctime"])<since:
+                    since=int(i["ctime"])
+            if len(foo)==0 or shouldBreak:
+                return items
+            items.extend(foo)
     def tagList(self,TagName,Filter,Progress=dict(),Callback=None):
         since=0
         firstRun=False
@@ -398,44 +356,38 @@ class BCYCore(object):
             firstRun=True
             latestCTIME=0
         items=list()
-        try:
-            while True:
-                Params={"name":TagName,"filter":Filter,"since":since}
-                foo=json.loads(self.POST("circle/tag",Params).content)["data"]
-                shouldBreak=False#if ctime <= our stop point,break
-                for i in foo:
-                    if Callback!=None:
-                        Callback(i)
-                    if firstRun==False and int(i["ctime"])<latestCTIME:
-                        shouldBreak=True
-                    if int(i["ctime"])>latestCTIME:
-                        Progress["circle/tag"+str(TagName)+Filter]=int(i["ctime"])
-                    if since==0 or int(i["ctime"])<since:
-                        since=int(i["ctime"])
-                if len(foo)==0 or shouldBreak:
-                    return items
-                items.extend(foo)
-        except:
-            return items
+        while True:
+            Params={"name":TagName,"filter":Filter,"since":since}
+            foo=json.loads(self.POST("circle/tag",Params,timeout=self.Timeout).content)["data"]
+            shouldBreak=False#if ctime <= our stop point,break
+            for i in foo:
+                if Callback!=None:
+                    Callback(i)
+                if firstRun==False and int(i["ctime"])<latestCTIME:
+                    shouldBreak=True
+                if int(i["ctime"])>latestCTIME:
+                    Progress["circle/tag"+str(TagName)+Filter]=int(i["ctime"])
+                if since==0 or int(i["ctime"])<since:
+                    since=int(i["ctime"])
+            if len(foo)==0 or shouldBreak:
+                return items
+            items.extend(foo)
     def groupPostList(self,GroupID,Progress=dict(),Callback=None):
         '''
         这个是用来给定一个讨论串用来获取所有回贴列表的。例如41709对应https://bcy.net/group/list/41709
         '''
         items=list()
         p=1
-        try:
-            while True:
-                Params={"p":p,"gid":str(GroupID),"type":"ding","limit":20}
-                p=p+1
-                foo=json.loads(self.POST("group/listPosts",Params).content)["data"]
-                if Callback!=None:
-                    for i in foo:
-                        Callback(i)
-                if len(foo)==0:
-                    return items
-                items.extend(foo)
-        except:
-            return items
+        while True:
+            Params={"p":p,"gid":str(GroupID),"type":"ding","limit":20}
+            p=p+1
+            foo=json.loads(self.POST("group/listPosts",Params,timeout=self.Timeout).content)["data"]
+            if Callback!=None:
+                for i in foo:
+                    Callback(i)
+            if len(foo)==0:
+                return items
+            items.extend(foo)
     def userWorkList(self,UID,Filter,Progress=dict(),Callback=None):
         '''
         获取某个用户的所有作品
@@ -446,36 +398,32 @@ class BCYCore(object):
         items=list()
         LAST_TL_ID=Progress.get("timeline/latest"+str(UID)+Filter,None)
         Param={"uid":str(UID),"num":10,"filter":"origin","source":Filter,"type":"user"}
-        try:
-            Latest=json.loads(self.POST("timeline/latest",Param).content)["data"]
-            items.extend(Latest)
-            if len(items)==0:
+        Latest=json.loads(self.POST("timeline/latest",Param,timeout=self.Timeout).content)["data"]
+        items.extend(Latest)
+        if len(items)==0:
+            return items
+        for x in items:
+            if Callback!=None:
+                Callback(x)
+            if LAST_TL_ID!=None:
+                if int(x["tl_id"])<LAST_TL_ID:
+                    Progress["timeline/latest"+str(UID)+Filter]=int(items[0]["tl_id"])
+                    return items
+        while True:
+            since=int(items[-1]["tl_id"])#严格意义上来说我们需要比较并找出最小的tl_id。但是官方的应答是已经排序好的。所以官方App直接取最后一个。我们照抄
+            Param["since"]=str(since)
+            more=json.loads(self.POST("timeline/more",Param,timeout=self.Timeout).content)["data"]
+            items.extend(more)
+            if len(more)==0:
+                Progress["timeline/latest"+str(UID)+Filter]=int(items[0]["tl_id"])
                 return items
-            for x in items:
+            for x in more:
                 if Callback!=None:
                     Callback(x)
                 if LAST_TL_ID!=None:
                     if int(x["tl_id"])<LAST_TL_ID:
                         Progress["timeline/latest"+str(UID)+Filter]=int(items[0]["tl_id"])
                         return items
-            while True:
-                since=int(items[-1]["tl_id"])#严格意义上来说我们需要比较并找出最小的tl_id。但是官方的应答是已经排序好的。所以官方App直接取最后一个。我们照抄
-                Param["since"]=str(since)
-                more=json.loads(self.POST("timeline/more",Param).content)["data"]
-                items.extend(more)
-                if len(more)==0:
-                    Progress["timeline/latest"+str(UID)+Filter]=int(items[0]["tl_id"])
-                    return items
-                for x in more:
-                    if Callback!=None:
-                        Callback(x)
-                    if LAST_TL_ID!=None:
-                        if int(x["tl_id"])<LAST_TL_ID:
-                            Progress["timeline/latest"+str(UID)+Filter]=int(items[0]["tl_id"])
-                            return items
-
-        except:
-            return items
     def likedList(self,Filter,Progress=None,Callback=None):
         '''
         下载自己点过赞的作品
@@ -484,18 +432,14 @@ class BCYCore(object):
         items=list()
         p=1
         while True:
-            try:
-                itemList=json.loads(self.POST("space/zanlist",{"sub":Filter,"p":p}).content)["data"]
-                p=p+1
-                if len(itemList)==0:
-                    return items
-                items.extend(itemList)
-                if Callback!=None:
-                    for item in itemList:
-                        Callback(item)
-
-            except:
+            itemList=json.loads(self.POST("space/zanlist",{"sub":Filter,"p":p},timeout=self.Timeout).content)["data"]
+            p=p+1
+            if len(itemList)==0:
                 return items
+            items.extend(itemList)
+            if Callback!=None:
+                for item in itemList:
+                    Callback(item)
     def userRecommends(self,UID,Filter,Callback=None,Progress=dict()):
         '''
         下载其他某个用户赞过的作品
@@ -504,33 +448,29 @@ class BCYCore(object):
         items=list()
         LAST_TL_ID=Progress.get("timeline/latest"+str(UID)+Filter,None)
         Param={"uid":str(UID),"filter":"tuijian","source":Filter}
-        try:
-            Latest=json.loads(self.POST("timeline/userGrid",Param).content)["data"]
-            items.extend(Latest)
-            if len(items)==0:
+        Latest=json.loads(self.POST("timeline/userGrid",Param,timeout=self.Timeout).content)["data"]
+        items.extend(Latest)
+        if len(items)==0:
+            return items
+        for x in items:
+            if Callback!=None:
+                Callback(x)
+            if LAST_TL_ID!=None:
+                if int(x["tl_id"])<LAST_TL_ID:
+                    Progress["timeline/userGrid"+str(UID)+Filter]=int(items[0]["tl_id"])
+                    return items
+        while True:
+            since=int(items[-1]["tl_id"])#严格意义上来说我们需要比较并找出最小的tl_id。但是官方的应答是已经排序好的。所以官方App直接取最后一个。我们照抄
+            Param["since"]=since
+            more=json.loads(self.POST("timeline/userGrid",Param,timeout=self.Timeout).content)["data"]
+            items.extend(more)
+            if len(more)==0:
+                Progress["timeline/userGrid"+str(UID)+Filter]=int(items[0]["tl_id"])
                 return items
-            for x in items:
+            for x in more:
                 if Callback!=None:
                     Callback(x)
                 if LAST_TL_ID!=None:
                     if int(x["tl_id"])<LAST_TL_ID:
                         Progress["timeline/userGrid"+str(UID)+Filter]=int(items[0]["tl_id"])
                         return items
-            while True:
-                since=int(items[-1]["tl_id"])#严格意义上来说我们需要比较并找出最小的tl_id。但是官方的应答是已经排序好的。所以官方App直接取最后一个。我们照抄
-                Param["since"]=since
-                more=json.loads(self.POST("timeline/userGrid",Param).content)["data"]
-                items.extend(more)
-                if len(more)==0:
-                    Progress["timeline/userGrid"+str(UID)+Filter]=int(items[0]["tl_id"])
-                    return items
-                for x in more:
-                    if Callback!=None:
-                        Callback(x)
-                    if LAST_TL_ID!=None:
-                        if int(x["tl_id"])<LAST_TL_ID:
-                            Progress["timeline/userGrid"+str(UID)+Filter]=int(items[0]["tl_id"])
-                            return items
-
-        except:
-            return items

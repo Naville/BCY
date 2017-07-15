@@ -24,7 +24,7 @@ except OSError as exception:
         raise
 setup(
     name='PyBCY',
-    version='1.9.7',
+    version='1.9.8',
     packages=find_packages(),
     url = "https://github.com/Naville/PyBCY",
     license='GPL',

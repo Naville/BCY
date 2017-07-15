@@ -97,7 +97,7 @@ class BCYDownloadUtils(object):
         self.logger=logging.getLogger(str(__name__)+"-"+str(hex(id(self))))
         self.logger.addHandler(logging.NullHandler())
         self.Filter=BCYDownloadFilter()
-        self.API=BCYCore()
+        self.API=BCYCore(Semaphore=MaxQueryThread)
         self.FailedInfoList=list()
         if email!=None and password!=None:
             self.API.loginWithEmailAndPassWord(email,password)
@@ -406,13 +406,17 @@ class BCYDownloadUtils(object):
         return
     def join(self):
         '''
-        Blocks until all operations are finished
+        在下载完成前阻塞
         '''
         while self.QueryQueue.empty()==False or self.DownloadQueue.empty()==False:
             self.logger.warning ("QueryQueue Size:"+str(self.QueryQueue.qsize()))
             self.logger.warning ("DownloadQueue Size:"+str(self.DownloadQueue.qsize()))
             time.sleep(3)
     def verifyWorker(self):
+        '''
+        因为JSON解码也是有性能开销的。所以我们在verify()里将原始数据导入Queue.
+        由单独的线程使用本函数来负责解码注入
+        '''
         while self.verifyEvent.isSet()==True:
             obj=self.verifyQueue.get()
             Info=json.loads(obj)
@@ -421,12 +425,12 @@ class BCYDownloadUtils(object):
 
     def verify(self):
         '''
-        Iterate all records in the specified SQL Table and download missing images
+        将SQL表里的所有数据导入下载队列查漏补缺。
         '''
         self.verifyQueue=Queue.Queue()
         self.verifyEvent=threading.Event()
         self.verifyEvent.set()
-        for i in range(8):
+        for i in range(12):
             t =  threading.Thread(target=self.verifyWorker)
             t.daemon = False
             t.start()
@@ -438,4 +442,4 @@ class BCYDownloadUtils(object):
             i=i+1
         while self.verifyQueue.empty()==False:
             time.sleep(5)
-            self.logger.warning ("Verify Queue Size"+str(self.verifyQueue.qsize()))
+            self.logger.warning ("Verify Queue Size "+str(self.verifyQueue.qsize()))
