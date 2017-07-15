@@ -30,8 +30,8 @@ class BCYCore(object):
     自2017年7月左右起半次元API接口开启了同IP的并发请求限制。请求过快或过密会导致服务器不返回正文或者空正文。IP地址也会被Ban
     前者会触发requests.exceptions.ConnectionError异常
     '''
-    APIBase="http://api.bcy.net/api/"
-    Header={"User-Agent":"bcy/3.8.0 (iPhone; iOS 10.0.1; Scale/1.00)","X-BCY-Version":"iOS-3.8.0"}
+    APIBase="https://api.bcy.net/api/"
+    Header={"User-Agent":"bcy/3.8.1 (iPhone; iOS 10.0.1; Scale/1.00)","X-BCY-Version":"iOS-3.8.1"}
     NeedFollowServerResponse="阿拉，请先关注一下嘛"
     LockedServerResponse="该作品已被管理员锁定"
     APIErrorResponse="半次元不小心滑了一跤"
@@ -40,7 +40,7 @@ class BCYCore(object):
                4000:"请先登录半次元",
                21:"半次元不小心滑了一跤"
                 }
-    def __init__(self,Timeout=20,Semaphore=4):
+    def __init__(self,Timeout=20):
         '''
         Semaphore用于限制最大并发连接数。否则对服务器负载过大
         '''
@@ -52,7 +52,6 @@ class BCYCore(object):
         self.Timeout=Timeout
         self.session=requests.Session()
         self.session.headers.update(BCYCore.Header)
-        self.Semaphore=threading.Semaphore(Semaphore)
     def loginWithEmailAndPassWord(self,email,password):
         '''
         登录并非必须。
@@ -79,7 +78,6 @@ class BCYCore(object):
     def GET(self,URL,Params,**kwargs):
         return self.session.get(URL,params=Params,**kwargs)
     def POST(self,URL,Params,Auth=True,**kwargs):
-        self.Semaphore.acquire()
         if URL.startswith(BCYCore.APIBase)==False:
                 URL=BCYCore.APIBase + URL
         if Auth==True:
@@ -88,9 +86,7 @@ class BCYCore(object):
             if 'token' not in Params.keys() and self.Token!=None:
                 Params['token']=self.Token
         P=self.EncryptParam(Params)
-        foo=self.session.post(URL,data=P,**kwargs)
-        self.Semaphore.release()
-        return foo
+        return self.session.post(URL,data=P,**kwargs)
     def userDetail(self,UID):
         return json.loads(self.POST("user/detail",{"face":"b","uid":UID},timeout=self.Timeout).content)
     def downloadWorker(self,URL,Callback=None):
@@ -131,14 +127,15 @@ class BCYCore(object):
             ImageData=self.downloadWorker(OriginalImageURL,Callback=Callback)
         except requests.exceptions.MissingSchema: #API有Bug.有时图片列表会出现随机文本URL
             return None
-        except:
-            pass
         try:
             rep=json.loads(ImageData)
-        except ValueError:#否则说明是Document Not Found应答
+            return None
+        except:#否则说明是Document Not Found应答
             return ImageData
         ImageData=self.POST("image/download",ImageInfo,timeout=self.Timeout).content
         rep=json.loads(ImageData)
+        if type(rep["data"])==str:
+            return None
         ActualURL=rep["data"]["cover"]
         return self.downloadWorker(ActualURL,Callback=Callback)
     def followUser(self,uid):

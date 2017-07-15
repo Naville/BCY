@@ -84,6 +84,7 @@ class BCYDownloadUtils(object):
         And all interfaces in BCYDownloadUtils is actually just retreive and push AbstractInfo to the Queue.
         So when you see a log message indicating something is being downloaded, that only means the AbstractInfo
         has been pushed to the queue.
+        半次元新增IP并发请求数和请求速率限制之后建议每次调用方法之后join()一次避免速度过快被Ban
     '''
     def __init__(self,email,password,savepath,MaxDownloadThread=16,MaxQueryThread=64,Daemon=False,IP="127.0.0.1",Port=8081,DownloadProgress=False,DatabaseFileName="BCYInfo.db"):
         '''
@@ -97,7 +98,7 @@ class BCYDownloadUtils(object):
         self.logger=logging.getLogger(str(__name__)+"-"+str(hex(id(self))))
         self.logger.addHandler(logging.NullHandler())
         self.Filter=BCYDownloadFilter()
-        self.API=BCYCore(Semaphore=MaxQueryThread)
+        self.API=BCYCore()
         self.FailedInfoList=list()
         if email!=None and password!=None:
             self.API.loginWithEmailAndPassWord(email,password)
@@ -176,7 +177,7 @@ class BCYDownloadUtils(object):
                     f.write(ImageData)
                     f.close()
                     shutil.move(f.name,SavePath)
-            except Queue.Empty:
+            except:
                 pass
             self.DownloadQueue.task_done()
     def DownloadFromInfo(self,Info):
@@ -280,7 +281,7 @@ class BCYDownloadUtils(object):
                     self.DownloadFromInfo(Inf)
             except Queue.Empty:
                 pass
-            except AttributeError as e:
+            except:
                 self.FailedInfoList.append(AbstractInfo)
             self.QueryQueue.task_done()
     def LoadOrSaveUserName(self,UserName,UID):
