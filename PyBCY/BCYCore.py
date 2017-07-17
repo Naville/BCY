@@ -267,7 +267,7 @@ class BCYCore(object):
         items=list()
         p=1
         while True:
-            Params={"id":str(GroupID),"p":p,"limit":20}
+            Params={"id":str(CircleID),"p":p,"limit":20}
             p=p+1
             foo=json.loads(self.POST("goods/listHotCore",Params,timeout=self.Timeout).content)["data"]
             if Callback!=None:

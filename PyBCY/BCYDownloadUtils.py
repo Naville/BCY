@@ -68,22 +68,21 @@ class ServerHandler(BaseHTTPRequestHandler):
                 return
 class BCYDownloadUtils(object):
     '''
-        self.DownloadProcesses          A dictionary. For each entry, key is the URL being downloaded
-                                            The object is a tuple of structure(DownloadedSize,TotalSize)
-        self.logger                     A logging.logger() object
+        self.DownloadProcesses          字典。键为当前正在下载的URL。值为(已下载大小,总大小)的tuple
+        self.logger                     一个logging.logger() 对象
         self.Filter                     A BCYDownloadFilter() object used for filtering downloads
         self.API                        A BCYCore() object
-        self.FailedInfoList             A list of DetailedInfo of failed downloads
-        self.Status                     A dictionary. Used for fast iteration by skipping iterated works
+        self.FailedInfoList             一个查询详情失败的作品信息列表
+        self.Status                     一个用于记录列表迭代进度的字典
         self.InfoSQL                    A sqlite3 connection object
 
         BCYDownloadUtils is underlying powered by two FIFO Queues:
             QueryQueue          For Storing AbstractInfo
             DownloadQueue       Storing Info used by DownloadWorker(). DO NOT INVOKE DIRECTLY
 
-        And all interfaces in BCYDownloadUtils is actually just retreive and push AbstractInfo to the Queue.
-        So when you see a log message indicating something is being downloaded, that only means the AbstractInfo
-        has been pushed to the queue.
+        BCYDownloadUtils的所有方法实质上都是对两个FIFO队列的操作:
+            QueryQueue          用于存储作品信息
+            DownloadQueue       保存需要下载的详情。由DownloadWorker()来使用,由DownloadFromInfo()填充。请勿直接写入
         半次元新增IP并发请求数和请求速率限制之后建议每次调用方法之后join()一次避免速度过快被Ban
     '''
     def __init__(self,email,password,savepath,MaxDownloadThread=16,MaxQueryThread=64,Daemon=False,IP="127.0.0.1",Port=8081,DownloadProgress=False,DatabaseFileName="BCYInfo.db",UseCachedDetail=True):
@@ -150,7 +149,8 @@ class BCYDownloadUtils(object):
         self.cancel()
     def DownloadWorker(self):
         '''
-        DownloadWorker Spawned From __init__
+        供__init__ fork新线程使用。请勿直接调用。
+        本方法从DownloadQueue中获取下载任务并实际执行
         '''
         def Logger(URL,Downloaded,total_length):
             if Downloaded==total_length:
@@ -186,7 +186,10 @@ class BCYDownloadUtils(object):
             self.DownloadQueue.task_done()
     def DownloadFromInfo(self,Info):
         '''
-        Analyze Info and put it into the download queue
+        分析作品详情从中:
+            拼接路径等信息
+            保存详情
+            分发下载任务到DownloadQueue
         '''
         UID=None
         try:
@@ -225,7 +228,7 @@ class BCYDownloadUtils(object):
             GroupName=self.LoadOrSaveGroupName(Info["group"]["name"],GID)
             if(Title==None or len(Title)==0):
                 Title=GroupName+"-"+WorkID
-        Title=self.LoadTitle(Title,Info)
+        Title=self.LoadTitle(Info)
         self.SaveInfo(Title,Info)
         WritePathRoot=os.path.join(self.SavePath,str(CoserName).replace("/","-"),str(Title).replace("/","-"))
         for PathDict in Info["multi"]:
@@ -267,13 +270,13 @@ class BCYDownloadUtils(object):
         self.API.search(Keyword,Type,Callback=self.DownloadFromAbstractInfo,Progress=self.Status)
     def DownloadFromAbstractInfo(self,AbstractInfo):
         '''
-            Put AbstractInfo into QueryQueue.
+        通用的Callback。用于将查询获得的详细信息写入DownloadQueue
         '''
         self.QueryQueue.put(AbstractInfo)
     def DownloadFromAbstractInfoWorker(self):
         '''
-        AbstractInfoQueryWorker Spawned From __init__
-        Obtain AbstractInfo from QueryQueue, Query DetailInfo And Put Into Download Queue
+        供__init__ fork新线程使用。请勿直接调用。
+        本方法从QueryQueue中获取信息并查询详情后写入DownloadQueue
         '''
         while self.QueryEvent.isSet()==True:
             try:
@@ -293,6 +296,9 @@ class BCYDownloadUtils(object):
                 self.FailedInfoList.append(AbstractInfo)
             self.QueryQueue.task_done()
     def LoadCachedDetail(self,Info):
+        '''
+        用于读取本地SQL里的详细信息缓存
+        '''
         ValidIDs=dict()
         for key in ["cp_id","rp_id","dp_id","ud_id","post_id"]:
             value=Info.get(key)
@@ -315,8 +321,10 @@ class BCYDownloadUtils(object):
         return None
     def LoadOrSaveUserName(self,UserName,UID):
         '''
-            Can be used as pure query function when UserName is None
-            Return None if UserName is None and corresponding record doesn't exist.
+        当UserName为None时可用作纯查询函数。
+        否则查询SQL里对应UID的用户名:
+            如果有记录:返回原来的用户名
+            否则:建立UserName和UID的记录并返回UserName
         '''
         self.InfoSQLLock.acquire()
         Q="SELECT UserName FROM UserInfo WHERE uid="+str(UID)
@@ -332,8 +340,10 @@ class BCYDownloadUtils(object):
         return UserName
     def LoadOrSaveGroupName(self,GroupName,GID):
         '''
-            Can be used as pure query function when GroupName is None.
-            Return None if GroupName is None and corresponding record doesn't exist.
+        当GroupName为None时可用作纯查询函数。
+        否则查询SQL里对应GID的组名:
+            如果有记录:返回原来的组名
+            否则:建立GroupName和GID的记录并返回GroupName
         '''
         self.InfoSQLLock.acquire()
         Q="SELECT GroupName FROM GroupInfo WHERE gid="+str(GID)
@@ -346,9 +356,10 @@ class BCYDownloadUtils(object):
         self.InfoSQL.execute("INSERT INTO GroupInfo (gid, GroupName) VALUES (?,?)",(str(GID),GroupName,))
         self.InfoSQLLock.release()
         return GroupName
-    def LoadTitle(self,Title,Info):
+    def LoadTitle(self,Info):
         '''
-            Load from database.Return Title if not exists
+        分析数据库并加载可用的标题
+        如果不存在记录则不保存
         '''
         ValidIDs=dict()
         for key in ["cp_id","rp_id","dp_id","ud_id","post_id"]:
@@ -368,7 +379,10 @@ class BCYDownloadUtils(object):
             return item[0]
         #We Don't Save Title as it's handled by SaveInfo
         return Title
-    def LoadOrSaveInfo(self,Title,Info):
+    def SaveInfo(self,Title,Info):
+        '''
+        保存作品信息
+        '''
         self.InfoSQLLock.acquire()
         ValidIDs=dict()
         #Prepare Insert Statement
@@ -397,7 +411,9 @@ class BCYDownloadUtils(object):
         self.InfoSQL.execute(InsertQuery,tuple(Values))
         self.InfoSQLLock.release()
     def cleanup(self):
-        #No need to obtain SQL Mutex as it's controlled by LoadOrSaveUserName()
+        '''
+        根据Filter清理下载现场
+        '''
         FolderList=list()
         for UID in self.Filter.UIDList:
             UserName=self.LoadOrSaveUserName(None,UID)
@@ -412,7 +428,8 @@ class BCYDownloadUtils(object):
         shutil.rmtree(os.path.join(self.SavePath,"DownloadTemp"))
     def cancel(self):
         '''
-        Call this to cancel operations.
+        取消所有任务
+        保存SQL
         '''
         #Obtain mutex
         self.logger.warning("Clearing Thread Flags")
