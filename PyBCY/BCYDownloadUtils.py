@@ -191,12 +191,7 @@ class BCYDownloadUtils(object):
             保存详情
             分发下载任务到DownloadQueue
         '''
-        UID=None
-        try:
-            UID=Info["uid"]
-        except:
-            self.FailedInfoList.append(Info)
-            return
+        UID=Info["uid"]
         Title=None
         if "title" in Info.keys():
             Title=Info["title"]
@@ -228,7 +223,7 @@ class BCYDownloadUtils(object):
             GroupName=self.LoadOrSaveGroupName(Info["group"]["name"],GID)
             if(Title==None or len(Title)==0):
                 Title=GroupName+"-"+WorkID
-        Title=self.LoadTitle(Info)
+        Title=self.LoadTitle(Title,Info)
         self.SaveInfo(Title,Info)
         WritePathRoot=os.path.join(self.SavePath,str(CoserName).replace("/","-"),str(Title).replace("/","-"))
         for PathDict in Info["multi"]:
@@ -286,10 +281,10 @@ class BCYDownloadUtils(object):
                     Inf=self.LoadCachedDetail(AbstractInfo["detail"])
                 if Inf==None:
                     Inf=self.API.queryDetail(AbstractInfo)
-                if Inf==None:
-                    self.FailedInfoList.append(AbstractInfo)
-                else:
+                if Inf!=None:
                     self.DownloadFromInfo(Inf)
+                else:
+                    self.FailedInfoList.append(AbstractInfo)
             except Queue.Empty:
                 pass
             except:
@@ -356,7 +351,7 @@ class BCYDownloadUtils(object):
         self.InfoSQL.execute("INSERT INTO GroupInfo (gid, GroupName) VALUES (?,?)",(str(GID),GroupName,))
         self.InfoSQLLock.release()
         return GroupName
-    def LoadTitle(self,Info):
+    def LoadTitle(self,Title,Info):
         '''
         分析数据库并加载可用的标题
         如果不存在记录则不保存
