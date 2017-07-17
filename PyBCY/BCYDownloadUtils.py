@@ -86,11 +86,12 @@ class BCYDownloadUtils(object):
         has been pushed to the queue.
         半次元新增IP并发请求数和请求速率限制之后建议每次调用方法之后join()一次避免速度过快被Ban
     '''
-    def __init__(self,email,password,savepath,MaxDownloadThread=16,MaxQueryThread=64,Daemon=False,IP="127.0.0.1",Port=8081,DownloadProgress=False,DatabaseFileName="BCYInfo.db"):
+    def __init__(self,email,password,savepath,MaxDownloadThread=16,MaxQueryThread=64,Daemon=False,IP="127.0.0.1",Port=8081,DownloadProgress=False,DatabaseFileName="BCYInfo.db",UseCachedDetail=True):
         '''
-        Argument names should be self-explained
-        pass None for email and password for anonymous browsing
+        传入None的email password可实现匿名登录。 注意此种情况下许多需要登录的API无法使用
+        UseCachedDetail为True时查询作品详情时会优先查询SQL内的缓存以避免昂贵的API访问带来的频次限制开销
         '''
+        self.UseCachedDetail=UseCachedDetail
         self.QueryQueue=Queue.Queue()
         self.Status=dict()
         self.DownloadQueue=Queue.Queue()
@@ -143,7 +144,10 @@ class BCYDownloadUtils(object):
             if exception.errno != errno.EEXIST:
                 raise
         self.DownloadProgress=DownloadProgress
-
+    def __enter__(self):
+        return self
+    def __exit__(self, type, value, trace):
+        self.cancel()
     def DownloadWorker(self):
         '''
         DownloadWorker Spawned From __init__
@@ -274,7 +278,11 @@ class BCYDownloadUtils(object):
         while self.QueryEvent.isSet()==True:
             try:
                 AbstractInfo=self.QueryQueue.get()
-                Inf=self.API.queryDetail(AbstractInfo)
+                Inf=None
+                if self.UseCachedDetail==True:
+                    Inf=self.LoadCachedDetail(AbstractInfo["detail"])
+                if Inf==None:
+                    Inf=self.API.queryDetail(AbstractInfo)
                 if Inf==None:
                     self.FailedInfoList.append(AbstractInfo)
                 else:
@@ -284,6 +292,31 @@ class BCYDownloadUtils(object):
             except:
                 self.FailedInfoList.append(AbstractInfo)
             self.QueryQueue.task_done()
+    def LoadCachedDetail(self,Info):
+        self.InfoSQLLock.acquire()
+        ValidIDs=dict()
+        for key in ["cp_id","rp_id","dp_id","ud_id","post_id"]:
+            value=Info.get(key)
+            if value!=None:
+                ValidIDs[key]=value
+        Q="SELECT Info FROM WorkInfo WHERE "
+        ArgsList=list()
+
+        #Construct A List of constraints
+        keys=list()
+        Values=list()
+
+        #Construct A List of constraints
+        for item in ValidIDs.keys():
+            keys.append(item+"=?")
+            Values.append(ValidIDs[item])
+        Q=Q+" AND ".join(keys)
+        Cursor=self.InfoSQL.execute(Q,tuple(Values))
+        for item in Cursor:
+            self.InfoSQLLock.release()
+            return json.loads(item[0])
+        self.InfoSQLLock.release()
+        return None
     def LoadOrSaveUserName(self,UserName,UID):
         '''
             Can be used as pure query function when UserName is None
@@ -346,7 +379,7 @@ class BCYDownloadUtils(object):
         #We Don't Save Title as it's handled by SaveInfo
         self.InfoSQLLock.release()
         return Title
-    def SaveInfo(self,Title,Info):
+    def LoadOrSaveInfo(self,Title,Info):
         self.InfoSQLLock.acquire()
         ValidIDs=dict()
         #Prepare Insert Statement
