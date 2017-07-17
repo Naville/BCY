@@ -293,7 +293,6 @@ class BCYDownloadUtils(object):
                 self.FailedInfoList.append(AbstractInfo)
             self.QueryQueue.task_done()
     def LoadCachedDetail(self,Info):
-        self.InfoSQLLock.acquire()
         ValidIDs=dict()
         for key in ["cp_id","rp_id","dp_id","ud_id","post_id"]:
             value=Info.get(key)
@@ -301,21 +300,16 @@ class BCYDownloadUtils(object):
                 ValidIDs[key]=value
         Q="SELECT Info FROM WorkInfo WHERE "
         ArgsList=list()
-
         #Construct A List of constraints
         keys=list()
         Values=list()
-
-        #Construct A List of constraints
         for item in ValidIDs.keys():
             keys.append(item+"=?")
             Values.append(ValidIDs[item])
         Q=Q+" AND ".join(keys)
         Cursor=self.InfoSQL.execute(Q,tuple(Values))
         for item in Cursor:
-            self.InfoSQLLock.release()
             return json.loads(item[0])
-        self.InfoSQLLock.release()
         return None
     def LoadOrSaveUserName(self,UserName,UID):
         '''
@@ -354,7 +348,6 @@ class BCYDownloadUtils(object):
         '''
             Load from database.Return Title if not exists
         '''
-        self.InfoSQLLock.acquire()
         ValidIDs=dict()
         for key in ["cp_id","rp_id","dp_id","ud_id","post_id"]:
             value=Info.get(key)
@@ -362,22 +355,16 @@ class BCYDownloadUtils(object):
                 ValidIDs[key]=value
         Q="SELECT Title FROM WorkInfo WHERE "
         ArgsList=list()
-
-        #Construct A List of constraints
         keys=list()
         Values=list()
-
-        #Construct A List of constraints
         for item in ValidIDs.keys():
             keys.append(item+"=?")
             Values.append(ValidIDs[item])
         Q=Q+" AND ".join(keys)
         Cursor=self.InfoSQL.execute(Q,tuple(Values))
         for item in Cursor:
-            self.InfoSQLLock.release()
             return item[0]
         #We Don't Save Title as it's handled by SaveInfo
-        self.InfoSQLLock.release()
         return Title
     def LoadOrSaveInfo(self,Title,Info):
         self.InfoSQLLock.acquire()
