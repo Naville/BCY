@@ -306,6 +306,8 @@ class BCYDownloadUtils(object):
         for item in ValidIDs.keys():
             keys.append(item+"=?")
             Values.append(ValidIDs[item])
+        if len(keys)==0:#Error Detection
+            return None
         Q=Q+" AND ".join(keys)
         Cursor=self.InfoSQL.execute(Q,tuple(Values))
         for item in Cursor:
