@@ -110,7 +110,6 @@ class BCYDownloadUtils(object):
         self.InfoSQL.execute("CREATE TABLE IF NOT EXISTS WorkInfo (uid STRING NOT NULL DEFAULT '',Title STRING NOT NULL DEFAULT '',cp_id STRING NOT NULL DEFAULT '',rp_id STRING NOT NULL DEFAULT '',dp_id STRING NOT NULL DEFAULT '',ud_id STRING NOT NULL DEFAULT '',post_id STRING NOT NULL DEFAULT '',Info STRING NOT NULL DEFAULT '',Tags STRING,UNIQUE(UID,cp_id,rp_id,dp_id,ud_id,post_id) ON CONFLICT REPLACE);")
         self.InfoSQL.execute("PRAGMA journal_mode=WAL;")
         self.InfoSQLLock=threading.Lock()
-        self.InfoSQLLock=threading.Lock()
         self.DownloadProcesses=dict()
         #Create Threading Events
         self.DownloadWorkerEvent=threading.Event()
@@ -278,7 +277,7 @@ class BCYDownloadUtils(object):
                 AbstractInfo=self.QueryQueue.get()
                 Inf=None
                 if self.UseCachedDetail==True:
-                    Inf=self.LoadCachedDetail(AbstractInfo["detail"])
+                    Inf=self.LoadCachedDetail(AbstractInfo)
                 if Inf==None:
                     Inf=self.API.queryDetail(AbstractInfo)
                 if Inf!=None:
@@ -287,7 +286,8 @@ class BCYDownloadUtils(object):
                     self.FailedInfoList.append(AbstractInfo)
             except Queue.Empty:
                 pass
-            except:
+            except requests.ConnectionError:
+                self.logger.critical("Detail Query Failed. Possible IP Ban.AbstractInfo added to FailedInfoList")
                 self.FailedInfoList.append(AbstractInfo)
             self.QueryQueue.task_done()
     def LoadCachedDetail(self,Info):
@@ -392,8 +392,6 @@ class BCYDownloadUtils(object):
         except TypeError:
             ValidIDs["Info"]=json.dumps(Info,separators=(',', ':'),ensure_ascii=False)
             ValidIDs["Tags"]=json.dumps(TagList,separators=(',', ':'),ensure_ascii=False)
-        except:
-            raise
         InsertQuery="INSERT OR REPLACE INTO WorkInfo ("
         keys=list()
         ValuesPlaceHolders=list()
