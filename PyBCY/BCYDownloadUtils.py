@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-import os,errno,tempfile,sqlite3,sys,shutil,threading,time,json,struct,requests
+import os,errno,tempfile,sqlite3,sys,shutil,threading,time,json,struct,requests,logging
 from PyBCY.BCYDownloadFilter import *
 from PyBCY.BCYCore import *
 from sys import version as python_version
@@ -99,10 +99,13 @@ class BCYDownloadUtils(object):
         self.logger.addHandler(logging.NullHandler())
         self.Filter=BCYDownloadFilter()
         self.API=BCYCore()
+
         self.FailedInfoList=list()
         if email!=None and password!=None:
             self.API.loginWithEmailAndPassWord(email,password)
-        print ("Logged in...UID:"+str(self.API.UID))
+            print ("Logged in...UID:"+str(self.API.UID))
+        else:
+            print ("Anonymous Login")
         self.InfoSQL=sqlite3.connect(os.path.join(savepath,DatabaseFileName),check_same_thread=False)
         self.InfoSQL.text_factory = str
         self.InfoSQL.execute("CREATE TABLE IF NOT EXISTS UserInfo (uid STRING,UserName STRING,UNIQUE(uid) ON CONFLICT IGNORE);")
@@ -158,7 +161,7 @@ class BCYDownloadUtils(object):
 
         while self.DownloadWorkerEvent.isSet()==True:
             try:
-                obj=self.DownloadQueue.get()
+                obj=self.DownloadQueue.get(block=True)
                 URL=obj[0]
                 ID=obj[1]
                 WorkType=obj[2]
@@ -191,9 +194,7 @@ class BCYDownloadUtils(object):
             分发下载任务到DownloadQueue
         '''
         UID=Info["uid"]
-        Title=None
-        if "title" in Info.keys():
-            Title=Info["title"]
+        Title=Info.get("title",None)
         CoserName=self.LoadOrSaveUserName(Info["profile"]["uname"],UID)
         WorkID=None
         WorkType=None
@@ -242,26 +243,26 @@ class BCYDownloadUtils(object):
                 self.DownloadQueue.put([URL,WorkID,WorkType,WritePathRoot,FileName])
 
     def DownloadUser(self,UID,Filter):
-        self.logger.warning("Downloading UID:"+str(UID)+" Filter:"+str(Filter))
-        self.API.userWorkList(UID,Filter,Callback=self.DownloadFromAbstractInfo,Progress=self.Status)
+        tmp=self.API.userWorkList(UID,Filter,Callback=self.DownloadFromAbstractInfo,Progress=self.Status)
+        self.logger.warning('Found {} works UID:{} Filter: {}'.format(str(len(tmp)), str(UID), Filter))
     def DownloadGroup(self,GID):
-        self.logger.warning("Downloading GroupGID:"+str(GID))
-        self.API.groupPostList(GID,Progress=self.Status,Callback=self.DownloadFromAbstractInfo)
+        tmp=self.API.groupPostList(GID,Progress=self.Status,Callback=self.DownloadFromAbstractInfo)
+        self.logger.warning("Found {} works for GroupGID:{}".format(str(len(tmp)),str(GID)))
     def DownloadCircle(self,CircleID,Filter):
-        self.logger.warning("Downloading CircleID:"+str(CircleID)+" Filter:"+str(Filter))
-        self.API.circleList(CircleID,Filter,Callback=self.DownloadFromAbstractInfo,Progress=self.Status)
+        foo=self.API.circleList(CircleID,Filter,Callback=self.DownloadFromAbstractInfo,Progress=self.Status)
+        self.logger.warning("Found {} works CircleID:{} Filter:{}".format(str(len(foo)),str(Filter), str(CircleID)))
     def DownloadTag(self,Tag,Filter):
-        self.logger.warning("Downloading Tag:"+str(Tag)+" Filter:"+str(Filter))
-        self.API.tagList(Tag,Filter,Callback=self.DownloadFromAbstractInfo,Progress=self.Status)
+        foo=self.API.tagList(Tag,Filter,Callback=self.DownloadFromAbstractInfo,Progress=self.Status)
+        self.logger.warning("Found {} works Tag:{} Filter:{}".format(str(len(foo)), str(Filter), str(Tag)))
     def DownloadLikedList(self,Filter):
-        self.logger.warning("Downloading likedList Filter:"+str(Filter))
-        self.API.likedList(Filter,Callback=self.DownloadFromAbstractInfo,Progress=self.Status)
+        foo=self.API.likedList(Filter,Callback=self.DownloadFromAbstractInfo,Progress=self.Status)
+        self.logger.warning("Found {} likedList Filter:{}".format(str(len(foo)), str(Filter)))
     def DownloadUserRecommends(self,UID,Filter):
-        self.logger.warning("Downloading Recommends From UID:"+str(UID)+" And Filter:"+Filter)
-        self.API.userRecommends(UID,Filter,Callback=self.DownloadFromAbstractInfo,Progress=self.Status)
+        foo=self.API.userRecommends(UID,Filter,Callback=self.DownloadFromAbstractInfo,Progress=self.Status)
+        self.logger.warning("Found {} User Recommends UID:{} Filter:{}".format(str(len(foo)), str(UID),Filter))
     def DownloadSearch(self,Keyword,Type):
-        self.logger.warning("Downloading Search Result From Keyword:"+str(Keyword)+" And Type:"+Type)
-        self.API.search(Keyword,Type,Callback=self.DownloadFromAbstractInfo,Progress=self.Status)
+        foo=self.API.search(Keyword,Type,Callback=self.DownloadFromAbstractInfo,Progress=self.Status)
+        self.logger.warning("Found {} Search Keywork:{} Type:{}".format(str(len(foo)), Keyword,Type))
     def DownloadFromAbstractInfo(self,AbstractInfo):
         '''
         通用的Callback。用于将查询获得的详细信息写入DownloadQueue
@@ -274,7 +275,7 @@ class BCYDownloadUtils(object):
         '''
         while self.QueryEvent.isSet()==True:
             try:
-                AbstractInfo=self.QueryQueue.get()
+                AbstractInfo=self.QueryQueue.get(block=True)
                 Inf=None
                 if self.UseCachedDetail==True:
                     Inf=self.LoadCachedDetail(AbstractInfo)
@@ -282,18 +283,14 @@ class BCYDownloadUtils(object):
                     Inf=self.API.queryDetail(AbstractInfo)
                 if Inf!=None:
                     self.DownloadFromInfo(Inf)
-                else:
-                    self.FailedInfoList.append(AbstractInfo)
-            except Queue.Empty:
-                pass
-            except requests.ConnectionError:
-                self.logger.critical("Detail Query Failed. Possible IP Ban.AbstractInfo added to FailedInfoList")
+            except:
                 self.FailedInfoList.append(AbstractInfo)
             self.QueryQueue.task_done()
     def LoadCachedDetail(self,Info):
         '''
         用于读取本地SQL里的详细信息缓存
         '''
+        Info=Info.get("detail",Info)
         ValidIDs=dict()
         for key in ["cp_id","rp_id","dp_id","ud_id","post_id"]:
             value=Info.get(key)
@@ -310,9 +307,12 @@ class BCYDownloadUtils(object):
         if len(keys)==0:#Error Detection
             return None
         Q=Q+" AND ".join(keys)
+        self.InfoSQLLock.acquire()
         Cursor=self.InfoSQL.execute(Q,tuple(Values))
         for item in Cursor:
+            self.InfoSQLLock.release()
             return json.loads(item[0])
+        self.InfoSQLLock.release()
         return None
     def LoadOrSaveUserName(self,UserName,UID):
         '''
