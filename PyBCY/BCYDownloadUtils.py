@@ -307,12 +307,9 @@ class BCYDownloadUtils(object):
         if len(keys)==0:#Error Detection
             return None
         Q=Q+" AND ".join(keys)
-        self.InfoSQLLock.acquire()
         Cursor=self.InfoSQL.execute(Q,tuple(Values))
         for item in Cursor:
-            self.InfoSQLLock.release()
             return json.loads(item[0])
-        self.InfoSQLLock.release()
         return None
     def LoadOrSaveUserName(self,UserName,UID):
         '''
@@ -347,6 +344,7 @@ class BCYDownloadUtils(object):
             self.InfoSQLLock.release()
             return item[0]
         if GroupName==None:
+            self.InfoSQLLock.release()
             return None
         self.InfoSQL.execute("INSERT INTO GroupInfo (gid, GroupName) VALUES (?,?)",(str(GID),GroupName,))
         self.InfoSQLLock.release()
