@@ -178,7 +178,7 @@ class BCYDownloadUtils(object):
                 else:
                     ImageData=self.API.imageDownload({"url":URL,"id":ID,"type":WorkType})
                 #Atomic Writing
-                if ImageData!=None:
+                if ImageData!=None and len(ImageData) > 16:
                     f=tempfile.NamedTemporaryFile(dir=os.path.join(self.SavePath,"DownloadTemp/"),delete=False, suffix="PyBCY-")
                     f.write(ImageData)
                     f.close()
@@ -263,6 +263,9 @@ class BCYDownloadUtils(object):
     def DownloadSearch(self,Keyword,Type):
         foo=self.API.search(Keyword,Type,Callback=self.DownloadFromAbstractInfo,Progress=self.Status)
         self.logger.warning("Found {} Search Keywork:{} Type:{}".format(str(len(foo)), Keyword,Type))
+    def DownloadTimeline(self):
+        foo=self.API.getTimeline(Callback=self.DownloadFromAbstractInfo,Progress=self.Status)
+        self.logger.warning("Found {} In Timeline".format(str(len(foo))))
     def DownloadFromAbstractInfo(self,AbstractInfo):
         '''
         通用的Callback。用于将查询获得的详细信息写入DownloadQueue
@@ -454,23 +457,22 @@ class BCYDownloadUtils(object):
             self.DownloadFromInfo(Info)
             self.verifyQueue.task_done()
 
-    def verify(self):
+    def verify(self,thread=12):
         '''
         将SQL表里的所有数据导入下载队列查漏补缺。
         '''
+        self.logger.warning("Verifying Local Cache")
         self.verifyQueue=Queue.Queue()
         self.verifyEvent=threading.Event()
         self.verifyEvent.set()
-        for i in range(12):
+        for i in range(thread):
             t =  threading.Thread(target=self.verifyWorker)
             t.daemon = False
             t.start()
-        i=0
-        self.logger.warning("Verifying Local Cache")
         Cursor=self.InfoSQL.execute("SELECT Info FROM WorkInfo").fetchall()
         for item in Cursor:
             self.verifyQueue.put(item[0])
-            i=i+1
         while self.verifyQueue.empty()==False:
             time.sleep(5)
             self.logger.warning ("Verify Queue Size "+str(self.verifyQueue.qsize()))
+            self.logger.warning ("DownloadQueue Size:"+str(self.DownloadQueue.qsize()))

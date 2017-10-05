@@ -49,14 +49,15 @@ class BCYCore(object):
                  21: "半次元不小心滑了一跤"
                  }
 
-    def __init__(self):
+    def __init__(self,Timeout=15):
         self.UID = None
         self.Token = None
-        # Lack Support of PKCS7Padding.Solve it in actual crypto stage
+        #PyCrypto不支持PKCS7Padding,留到实际加密时解决
         self.Crypto = AES.new('com_banciyuan_AI', AES.MODE_ECB)
         self.pkcs7 = PKCS7Encoder()
         self.session = requests.Session()
         self.session.headers.update(BCYCore.Header)
+        self.Timeout=Timeout
 
     def loginWithEmailAndPassWord(self, email, password):
         '''
@@ -72,7 +73,8 @@ class BCYCore(object):
             raise ValueError("BCYLogin Error:" + str(data))
 
     def EncryptData(self, Data):
-        Data = Data.encode("utf8")
+        if sys.version_info < (3,0):
+            Data = Data.encode("utf8")
         Data = self.pkcs7.encode(Data)
         return self.Crypto.encrypt(Data)
 
@@ -85,7 +87,7 @@ class BCYCore(object):
         return {"data": base64.b64encode(self.EncryptData(ParamData))}
 
     def GET(self, URL, Params, **kwargs):
-        return self.session.get(URL, params=Params, **kwargs)
+        return self.session.get(URL, params=Params,timeout=self.Timeout,**kwargs)
 
     def POST(self, URL, Params, Auth=True,Encrypt=True, **kwargs):
         if URL.startswith("http") == False:
@@ -97,7 +99,7 @@ class BCYCore(object):
                 Params['token'] = self.Token
         if Encrypt:
             Params = self.EncryptParam(Params)
-        return self.session.post(URL, data=Params, **kwargs)
+        return self.session.post(URL, data=Params,timeout=self.Timeout, **kwargs)
 
     def userDetail(self, UID):
         return json.loads(self.POST("user/detail", {"face": "b", "uid": UID}).content)
@@ -416,12 +418,50 @@ class BCYCore(object):
             if len(foo) == 0:
                 return items
             items.extend(foo)
+    def getTimeline(self,Progress=dict(),Callback=None):
+        '''
+        获取当前用户的推送列表
+        可在https://bcy.net/home/account/settings的首页设置下进行设置
+        '''
+        since = 0
+        items = list()
+        try:
+            LAST_TL_ID = Progress.get("getTimeline", None)
+            Param = {"num": 50,"type": "square"}
+            Latest = json.loads(self.POST("timeline/latest", Param).content)["data"]
+            items.extend(Latest)
+            if len(items) == 0:
+                return items
+            for x in items:
+                if Callback != None:
+                    Callback(x)
+                if LAST_TL_ID != None:
+                    if int(x["tl_id"]) < LAST_TL_ID:
+                        Progress["getTimeline"] = int(items[0]["tl_id"])
+                        return items
+            while True:
+                since = int(items[-1]["tl_id"])  # 严格意义上来说我们需要比较并找出最小的tl_id。但是官方的应答是已经排序好的。所以官方App直接取最后一个。我们照抄
+                Param["since"] = str(since)
+                more = json.loads(self.POST("timeline/more", Param).content)["data"]
+                items.extend(more)
+                if len(more) == 0:
+                    Progress["getTimeline"] = int(items[0]["tl_id"])
+                    return items
+                for x in more:
+                    if Callback != None:
+                        Callback(x)
+                    if LAST_TL_ID != None:
+                        if int(x["tl_id"]) < LAST_TL_ID:
+                            Progress["getTimeline"] = int(items[0]["tl_id"])
+                            return items
+        except:
+            return items
+
 
     def userWorkList(self, UID, Filter, Progress=dict(), Callback=None):
         '''
         获取某个用户的所有作品
         日常的Filter在这里用user
-        说真的WTF?
         '''
         since = 0
         items = list()
