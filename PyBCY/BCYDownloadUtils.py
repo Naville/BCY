@@ -186,7 +186,7 @@ class BCYDownloadUtils(object):
             except:
                 pass
             self.DownloadQueue.task_done()
-    def DownloadFromInfo(self,Info):
+    def DownloadFromInfo(self,Info,SaveInfo=True):
         '''
         分析作品详情从中:
             拼接路径等信息
@@ -224,7 +224,8 @@ class BCYDownloadUtils(object):
             if(Title==None or len(Title)==0):
                 Title=GroupName+"-"+WorkID
         Title=self.LoadTitle(Title,Info)
-        self.SaveInfo(Title,Info)
+        if SaveInfo==True:
+            self.SaveInfo(Title,Info)
         WritePathRoot=os.path.join(self.SavePath,str(CoserName).replace("/","-"),str(Title).replace("/","-"))
         for PathDict in Info["multi"]:
             URL=PathDict["path"]
@@ -454,7 +455,7 @@ class BCYDownloadUtils(object):
         while self.verifyEvent.isSet()==True:
             obj=self.verifyQueue.get()
             Info=json.loads(obj)
-            self.DownloadFromInfo(Info)
+            self.DownloadFromInfo(Info,SaveInfo=False)
             self.verifyQueue.task_done()
 
     def verify(self,thread=12):
@@ -470,9 +471,9 @@ class BCYDownloadUtils(object):
             t.daemon = False
             t.start()
         Cursor=self.InfoSQL.execute("SELECT Info FROM WorkInfo").fetchall()
-        for item in Cursor:
+        for item in reversed(Cursor):
             self.verifyQueue.put(item[0])
         while self.verifyQueue.empty()==False:
-            time.sleep(5)
             self.logger.warning ("Verify Queue Size "+str(self.verifyQueue.qsize()))
             self.logger.warning ("DownloadQueue Size:"+str(self.DownloadQueue.qsize()))
+            time.sleep(3)
