@@ -429,13 +429,11 @@ class BCYDownloadUtils(object):
         取消所有任务
         保存SQL
         '''
-        self.DownloadWorkerEvent.clear()
-        self.QueryEvent.clear()
-        if self.verifyEvent!=None:
-            self.verifyEvent.clear()
-        #Obtain mutex
         self.logger.warning("Clearing Thread Flags")
         self.DownloadWorkerEvent.clear()
+        self.QueryEvent.clear()
+        if hasattr(self,"verifyEvent"):
+            self.verifyEvent.clear()
         self.QueryEvent.clear()
         self.logger.warning("Obtaining SQL Mutex")
         self.InfoSQLLock.acquire()
