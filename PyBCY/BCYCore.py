@@ -169,20 +169,12 @@ class BCYCore(object):
             - 已锁定内容
         '''
         data = json.loads(self.POST(URL, InfoParams).content)
-        UnicodeStatus = None
-        try:
-            UnicodeStatus = unicode(data["data"]["data"]).encode('utf8')
-        except:
-            try:
-                UnicodeStatus = data["data"]["data"]
-            except:
-                pass
-        if UnicodeStatus == BCYCore.NeedFollowServerResponse:
+        if data["data"] == BCYCore.NeedFollowServerResponse or (type(data["data"])==dict and data["data"].get("data",None)==BCYCore.NeedFollowServerResponse):
             UID = int(data["data"]["profile"]["uid"])
             self.followUser(UID)
             data = json.loads(self.POST(URL, InfoParams).content)
             self.unfollowUser(UID)
-        if UnicodeStatus == BCYCore.LockedServerResponse:
+        if data["data"] == BCYCore.LockedServerResponse or (type(data["data"])==dict and data["data"].get("data",None) == BCYCore.LockedServerResponse):
             return None
         return data["data"]
 

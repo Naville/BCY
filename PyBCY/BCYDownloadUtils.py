@@ -193,6 +193,9 @@ class BCYDownloadUtils(object):
             保存详情
             分发下载任务到DownloadQueue
         '''
+        if type(Info)!=dict or "uid" not in Info.keys():
+            self.logger.error("Found Invalid Info:%s",Info)
+            return
         UID=Info["uid"]
         Title=Info.get("title",None)
         CoserName=self.LoadOrSaveUserName(Info["profile"]["uname"],UID)
@@ -278,17 +281,17 @@ class BCYDownloadUtils(object):
         本方法从QueryQueue中获取信息并查询详情后写入DownloadQueue
         '''
         while self.QueryEvent.isSet()==True:
-            try:
-                AbstractInfo=self.QueryQueue.get(block=True)
-                Inf=None
-                if self.UseCachedDetail==True:
-                    Inf=self.LoadCachedDetail(AbstractInfo)
-                if Inf==None:
+            AbstractInfo=self.QueryQueue.get(block=True)
+            Inf=None
+            if self.UseCachedDetail==True:
+                Inf=self.LoadCachedDetail(AbstractInfo)
+            if Inf==None:
+                try:
                     Inf=self.API.queryDetail(AbstractInfo)
-                if Inf!=None:
+                except:
+                    self.FailedInfoList.append(AbstractInfo)
+            if Inf!=None:
                     self.DownloadFromInfo(Inf)
-            except:
-                self.FailedInfoList.append(AbstractInfo)
             self.QueryQueue.task_done()
     def LoadCachedDetail(self,Info):
         '''
@@ -426,6 +429,10 @@ class BCYDownloadUtils(object):
         取消所有任务
         保存SQL
         '''
+        self.DownloadWorkerEvent.clear()
+        self.QueryEvent.clear()
+        if self.verifyEvent!=None:
+            self.verifyEvent.clear()
         #Obtain mutex
         self.logger.warning("Clearing Thread Flags")
         self.DownloadWorkerEvent.clear()
