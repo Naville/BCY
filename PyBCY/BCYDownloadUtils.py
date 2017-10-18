@@ -254,7 +254,7 @@ class BCYDownloadUtils(object):
         self.logger.warning("Found {} works for GroupGID:{}".format(str(len(tmp)),str(GID)))
     def DownloadCircle(self,CircleID,Filter):
         foo=self.API.circleList(CircleID,Filter,Callback=self.DownloadFromAbstractInfo,Progress=self.Status)
-        self.logger.warning("Found {} works CircleID:{} Filter:{}".format(str(len(foo)),str(Filter), str(CircleID)))
+        self.logger.warning("Found {} works CircleID:{} Filter:{}".format(str(len(foo)),str(CircleID),str(Filter)))
     def DownloadTag(self,Tag,Filter):
         foo=self.API.tagList(Tag,Filter,Callback=self.DownloadFromAbstractInfo,Progress=self.Status)
         self.logger.warning("Found {} works Tag:{} Filter:{}".format(str(len(foo)), str(Filter), str(Tag)))
