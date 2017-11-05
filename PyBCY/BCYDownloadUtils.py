@@ -307,6 +307,8 @@ class BCYDownloadUtils(object):
         '''
         用于读取本地SQL里的详细信息缓存
         '''
+        if type(Info)!=dict:
+            return None
         Info=Info.get("detail",Info)
         ValidIDs=dict()
         for key in ["cp_id","rp_id","dp_id","ud_id","post_id"]:

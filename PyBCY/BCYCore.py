@@ -39,13 +39,13 @@ class BCYCore(object):
     '''
     APIBase = "http://api.bcy.net/api/"
     Header = {"User-Agent": "bcy/3.7.1 (iPhone; iOS 9.3.3; Scale/1.00)", "X-BCY-Version": "iOS-3.7.1"}
-    NeedFollowServerResponse = "阿拉，请先关注一下嘛"
-    LockedServerResponse = "该作品已被管理员锁定"
     APIErrorResponse = "半次元不小心滑了一跤"
-    GroupLockedResponse = "该讨论已被管理员锁定"
+    NeedLoginResponse = "阿拉，请先登录半次元"
     StatusMap = {100: "请先登录半次元",
                  4000: "请先登录半次元",
-                 21: "半次元不小心滑了一跤"
+                 21: "半次元不小心滑了一跤",
+                 4010:"阿拉，请先登录半次元",
+                 4050:"该讨论已被管理员锁定"
                  }
 
     def __init__(self,Timeout=15):
@@ -172,12 +172,12 @@ class BCYCore(object):
             - 已锁定内容
         '''
         data = json.loads(self.POST(URL, InfoParams).content)
-        if data["data"] == BCYCore.NeedFollowServerResponse or (type(data["data"])==dict and data["data"].get("data",None)==BCYCore.NeedFollowServerResponse):
+        if data["status"]==4010:
             UID = int(data["data"]["profile"]["uid"])
             self.followUser(UID)
             data = json.loads(self.POST(URL, InfoParams).content)
             self.unfollowUser(UID)
-        if data["data"] == BCYCore.LockedServerResponse or (type(data["data"])==dict and data["data"].get("data",None) == BCYCore.LockedServerResponse):
+        if data["status"]==4050:
             return None
         return data["data"]
 
