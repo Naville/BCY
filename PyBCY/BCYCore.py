@@ -7,7 +7,6 @@ import sys
 import tempfile
 import threading
 from Crypto.Cipher import AES
-from pkcs7 import PKCS7Encoder
 
 try:
     reload(sys)
@@ -52,9 +51,7 @@ class BCYCore(object):
     def __init__(self,Timeout=15):
         self.UID = None
         self.Token = None
-        #PyCrypto不支持PKCS7Padding,留到实际加密时解决
         self.Crypto = AES.new('com_banciyuan_AI', AES.MODE_ECB)
-        self.pkcs7 = PKCS7Encoder()
         self.session = requests.Session()
         self.session.headers.update(BCYCore.Header)
         self.Timeout=Timeout
@@ -73,9 +70,15 @@ class BCYCore(object):
             raise ValueError("BCYLogin Error:" + str(data))
 
     def EncryptData(self, Data):
-        if sys.version_info < (3,0):
+        #PKCS7 from https://stackoverflow.com/a/14205319 with modifications
+        if sys.version_info >= (3,0):
             Data = Data.encode("utf8")
-        Data = self.pkcs7.encode(Data)
+            length = 16 - (len(Data) % 16)
+            Data += bytes([length])*length
+        else:
+            Data = Data.decode("utf8").encode("utf8")
+            length = 16 - (len(Data) % 16)
+            Data += chr(length)*length
         return self.Crypto.encrypt(Data)
 
     def EncryptParam(self, Params):

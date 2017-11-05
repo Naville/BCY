@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-import os,errno,tempfile,sqlite3,sys,shutil,threading,time,json,struct,requests,logging
+import os,errno,tempfile,sqlite3,sys,shutil,threading,time,json,struct,requests,logging,re
 from PyBCY.BCYDownloadFilter import *
 from PyBCY.BCYCore import *
 from sys import version as python_version
@@ -230,6 +230,16 @@ class BCYDownloadUtils(object):
         if SaveInfo==True:
             self.SaveInfo(Title,Info)
         WritePathRoot=os.path.join(self.SavePath,str(CoserName).replace("/","-"),str(Title).replace("/","-"))
+        if Info["type"]=="larticle" and (type(Info["multi"])==bool or len(Info["multi"])==0):#Long Article. Extract URLs from HTML using regex
+            match=re.findall(r"<img src=\"(.{80,100})\" alt=",Info["content"])
+            URLs=list()
+            if match!=None:
+                for url in match:
+                    temp=dict()
+                    temp["type"]="image"
+                    temp["path"]=url
+                    URLs.append(temp)
+            Info["multi"]=URLs
         for PathDict in Info["multi"]:
             URL=PathDict["path"]
             if len(URL)==0:
@@ -311,7 +321,7 @@ class BCYDownloadUtils(object):
         for item in ValidIDs.keys():
             keys.append(item+"=?")
             Values.append(ValidIDs[item])
-        if len(keys)==0:#Error Detection
+        if len(keys)==0 or len(keys)!=len(Values):#Error Detection
             return None
         Q=Q+" AND ".join(keys)
         Cursor=self.InfoSQL.execute(Q,tuple(Values))
@@ -334,7 +344,7 @@ class BCYDownloadUtils(object):
         if UserName==None:
             self.InfoSQLLock.release()
             return None
-        self.InfoSQL.execute("INSERT INTO UserInfo (uid, UserName) VALUES (?,?)",(str(UID),UserName,))
+        self.InfoSQL.execute("INSERT INTO UserInfo (uid, UserName) VALUES (?,?)",(str(UID),UserName))
         self.InfoSQLLock.release()
         return UserName
     def LoadOrSaveGroupName(self,GroupName,GID):
@@ -353,7 +363,7 @@ class BCYDownloadUtils(object):
         if GroupName==None:
             self.InfoSQLLock.release()
             return None
-        self.InfoSQL.execute("INSERT INTO GroupInfo (gid, GroupName) VALUES (?,?)",(str(GID),GroupName,))
+        self.InfoSQL.execute("INSERT INTO GroupInfo (gid, GroupName) VALUES (?,?)",(str(GID),GroupName))
         self.InfoSQLLock.release()
         return GroupName
     def LoadTitle(self,Title,Info):
@@ -463,7 +473,7 @@ class BCYDownloadUtils(object):
             self.DownloadFromInfo(Info,SaveInfo=False)
             self.verifyQueue.task_done()
 
-    def verify(self,thread=12):
+    def verify(self,thread=12,reverse=False):
         '''
         将SQL表里的所有数据导入下载队列查漏补缺。
         '''
@@ -476,7 +486,9 @@ class BCYDownloadUtils(object):
             t.daemon = False
             t.start()
         Cursor=self.InfoSQL.execute("SELECT Info FROM WorkInfo").fetchall()
-        for item in reversed(Cursor):
+        if reverse==True:
+            Cursor=reversed(Cursor)
+        for item in Cursor:
             self.verifyQueue.put(item[0])
         while self.verifyQueue.empty()==False:
             self.logger.warning ("Verify Queue Size "+str(self.verifyQueue.qsize()))

@@ -24,13 +24,13 @@ except OSError as exception:
         raise
 setup(
     name='PyBCY',
-    version='2.2.6',
+    version='2.3.0',
     packages=find_packages(),
     url = "https://github.com/Naville/PyBCY",
     license='GPL',
     author='Naville',
     author_email='admin@mayuyu.io',
     description='Python Interface For BCY.net API',
-    install_requires=['pkcs7','PyCrypto',"requests"],
+    install_requires=['PyCrypto',"requests"],
     test_suite='setup.my_test_suite',
 )
