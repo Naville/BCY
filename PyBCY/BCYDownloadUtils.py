@@ -108,9 +108,9 @@ class BCYDownloadUtils(object):
             print ("Anonymous Login")
         self.InfoSQL=sqlite3.connect(os.path.join(savepath,DatabaseFileName),check_same_thread=False)
         self.InfoSQL.text_factory = str
-        self.InfoSQL.execute("CREATE TABLE IF NOT EXISTS UserInfo (uid STRING,UserName STRING,UNIQUE(uid) ON CONFLICT IGNORE);")
-        self.InfoSQL.execute("CREATE TABLE IF NOT EXISTS GroupInfo (gid STRING,GroupName STRING,UNIQUE(gid) ON CONFLICT IGNORE);")
-        self.InfoSQL.execute("CREATE TABLE IF NOT EXISTS WorkInfo (uid STRING NOT NULL DEFAULT '',Title STRING NOT NULL DEFAULT '',cp_id STRING NOT NULL DEFAULT '',rp_id STRING NOT NULL DEFAULT '',dp_id STRING NOT NULL DEFAULT '',ud_id STRING NOT NULL DEFAULT '',post_id STRING NOT NULL DEFAULT '',Info STRING NOT NULL DEFAULT '',Tags STRING,UNIQUE(UID,cp_id,rp_id,dp_id,ud_id,post_id) ON CONFLICT REPLACE);")
+        self.InfoSQL.execute("CREATE TABLE IF NOT EXISTS UserInfo (uid INTEGER,UserName STRING,UNIQUE(uid) ON CONFLICT IGNORE)")
+        self.InfoSQL.execute("CREATE TABLE IF NOT EXISTS GroupInfo (gid INTEGER,GroupName STRING,UNIQUE(gid) ON CONFLICT IGNORE)")
+        self.InfoSQL.execute("CREATE TABLE IF NOT EXISTS WorkInfo (uid INTEGER DEFAULT 0,Title STRING NOT NULL DEFAULT '',cp_id INTEGER DEFAULT 0,rp_id INTEGER DEFAULT 0,dp_id INTEGER DEFAULT 0,ud_id INTEGER DEFAULT 0,post_id INTEGER DEFAULT 0,Info STRING NOT NULL DEFAULT '',Tags STRING,UNIQUE(uid,cp_id,rp_id,dp_id,ud_id,post_id) ON CONFLICT REPLACE)")
         self.InfoSQL.execute("PRAGMA journal_mode=WAL;")
         self.InfoSQLLock=threading.Lock()
         self.DownloadProcesses=dict()
@@ -307,14 +307,12 @@ class BCYDownloadUtils(object):
         '''
         用于读取本地SQL里的详细信息缓存
         '''
-        if type(Info)!=dict:
-            return None
         Info=Info.get("detail",Info)
         ValidIDs=dict()
         for key in ["cp_id","rp_id","dp_id","ud_id","post_id"]:
             value=Info.get(key)
             if value!=None:
-                ValidIDs[key]=value
+                ValidIDs[key]=int(value)
         Q="SELECT Info FROM WorkInfo WHERE "
         ArgsList=list()
         #Construct A List of constraints
@@ -326,10 +324,10 @@ class BCYDownloadUtils(object):
         if len(keys)==0 or len(keys)!=len(Values):#Error Detection
             return None
         Q=Q+" AND ".join(keys)
-        Cursor=self.InfoSQL.execute(Q,tuple(Values))
-        for item in Cursor:
-            return json.loads(item[0])
-        return None
+        Cursor=self.InfoSQL.execute(Q,tuple(Values)).fetchall()
+        if len(Cursor)==0:
+            return None
+        return json.loads(Cursor[0])
     def LoadOrSaveUserName(self,UserName,UID):
         '''
         当UserName为None时可用作纯查询函数。
@@ -346,7 +344,7 @@ class BCYDownloadUtils(object):
         if UserName==None:
             self.InfoSQLLock.release()
             return None
-        self.InfoSQL.execute("INSERT INTO UserInfo (uid, UserName) VALUES (?,?)",(str(UID),UserName))
+        self.InfoSQL.execute("INSERT INTO UserInfo (uid, UserName) VALUES (?,?)",(int(UID),UserName))
         self.InfoSQLLock.release()
         return UserName
     def LoadOrSaveGroupName(self,GroupName,GID):
@@ -365,7 +363,7 @@ class BCYDownloadUtils(object):
         if GroupName==None:
             self.InfoSQLLock.release()
             return None
-        self.InfoSQL.execute("INSERT INTO GroupInfo (gid, GroupName) VALUES (?,?)",(str(GID),GroupName))
+        self.InfoSQL.execute("INSERT INTO GroupInfo (gid, GroupName) VALUES (?,?)",(int(GID),GroupName))
         self.InfoSQLLock.release()
         return GroupName
     def LoadTitle(self,Title,Info):
@@ -377,7 +375,7 @@ class BCYDownloadUtils(object):
         for key in ["cp_id","rp_id","dp_id","ud_id","post_id"]:
             value=Info.get(key)
             if value!=None:
-                ValidIDs[key]=value
+                ValidIDs[key]=int(value)
         Q="SELECT Title FROM WorkInfo WHERE "
         ArgsList=list()
         keys=list()
@@ -399,7 +397,9 @@ class BCYDownloadUtils(object):
         ValidIDs=dict()
         #Prepare Insert Statement
         ValidIDs["Title"]=Title
-        ValidIDs["uid"]=Info["uid"]
+        for key in ["cp_id","rp_id","dp_id","ud_id","post_id","uid"]:
+            if Info.get(key)!=None:
+                Info[key]=int(Info[key])
         TagList=list()
         for item in Info.get("post_tags",list()):
             TagList.append(item["tag_name"])

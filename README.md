@@ -162,3 +162,56 @@ Then apply dump of old table
 sqlite3 /PATH/TO/OLD/TABLE/BCYInfo.db .dump >DUMP.SQL
 sqlite3 /PATH/TO/NEW/TABLE/BCYInfo.db < DUMP.SQL
 ```
+
+## 2.4.0
+  Use INTEGER as the data type of WorkInfo's related columns.Below is a python3 mitigation script
+
+```python
+import sqlite3
+import json
+InfoSQL=sqlite3.connect("OLD/DATABASE/")
+NewSQL=sqlite3.connect("NEW/DATABASE/")
+InfoSQL.text_factory = str
+NewSQL.text_factory = str
+NewSQL.execute("CREATE TABLE IF NOT EXISTS UserInfo (uid STRING,UserName STRING,UNIQUE(uid) ON CONFLICT IGNORE);")
+NewSQL.execute("CREATE TABLE IF NOT EXISTS GroupInfo (gid STRING,GroupName STRING,UNIQUE(gid) ON CONFLICT IGNORE);")
+NewSQL.execute("CREATE TABLE IF NOT EXISTS WorkInfo (uid INTEGER DEFAULT 0,Title STRING NOT NULL DEFAULT '',cp_id INTEGER DEFAULT 0,rp_id INTEGER DEFAULT 0,dp_id INTEGER DEFAULT 0,ud_id INTEGER DEFAULT 0,post_id INTEGER DEFAULT 0,Info STRING NOT NULL DEFAULT '',Tags STRING,UNIQUE(uid,cp_id,rp_id,dp_id,ud_id,post_id) ON CONFLICT REPLACE);")
+Cursor=InfoSQL.execute("SELECT Title,Info FROM WorkInfo").fetchall()
+index=1
+for item in Cursor:
+    Title=item[0]
+    Info=json.loads(item[1])
+    tags=list()
+    args=list()
+    args.append(int(Info["uid"]))
+    args.append(Title)
+    args.append(int(Info.get("cp_id",0)))
+    args.append(int(Info.get("rp_id",0)))
+    args.append(int(Info.get("dp_id",0)))
+    args.append(int(Info.get("ud_id",0)))
+    args.append(int(Info.get("post_id",0)))
+    args.append(item[1])
+    for foo in Info.get("post_tags",list()):
+        tags.append(foo["tag_name"])
+    args.append(json.dumps(tags))
+    NewSQL.execute("INSERT OR REPLACE INTO WorkInfo(uid,Title,cp_id,rp_id,dp_id,ud_id,post_id,Info,Tags) VALUES(?,?,?,?,?,?,?,?,?)",tuple(args))
+    print("WorkInfo Update:%i/%i"%(index,len(Cursor)))
+    index=index+1
+
+index=1
+Cursor=InfoSQL.execute("SELECT gid,GroupName FROM GroupInfo").fetchall()
+for item in Cursor:
+    NewSQL.execute("INSERT OR REPLACE INTO GroupInfo(gid,GroupName) VALUES(?,?)",(int(item[0]),item[1]))
+    print("GroupInfo Update:%i/%i"%(index,len(Cursor)))
+    index=index+1
+index=1
+Cursor=InfoSQL.execute("SELECT uid,UserName FROM UserInfo").fetchall()
+for item in Cursor:
+    NewSQL.execute("INSERT OR REPLACE INTO UserInfo(uid,UserName) VALUES(?,?)",(int(item[0]),item[1]))
+    print("UserInfo Update:%i/%i"%(index,len(Cursor)))
+    index=index+1
+NewSQL.commit()
+NewSQL.close()
+InfoSQL.close()
+```
+then replace the old database with the new one
