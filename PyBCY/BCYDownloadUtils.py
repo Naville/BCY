@@ -327,7 +327,7 @@ class BCYDownloadUtils(object):
         Cursor=self.InfoSQL.execute(Q,tuple(Values)).fetchall()
         if len(Cursor)==0:
             return None
-        return json.loads(Cursor[0])
+        return json.loads(Cursor[0][0])
     def LoadOrSaveUserName(self,UserName,UID):
         '''
         当UserName为None时可用作纯查询函数。
