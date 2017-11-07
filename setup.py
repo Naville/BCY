@@ -10,7 +10,9 @@ def recursiveSearch(directory):
                  for root, dirs, files in os.walk(directory)
                  for name in files
                  if name.endswith(".DS_Store")==False]
-
+def readme():
+    with open('README.rst') as f:
+        return f.read()
 ChromeExtensionInstallPath=None
 if os.name == 'nt':
     ChromeExtensionInstallPath = os.path.join(os.path.join(os.environ['USERPROFILE']),'PyBCYChromeExtension')
@@ -22,15 +24,20 @@ try:
 except OSError as exception:
     if exception.errno != errno.EEXIST:
         raise
+
 setup(
     name='PyBCY',
-    version='2.5.2',
+    version='2.5.3',
+
     packages=find_packages(),
     url = "https://github.com/Naville/PyBCY",
     license='GPL',
     author='Naville',
     author_email='admin@mayuyu.io',
     description='Python Interface For BCY.net API',
+    long_description=readme(),
     install_requires=['PyCrypto',"requests"],
     test_suite='setup.my_test_suite',
+    include_package_data=True,
+    zip_safe=False
 )
