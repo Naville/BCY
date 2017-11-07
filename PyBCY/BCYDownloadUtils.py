@@ -420,8 +420,6 @@ class BCYDownloadUtils(object):
             Values.append(ValidIDs[item])
             ValuesPlaceHolders.append("?")
         InsertQuery=InsertQuery+",".join(keys)+")VALUES ("+",".join(ValuesPlaceHolders)+")"
-        print (InsertQuery)
-        print(Values)
         self.InfoSQL.execute(InsertQuery,tuple(Values))
         self.InfoSQLLock.release()
     def cleanup(self):
