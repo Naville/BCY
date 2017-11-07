@@ -232,7 +232,7 @@ class BCYDownloadUtils(object):
         if SaveInfo==True:
             self.SaveInfo(Title,Info)
         WritePathRoot=os.path.join(self.SavePath,str(CoserName).replace("/","-"),str(Title).replace("/","-"))
-        if Info["type"]=="larticle" and (type(Info["multi"])==bool or len(Info["multi"])==0):#Long Article. Extract URLs from HTML using regex
+        if Info.get("type")=="larticle" and (type(Info["multi"])==bool or len(Info["multi"])==0):#Long Article. Extract URLs from HTML using regex
             match=re.findall(r"<img src=\"(.{80,100})\" alt=",Info["content"])
             URLs=list()
             if match!=None:
