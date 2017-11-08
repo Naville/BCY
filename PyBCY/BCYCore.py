@@ -198,13 +198,15 @@ class BCYCore(object):
         '''
         给某个作品点赞。Info为*只*包含标识符的字典
         '''
-        return self.POST(WorkType + "/doZan", Info)
+        Info["token"]=self.Token
+        return json.loads(self.POST(WorkType + "/doZan", Info,Auth=False).content)
 
     def unlikeWork(self, WorkType, Info):
         '''
         取消给某个作品点赞。Info为*只*包含标识符的字典
         '''
-        return self.POST(WorkType + "/undoZan", Info)
+        Info["token"]=self.Token
+        return json.loads(self.POST(WorkType + "/undoZan", Info,Auth=False).content)
 
     def queryDetail(self, Info):
         '''

@@ -215,3 +215,7 @@ NewSQL.close()
 InfoSQL.close()
 ```
 then replace the old database with the new one
+
+## 2.5.1
+Fix a legacy issue results in empty identifiers being saved.
+Re-run the mitigation script for 2.4.0

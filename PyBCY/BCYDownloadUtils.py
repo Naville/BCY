@@ -167,6 +167,7 @@ class BCYDownloadUtils(object):
                 WorkType=obj[2]
                 SaveBase=obj[3]
                 FileName=obj[4]
+                ctime=obj[5]
                 SavePath=os.path.join(SaveBase,FileName)
                 try:
                     os.makedirs(SaveBase)
@@ -183,6 +184,7 @@ class BCYDownloadUtils(object):
                     f.write(ImageData)
                     f.close()
                     shutil.move(f.name,SavePath)
+                    os.utime(savePath,(ctime,ctime))
             except:
                 pass
             self.DownloadQueue.task_done()
@@ -253,8 +255,9 @@ class BCYDownloadUtils(object):
             if ShouldAppendSuffix==True:
                 FileName=FileName+".jpg"
             SavePath=os.path.join(WritePathRoot,FileName)
+            ctime=Info["ctime"]
             if os.path.isfile(SavePath)==False:
-                self.DownloadQueue.put([URL,WorkID,WorkType,WritePathRoot,FileName])
+                self.DownloadQueue.put([URL,WorkID,WorkType,WritePathRoot,FileName,ctime])
 
     def DownloadUser(self,UID,Filter):
         tmp=self.API.userWorkList(UID,Filter,Callback=self.DownloadFromAbstractInfo,Progress=self.Status)
@@ -398,8 +401,7 @@ class BCYDownloadUtils(object):
         #Prepare Insert Statement
         ValidIDs["Title"]=Title
         for key in ["cp_id","rp_id","dp_id","ud_id","post_id","uid"]:
-            if Info.get(key)!=None:
-                Info[key]=int(Info[key])
+            ValidIDs[key]=int(Info.get(key,0))
         TagList=list()
         for item in Info.get("post_tags",list()):
             TagList.append(item["tag_name"])
@@ -417,7 +419,9 @@ class BCYDownloadUtils(object):
             keys.append(item)
             Values.append(ValidIDs[item])
             ValuesPlaceHolders.append("?")
-        InsertQuery=InsertQuery+",".join(keys)+")VALUES ("+",".join(ValuesPlaceHolders)+");"
+        InsertQuery=InsertQuery+",".join(keys)+")VALUES ("+",".join(ValuesPlaceHolders)+")"
+        print (InsertQuery)
+        print(Values)
         self.InfoSQL.execute(InsertQuery,tuple(Values))
         self.InfoSQLLock.release()
     def cleanup(self):
