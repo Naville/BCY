@@ -48,7 +48,6 @@ class BCYCore(object):
                  4050:"该讨论已被管理员锁定",
                  160:"半次元在忙，请稍后再试"
                  }
-
     def __init__(self,Timeout=15):
         self.UID = None
         self.Token = None
@@ -133,6 +132,29 @@ class BCYCore(object):
             return Content
         else:
             return None
+    def coserAllWorks(self, Progress=dict(), Callback=None):
+        '''
+        获取所有Cos作品列表。
+        '''
+        minimalctime=Progress.get("coserAllWorks",0)
+        items = list()
+        p = 1
+        while True:
+            Params = {"p": p}
+            p = p + 1
+            foo = json.loads(self.POST("coser/allWorks", Params,Auth=False).content)["data"]
+            if Callback != None:
+                for i in foo:
+                    if Callback(i)==True:
+                        Progress["coserAllWorks"]=int(items[-1]["ctime"])
+                        return items
+            if len(foo) == 0:
+                Progress["coserAllWorks"]=int(items[-1]["ctime"])
+                return items
+            if int(foo[-1]["ctime"])<minimalctime:
+                Progress["coserAllWorks"]=int(items[-1]["ctime"])
+                return items
+            items.extend(foo)
 
     def imageDownload(self, ImageInfo, Callback=None):
         '''
@@ -193,20 +215,42 @@ class BCYCore(object):
 
     def groupPostDetail(self, GroupID, PostID):
         return self.detailWorker("group/postDetail", {"gid": GroupID, "post_id": PostID})
+    def recommendWork(self, WorkType, Info):
+        '''
+        推荐某个作品。Info为*只*包含标识符的字典
+        '''
+        Info["token"]=self.Token
+        return json.loads(self.POST(WorkType + "/doTuijian", Info,Auth=False).content)
+
+    def unrecommendWork(self, WorkType, Info):
+        '''
+        取消推荐某个作品。Info为*只*包含标识符的字典
+        '''
+        Info["token"]=self.Token
+        return json.loads(self.POST(WorkType + "/undoTuijian", Info,Auth=False).content)
+
 
     def likeWork(self, WorkType, Info):
         '''
         给某个作品点赞。Info为*只*包含标识符的字典
         '''
-        Info["token"]=self.Token
-        return json.loads(self.POST(WorkType + "/doZan", Info,Auth=False).content)
+        if WorkType=="daily":
+            Info["token"]=self.Token
+            return json.loads(self.POST("daily/doPostDing", Info,Auth=False).content)
+        else:
+            Info["token"]=self.Token
+            return json.loads(self.POST(WorkType + "/doZan", Info,Auth=False).content)
 
     def unlikeWork(self, WorkType, Info):
         '''
         取消给某个作品点赞。Info为*只*包含标识符的字典
         '''
-        Info["token"]=self.Token
-        return json.loads(self.POST(WorkType + "/undoZan", Info,Auth=False).content)
+        if WorkType=="daily":
+            Info["token"]=self.Token
+            return json.loads(self.POST("daily/undoPostDing", Info,Auth=False).content)
+        else:
+            Info["token"]=self.Token
+            return json.loads(self.POST(WorkType + "/undoZan", Info,Auth=False).content)
 
     def queryDetail(self, Info):
         '''
@@ -278,7 +322,8 @@ class BCYCore(object):
             foo = json.loads(self.POST(WorkType + "/getReply", Par).content)["data"]
             if Callback != None:
                 for i in foo:
-                    Callback(i)
+                    if Callback(i)==True:
+                        return items
             if len(foo) == 0:
                 return items
             items.extend(foo)
@@ -296,7 +341,8 @@ class BCYCore(object):
             foo = json.loads(self.POST("goods/listHotCore", Params).content)["data"]
             if Callback != None:
                 for i in foo:
-                    Callback(i)
+                    if Callback(i)==True:
+                        return items
             if len(foo) == 0:
                 return items
             items.extend(foo)
@@ -314,7 +360,8 @@ class BCYCore(object):
             foo = json.loads(self.POST("tag/detail", Params).content)["data"]
             if Callback != None:
                 for i in foo:
-                    Callback(i)
+                    if Callback(i)==True:
+                        return items
             if len(foo) == 0:
                 return items
             items.extend(foo)
@@ -348,7 +395,8 @@ class BCYCore(object):
             items.extend(itemList)
             if Callback != None:
                 for item in itemList:
-                    Callback(item)
+                    if Callback(item)==True:
+                        return items
 
     def circleList(self, CircleID, Filter, Progress=dict(), Callback=None):
         since = 0
@@ -364,7 +412,8 @@ class BCYCore(object):
             shouldBreak = False  # if ctime <= our stop point,break
             for i in foo:
                 if Callback != None:
-                    Callback(i)
+                    if Callback(i)==True:
+                        return items
                 if firstRun == False and int(i["ctime"]) < latestCTIME:
                     shouldBreak = True
                 if int(i["ctime"]) > latestCTIME:
@@ -389,7 +438,8 @@ class BCYCore(object):
             shouldBreak = False  # if ctime <= our stop point,break
             for i in foo:
                 if Callback != None:
-                    Callback(i)
+                    if Callback(i)==True:
+                        return items
                 if firstRun == False and int(i["ctime"]) < latestCTIME:
                     shouldBreak = True
                 if int(i["ctime"]) > latestCTIME:
@@ -412,7 +462,8 @@ class BCYCore(object):
             foo = json.loads(self.POST("group/listPosts", Params).content)["data"]
             if Callback != None:
                 for i in foo:
-                    Callback(i)
+                    if Callback(i)==True:
+                        return items
             if len(foo) == 0:
                 return items
             items.extend(foo)
@@ -432,7 +483,8 @@ class BCYCore(object):
                 return items
             for x in items:
                 if Callback != None:
-                    Callback(x)
+                    if Callback(x)==True:
+                        return items
                 if LAST_TL_ID != None:
                     if int(x["tl_id"]) < LAST_TL_ID:
                         Progress["getTimeline"] = int(items[0]["tl_id"])
@@ -447,7 +499,8 @@ class BCYCore(object):
                     return items
                 for x in more:
                     if Callback != None:
-                        Callback(x)
+                        if Callback(x)==True:
+                            return items
                     if LAST_TL_ID != None:
                         if int(x["tl_id"]) < LAST_TL_ID:
                             Progress["getTimeline"] = int(items[0]["tl_id"])
@@ -459,10 +512,11 @@ class BCYCore(object):
     def userWorkList(self, UID, Filter, Progress=dict(), Callback=None):
         '''
         获取某个用户的所有作品
-        日常的Filter在这里用user
         '''
         since = 0
         items = list()
+        if (Filter=="daily"):#API设计缺陷
+            Filter="user"
         try:
             LAST_TL_ID = Progress.get("timeline/latest" + str(UID) + Filter, None)
             Param = {"uid": str(UID), "num": 50, "filter": "origin", "source": Filter, "type": "user"}
@@ -472,7 +526,8 @@ class BCYCore(object):
                 return items
             for x in items:
                 if Callback != None:
-                    Callback(x)
+                    if Callback(x)==True:
+                        return items
                 if LAST_TL_ID != None:
                     if int(x["tl_id"]) < LAST_TL_ID:
                         Progress["timeline/latest" + str(UID) + Filter] = int(items[0]["tl_id"])
@@ -487,7 +542,8 @@ class BCYCore(object):
                     return items
                 for x in more:
                     if Callback != None:
-                        Callback(x)
+                        if Callback(x)==True:
+                            return items
                     if LAST_TL_ID != None:
                         if int(x["tl_id"]) < LAST_TL_ID:
                             Progress["timeline/latest" + str(UID) + Filter] = int(items[0]["tl_id"])
@@ -512,7 +568,8 @@ class BCYCore(object):
                 items.extend(itemList)
                 if Callback != None:
                     for item in itemList:
-                        Callback(item)
+                        if Callback(item)==True:
+                            return items
         except:
             return items
 
@@ -520,6 +577,8 @@ class BCYCore(object):
         '''
         下载其他某个用户赞过的作品
         '''
+        if (Filter=="daily"):#API设计缺陷
+            Filter="user"
         since = 0
         items = list()
         LAST_TL_ID = Progress.get("timeline/latest" + str(UID) + Filter, None)
@@ -530,7 +589,8 @@ class BCYCore(object):
             return items
         for x in items:
             if Callback != None:
-                Callback(x)
+                if Callback(x)==True:
+                    return items
             if LAST_TL_ID != None:
                 if int(x["tl_id"]) < LAST_TL_ID:
                     Progress["timeline/userGrid" + str(UID) + Filter] = int(items[0]["tl_id"])
@@ -545,7 +605,8 @@ class BCYCore(object):
                 return items
             for x in more:
                 if Callback != None:
-                    Callback(x)
+                    if Callback(x)==True:
+                        return items
                 if LAST_TL_ID != None:
                     if int(x["tl_id"]) < LAST_TL_ID:
                         Progress["timeline/userGrid" + str(UID) + Filter] = int(items[0]["tl_id"])

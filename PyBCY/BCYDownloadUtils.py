@@ -310,6 +310,9 @@ class BCYDownloadUtils(object):
         '''
         用于读取本地SQL里的详细信息缓存
         '''
+        if type(Info)==str:
+            self.logger.error("%s Not A Dictionary"%(Info))
+            return None
         Info=Info.get("detail",Info)
         ValidIDs=dict()
         for key in ["cp_id","rp_id","dp_id","ud_id","post_id"]:
@@ -327,10 +330,15 @@ class BCYDownloadUtils(object):
         if len(keys)==0 or len(keys)!=len(Values):#Error Detection
             return None
         Q=Q+" AND ".join(keys)
-        Cursor=self.InfoSQL.execute(Q,tuple(Values)).fetchall()
-        if len(Cursor)==0:
+        try:
+            Cursor=self.InfoSQL.execute(Q,tuple(Values)).fetchall()
+            if len(Cursor)==0:
+                return None
+            return json.loads(Cursor[0][0])
+        except:
+            self.InfoSQLLock.release()
+            self.logger.debug(str(Q)+str(Values))
             return None
-        return json.loads(Cursor[0][0])
     def LoadOrSaveUserName(self,UserName,UID):
         '''
         当UserName为None时可用作纯查询函数。
@@ -340,14 +348,24 @@ class BCYDownloadUtils(object):
         '''
         self.InfoSQLLock.acquire()
         Q="SELECT UserName FROM UserInfo WHERE uid="+str(UID)
-        Cursor=self.InfoSQL.execute(Q)
+        try:
+            Cursor=self.InfoSQL.execute(Q)
+        except:
+            print(Q)
+            self.InfoSQLLock.release()
+            raise
         for item in Cursor:
             self.InfoSQLLock.release()
             return item[0]
         if UserName==None:
             self.InfoSQLLock.release()
             return None
-        self.InfoSQL.execute("INSERT INTO UserInfo (uid, UserName) VALUES (?,?)",(int(UID),UserName))
+        try:
+            self.InfoSQL.execute("INSERT INTO UserInfo (uid, UserName) VALUES (?,?)",(int(UID),UserName))
+        except KeyError:
+            self.InfoSQLLock.release()
+            print("INSERT INTO UserInfo (uid, UserName) VALUES (?,?)"+str((int(UID),UserName)))
+            raise
         self.InfoSQLLock.release()
         return UserName
     def LoadOrSaveGroupName(self,GroupName,GID):

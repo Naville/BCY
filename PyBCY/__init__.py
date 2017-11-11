@@ -1,3 +1,3 @@
-from .BCYCore import BCYCore
+from .BCYCore import *
 from .BCYDownloadUtils import BCYDownloadUtils
 from .BCYDownloadFilter import *
