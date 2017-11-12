@@ -295,6 +295,7 @@ class BCYDownloadUtils(object):
         '''
         while self.QueryEvent.isSet()==True:
             AbstractInfo=self.QueryQueue.get(block=True)
+            AbstractInfo=AbstractInfo.get("detail",AbstractInfo)
             Inf=None
             if self.UseCachedDetail==True:
                 Inf=self.LoadCachedDetail(AbstractInfo)
@@ -304,7 +305,9 @@ class BCYDownloadUtils(object):
                 except:
                     self.FailedInfoList.append(AbstractInfo)
             if Inf!=None:
-                    self.DownloadFromInfo(Inf)
+                self.DownloadFromInfo(Inf)
+            else:
+                self.FailedInfoList.append(AbstractInfo)
             self.QueryQueue.task_done()
     def LoadCachedDetail(self,Info):
         '''
@@ -313,6 +316,7 @@ class BCYDownloadUtils(object):
         if type(Info)==str:
             self.logger.error("%s Not A Dictionary"%(Info))
             return None
+        self.InfoSQLLock.acquire()
         Info=Info.get("detail",Info)
         ValidIDs=dict()
         for key in ["cp_id","rp_id","dp_id","ud_id","post_id"]:
@@ -328,17 +332,15 @@ class BCYDownloadUtils(object):
             keys.append(item+"=?")
             Values.append(ValidIDs[item])
         if len(keys)==0 or len(keys)!=len(Values):#Error Detection
+            self.InfoSQLLock.release()
             return None
         Q=Q+" AND ".join(keys)
-        try:
-            Cursor=self.InfoSQL.execute(Q,tuple(Values)).fetchall()
-            if len(Cursor)==0:
-                return None
-            return json.loads(Cursor[0][0])
-        except:
+        Cursor=self.InfoSQL.execute(Q,tuple(Values)).fetchall()
+        if len(Cursor)==0:
             self.InfoSQLLock.release()
-            self.logger.debug(str(Q)+str(Values))
             return None
+        self.InfoSQLLock.release()
+        return json.loads(Cursor[0][0])
     def LoadOrSaveUserName(self,UserName,UID):
         '''
         当UserName为None时可用作纯查询函数。
@@ -348,24 +350,14 @@ class BCYDownloadUtils(object):
         '''
         self.InfoSQLLock.acquire()
         Q="SELECT UserName FROM UserInfo WHERE uid="+str(UID)
-        try:
-            Cursor=self.InfoSQL.execute(Q)
-        except:
-            print(Q)
-            self.InfoSQLLock.release()
-            raise
+        Cursor=self.InfoSQL.execute(Q)
         for item in Cursor:
             self.InfoSQLLock.release()
             return item[0]
         if UserName==None:
             self.InfoSQLLock.release()
             return None
-        try:
-            self.InfoSQL.execute("INSERT INTO UserInfo (uid, UserName) VALUES (?,?)",(int(UID),UserName))
-        except KeyError:
-            self.InfoSQLLock.release()
-            print("INSERT INTO UserInfo (uid, UserName) VALUES (?,?)"+str((int(UID),UserName)))
-            raise
+        self.InfoSQL.execute("INSERT INTO UserInfo (uid, UserName) VALUES (?,?)",(int(UID),UserName))
         self.InfoSQLLock.release()
         return UserName
     def LoadOrSaveGroupName(self,GroupName,GID):
@@ -392,6 +384,7 @@ class BCYDownloadUtils(object):
         分析数据库并加载可用的标题
         如果不存在记录则不保存
         '''
+        self.InfoSQLLock.acquire()
         ValidIDs=dict()
         for key in ["cp_id","rp_id","dp_id","ud_id","post_id"]:
             value=Info.get(key)
@@ -407,8 +400,10 @@ class BCYDownloadUtils(object):
         Q=Q+" AND ".join(keys)
         Cursor=self.InfoSQL.execute(Q,tuple(Values))
         for item in Cursor:
+            self.InfoSQLLock.release()
             return item[0]
         #We Don't Save Title as it's handled by SaveInfo
+        self.InfoSQLLock.release()
         return Title
     def SaveInfo(self,Title,Info):
         '''
