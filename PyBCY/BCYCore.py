@@ -51,7 +51,7 @@ class BCYCore(object):
     def __init__(self,Timeout=15):
         self.UID = None
         self.Token = None
-        self.Crypto = AES.new('com_banciyuan_AI', AES.MODE_ECB)
+        self.Crypto = AES.new(b"com_banciyuan_AI", AES.MODE_ECB)
         self.session = requests.Session()
         self.session.headers.update(BCYCore.Header)
         self.Timeout=Timeout
