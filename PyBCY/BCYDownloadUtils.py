@@ -99,6 +99,8 @@ class BCYDownloadUtils(object):
         self.logger.addHandler(logging.NullHandler())
         self.Filter=BCYDownloadFilter()
         self.API=BCYCore()
+        self.MaxDownloadThread=MaxDownloadThread
+        self.MaxQueryThread=MaxQueryThread
 
         self.FailedInfoList=list()
         if email!=None and password!=None:
@@ -475,7 +477,7 @@ class BCYDownloadUtils(object):
         '''
         在下载完成前阻塞
         '''
-        while self.QueryQueue.empty()==False or self.DownloadQueue.empty()==False:
+        while (self.QueryQueue.empty()==False and self.MaxQueryThread>0) or (self.DownloadQueue.empty()==False and self.MaxDownloadThread>0):
             self.logger.warning ("QueryQueue Size:"+str(self.QueryQueue.qsize()))
             self.logger.warning ("DownloadQueue Size:"+str(self.DownloadQueue.qsize()))
             time.sleep(3)
