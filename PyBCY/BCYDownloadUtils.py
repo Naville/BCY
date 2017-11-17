@@ -187,7 +187,7 @@ class BCYDownloadUtils(object):
 
         while self.DownloadWorkerEvent.isSet()==True:
             try:
-                obj=self.DownloadQueue.get(block=True)
+                obj=self.DownloadQueue.get()
                 URL=obj[0]
                 ID=obj[1]
                 WorkType=obj[2]
@@ -210,10 +210,10 @@ class BCYDownloadUtils(object):
                     f.write(ImageData)
                     f.close()
                     shutil.move(f.name,SavePath)
-                    os.utime(savePath,(ctime,ctime))
-            except:
+                    os.utime(SavePath,(ctime,ctime))
+                self.QueryQueue.task_done()
+            except Queue.Empty:
                 pass
-            self.DownloadQueue.task_done()
     def DownloadFromInfo(self,Info,SaveInfo=True):
         '''
         分析作品详情从中:
@@ -323,21 +323,26 @@ class BCYDownloadUtils(object):
         本方法从QueryQueue中获取信息并查询详情后写入DownloadQueue
         '''
         while self.QueryEvent.isSet()==True:
-            AbstractInfo=self.QueryQueue.get(block=True)
-            AbstractInfo=AbstractInfo.get("detail",AbstractInfo)
-            Inf=None
-            if self.UseCachedDetail==True:
-                Inf=self.LoadCachedDetail(AbstractInfo)
-            if Inf==None:
-                try:
-                    Inf=self.API.queryDetail(AbstractInfo)
-                except:
+            try:
+                AbstractInfo=self.QueryQueue.get()
+                AbstractInfo=AbstractInfo.get("detail",AbstractInfo)
+                Inf=None
+                if self.UseCachedDetail==True:
+                    Inf=self.LoadCachedDetail(AbstractInfo)
+                if Inf==None:
+                    try:
+                        Inf=self.API.queryDetail(AbstractInfo)
+                    except:
+                        self.FailedInfoList.append(AbstractInfo)
+                if Inf!=None:
+                    self.DownloadFromInfo(Inf)
+                else:
                     self.FailedInfoList.append(AbstractInfo)
-            if Inf!=None:
-                self.DownloadFromInfo(Inf)
-            else:
-                self.FailedInfoList.append(AbstractInfo)
-            self.QueryQueue.task_done()
+                self.QueryQueue.task_done()
+            except Queue.Empty:
+                pass
+            except:
+                self.QueryQueue.task_done()
     def LoadCachedDetail(self,Info):
         '''
         用于读取本地SQL里的详细信息缓存
@@ -447,21 +452,17 @@ class BCYDownloadUtils(object):
         TagList=list()
         for item in Info.get("post_tags",list()):
             TagList.append(item["tag_name"])
-        try:
-            ValidIDs["Info"]=json.dumps(Info,separators=(',', ':'),ensure_ascii=False, encoding='utf8')
-            ValidIDs["Tags"]=json.dumps(TagList,separators=(',', ':'),ensure_ascii=False, encoding='utf8')
-        except TypeError:
-            ValidIDs["Info"]=json.dumps(Info,separators=(',', ':'),ensure_ascii=False)
-            ValidIDs["Tags"]=json.dumps(TagList,separators=(',', ':'),ensure_ascii=False)
-        InsertQuery="INSERT OR REPLACE INTO WorkInfo ("
+        ValidIDs["Info"]=json.dumps(Info,separators=(',', ':'),ensure_ascii=False)
+        ValidIDs["Tags"]=json.dumps(TagList,separators=(',', ':'),ensure_ascii=False)
+        InsertQuery=u"INSERT OR REPLACE INTO WorkInfo ("
         keys=list()
         ValuesPlaceHolders=list()
         Values=list()
         for item in ValidIDs.keys():
             keys.append(item)
             Values.append(ValidIDs[item])
-            ValuesPlaceHolders.append("?")
-        InsertQuery=InsertQuery+",".join(keys)+")VALUES ("+",".join(ValuesPlaceHolders)+")"
+            ValuesPlaceHolders.append(u"?")
+        InsertQuery=InsertQuery+u",".join(keys)+u")VALUES ("+u",".join(ValuesPlaceHolders)+u")"
         self.InfoSQL.execute(InsertQuery,tuple(Values))
         self.InfoSQLLock.release()
     def cleanup(self):
