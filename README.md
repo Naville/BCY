@@ -164,7 +164,7 @@ sqlite3 /PATH/TO/NEW/TABLE/BCYInfo.db < DUMP.SQL
 ```
 
 ## 2.4.0
-  Use INTEGER as the data type of WorkInfo's related columns.Below is a python3 mitigation script
+  Use INTEGER as the data type of WorkInfo's related columns.Below is a python3 migration script
 
 ```python
 import sqlite3
@@ -218,11 +218,11 @@ then replace the old database with the new one
 
 ## 2.5.2
 Fix a legacy issue results in empty identifiers being saved.
-Re-run the mitigation script for 2.4.0
+Re-run the migration script for 2.4.0
 
 ## 2.7.0
 Implement database version checks and distribute UID's into smaller sub-folders to decrease the filesystem load.  
-Mitigation Script:  
+migration Script:  
 
 ```python
 import sqlite3,os,shutil,errno

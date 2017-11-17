@@ -24,7 +24,7 @@ except ImportError:
     except ImportError:
         raise
 PackageVersion=pkg_resources.get_distribution("PyBCY").version
-__LastStableVersion__="2.7.0"#Last Known Version That Doesn't Require Mitigation
+__LastStableVersion__="2.7.0"#Last Known Version That Doesn't Require Migration
 
 class ServerHandler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
@@ -124,7 +124,7 @@ class BCYDownloadUtils(object):
             Value=self.InfoSQL.execute("SELECT Value FROM PyBCY WHERE Key=\"Version\"").fetchall()
             if(len(Value)<=0):
                 self.InfoSQL.close()
-                raise RuntimeError("Unknown PyBCY Version.Run mitigation scripts from https://github.com/Naville/PyBCY/blob/master/README.md or use RunVersionChecks=True to override")
+                raise RuntimeError("Unknown PyBCY Version.Run migration scripts from https://github.com/Naville/PyBCY/blob/master/README.md or use RunVersionChecks=True to override")
                 return None
             else:
                 DBVersion=Value[0][0]
