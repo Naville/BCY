@@ -219,3 +219,40 @@ then replace the old database with the new one
 ## 2.5.2
 Fix a legacy issue results in empty identifiers being saved.
 Re-run the mitigation script for 2.4.0
+
+## 2.7.0
+Implement database version checks and distribute UID's into smaller sub-folders to decrease the filesystem load.  
+Mitigation Script:  
+
+```python
+import sqlite3,os,shutil,errno
+BasePath="PATH/TO/DOWNLOAD/ROOT"
+SQL=sqlite3.connect(os.path.join(BasePath,"BCYInfo.db"))
+Cursor=SQL.execute("SELECT UID,UserName FROM UserInfo").fetchall()
+index=1
+length=len(Cursor)
+for item in Cursor:
+    UID=int(item[0])
+    UserName=item[1]
+    L1Path=UID%10
+    L2Path=(int((UID-L1Path)/10))%10
+    OriginalPath=os.path.join(BasePath,str(UserName))
+    SavePath=os.path.join(BasePath,str(L1Path),str(L2Path),str(UID))
+    try:
+        os.makedirs(os.path.join(BasePath,str(L1Path),str(L2Path)))
+    except OSError as e:
+        if e.errno != errno.EEXIST:
+            raise e
+    if os.path.isdir(OriginalPath):
+        shutil.move(OriginalPath,SavePath)
+        print("Moved %s to %s"%(OriginalPath,SavePath))
+    print("%i/%i"%(index,length))
+    index=index+1
+SQL.execute("INSERT OR REPLACE INTO PyBCY(Key,Value) VALUES(\"Version\",\"2.7.0\");")
+SQL.commit()
+SQL.close()
+
+```
+Note that from now on UID's are stored in two-level subfolder.  
+Example:
+User with UID 12345 is now stored at SaveRoot/5/4/12345

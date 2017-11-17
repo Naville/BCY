@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-import os,errno,tempfile,sqlite3,sys,shutil,threading,time,json,struct,requests,logging,re
+import os,errno,tempfile,sqlite3,sys,shutil,threading,time,json,struct,requests,logging,re,pkg_resources
 from PyBCY.BCYDownloadFilter import *
 from PyBCY.BCYCore import *
 from sys import version as python_version
@@ -23,7 +23,8 @@ except ImportError:
         import queue as Queue
     except ImportError:
         raise
-
+PackageVersion=pkg_resources.get_distribution("PyBCY").version
+__LastStableVersion__="2.7.0"#Last Known Version That Doesn't Require Mitigation
 
 class ServerHandler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
@@ -85,7 +86,7 @@ class BCYDownloadUtils(object):
             DownloadQueue       保存需要下载的详情。由DownloadWorker()来使用,由DownloadFromInfo()填充。请勿直接写入
         半次元新增IP并发请求数和请求速率限制之后建议每次调用方法之后join()一次避免速度过快被Ban
     '''
-    def __init__(self,email,password,savepath,MaxDownloadThread=16,MaxQueryThread=64,Daemon=False,IP="127.0.0.1",Port=8081,DownloadProgress=False,DatabaseFileName="BCYInfo.db",UseCachedDetail=True):
+    def __init__(self,email,password,savepath,MaxDownloadThread=16,MaxQueryThread=64,Daemon=False,IP="127.0.0.1",Port=8081,DownloadProgress=False,DatabaseFileName="BCYInfo.db",UseCachedDetail=True,RunVersionChecks=True):
         '''
         传入None的email password可实现匿名登录。 注意此种情况下许多需要登录的API无法使用
         UseCachedDetail为True时查询作品详情时会优先查询SQL内的缓存以避免昂贵的API访问带来的频次限制开销
@@ -108,12 +109,35 @@ class BCYDownloadUtils(object):
             print ("Logged in...UID:"+str(self.API.UID))
         else:
             print ("Anonymous Login")
-        self.InfoSQL=sqlite3.connect(os.path.join(savepath,DatabaseFileName),check_same_thread=False)
+        DBPath=os.path.join(savepath,DatabaseFileName)
+        FirstTime=(os.path.isfile(DBPath)==False)
+        self.InfoSQL=sqlite3.connect(DBPath,check_same_thread=False)
         self.InfoSQL.text_factory = str
         self.InfoSQL.execute("CREATE TABLE IF NOT EXISTS UserInfo (uid INTEGER,UserName STRING,UNIQUE(uid) ON CONFLICT IGNORE)")
         self.InfoSQL.execute("CREATE TABLE IF NOT EXISTS GroupInfo (gid INTEGER,GroupName STRING,UNIQUE(gid) ON CONFLICT IGNORE)")
         self.InfoSQL.execute("CREATE TABLE IF NOT EXISTS WorkInfo (uid INTEGER DEFAULT 0,Title STRING NOT NULL DEFAULT '',cp_id INTEGER DEFAULT 0,rp_id INTEGER DEFAULT 0,dp_id INTEGER DEFAULT 0,ud_id INTEGER DEFAULT 0,post_id INTEGER DEFAULT 0,Info STRING NOT NULL DEFAULT '',Tags STRING,UNIQUE(uid,cp_id,rp_id,dp_id,ud_id,post_id) ON CONFLICT REPLACE)")
+        self.InfoSQL.execute("CREATE TABLE IF NOT EXISTS PyBCY (Key STRING DEFAULT '',Value STRING NOT NULL DEFAULT '')")
         self.InfoSQL.execute("PRAGMA journal_mode=WAL;")
+        if FirstTime:
+            self.InfoSQL.execute("INSERT OR REPLACE INTO PyBCY(Value,Key) VALUES(\""+PackageVersion+"\",\"Version\")")
+        if RunVersionChecks:
+            Value=self.InfoSQL.execute("SELECT Value FROM PyBCY WHERE Key=\"Version\"").fetchall()
+            if(len(Value)<=0):
+                self.InfoSQL.close()
+                raise RuntimeError("Unknown PyBCY Version.Run mitigation scripts from https://github.com/Naville/PyBCY/blob/master/README.md or use RunVersionChecks=True to override")
+                return None
+            else:
+                DBVersion=Value[0][0]
+                Value=DBVersion
+                Values=Value.split(".")
+                NumericalVersion=Values[0]*100+Values[1]*10+Values[2]
+                PKGValues=__LastStableVersion__.split(".")
+                PV=PKGValues[0]*100+PKGValues[1]*10+PKGValues[2]
+                if NumericalVersion<PV:
+                    self.InfoSQL.close()
+                    raise RuntimeError("DataBase Version:%s Different From Package Version:%s"%(DBVersion,PackageVersion))
+                    return None
+                pass
         self.InfoSQLLock=threading.Lock()
         self.DownloadProcesses=dict()
         #Create Threading Events
@@ -233,7 +257,10 @@ class BCYDownloadUtils(object):
         Title=self.LoadTitle(Title,Info)
         if SaveInfo==True:
             self.SaveInfo(Title,Info)
-        WritePathRoot=os.path.join(self.SavePath,str(CoserName).replace("/","-"),str(Title).replace("/","-"))
+        L1Path=int(UID)%10
+        L2Path=(int((int(UID)-L1Path)/10))%10
+        CoserPath=os.path.join(self.SavePath,str(L1Path),str(L2Path),str(UID))
+        WritePathRoot=os.path.join(CoserPath,str(Title).replace("/","-"))
         if Info.get("type")=="larticle" and (type(Info["multi"])==bool or len(Info["multi"])==0):#Long Article. Extract URLs from HTML using regex
             match=re.findall(r"<img src=\"(.{80,100})\" alt=",Info["content"])
             URLs=list()
