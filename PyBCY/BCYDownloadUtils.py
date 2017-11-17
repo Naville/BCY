@@ -473,11 +473,10 @@ class BCYDownloadUtils(object):
         '''
         FolderList=list()
         for UID in self.Filter.UIDList:
-            UserName=self.LoadOrSaveUserName(None,UID)
-            if UserName!=None and len(UserName)>0:
-                FolderPath=os.path.join(self.SavePath,UserName)
-                if (os.path.normpath(FolderPath) != os.path.normpath(self.SavePath)):
-                    FolderList.append(FolderPath)
+            L1Path=int(UID)%10
+            L2Path=(int((int(UID)-L1Path)/10))%10
+            FolderPath=os.path.join(self.SavePath,str(L1Path),str(L2Path),str(UID))
+            FolderList.append(FolderPath)
         for Path in FolderList:
             if os.path.isdir(Path):
                 self.logger.warning("Removing Folder"+Path)
