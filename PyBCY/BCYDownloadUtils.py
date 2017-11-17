@@ -211,9 +211,11 @@ class BCYDownloadUtils(object):
                     f.close()
                     shutil.move(f.name,SavePath)
                     os.utime(SavePath,(ctime,ctime))
-                self.QueryQueue.task_done()
+                self.DownloadQueue.task_done()
             except Queue.Empty:
                 pass
+            except:
+                self.DownloadQueue.task_done()
     def DownloadFromInfo(self,Info,SaveInfo=True):
         '''
         分析作品详情从中:
