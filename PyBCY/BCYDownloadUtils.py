@@ -197,9 +197,7 @@ class BCYDownloadUtils(object):
                 if NumericalVersion<PV:
                     self.InfoSQL.close()
                     raise RuntimeError("DataBase Version:%s Older Than Last Stable Version: %s.PyBCY's version: %s"%(DBVersion,__LastStableVersion__,PackageVersion))
-                    return None
-                pass
-        self.InfoSQLLock=threading.Lock()
+        self.Filter=BCYDownloadFilter(self.InfoSQL)
         self.DownloadProcesses=dict()
         #Create Threading Events
         self.DownloadWorkerEvent=threading.Event()
@@ -232,8 +230,6 @@ class BCYDownloadUtils(object):
             if exception.errno != errno.EEXIST:
                 raise
         self.DownloadProgress=DownloadProgress
-        self.Running=True
-        self.Filter=BCYDownloadFilter(self.InfoSQL)
     def __enter__(self):
         return self
     def __exit__(self, type, value, trace):
@@ -279,6 +275,7 @@ class BCYDownloadUtils(object):
                 pass
             except:
                 self.DownloadQueue.task_done()
+                raise
     def DownloadFromInfo(self,Info,SaveInfo=True):
         '''
         分析作品详情从中:
@@ -399,6 +396,7 @@ class BCYDownloadUtils(object):
                     try:
                         Inf=self.API.queryDetail(AbstractInfo)
                     except:
+                        raise
                         self.FailedInfoList.append(AbstractInfo)
                 else:
                     Save=False
@@ -410,6 +408,7 @@ class BCYDownloadUtils(object):
             except Queue.Empty:
                 pass
             except:
+                raise
                 self.QueryQueue.task_done()
     def LoadCachedDetail(self,Info):
         '''
@@ -418,7 +417,6 @@ class BCYDownloadUtils(object):
         if type(Info)==str:
             self.logger.error("%s Not A Dictionary"%(Info))
             return None
-        self.InfoSQLLock.acquire()
         Info=Info.get("detail",Info)
         ValidIDs=dict()
         for key in ["cp_id","rp_id","dp_id","ud_id","post_id"]:
@@ -426,22 +424,18 @@ class BCYDownloadUtils(object):
             if value!=None:
                 ValidIDs[key]=int(value)
         Q="SELECT Info FROM WorkInfo WHERE "
-        ArgsList=list()
         #Construct A List of constraints
         keys=list()
         Values=list()
         for item in ValidIDs.keys():
-            keys.append(item+"=?")
+            keys.append(item+"=(?)")
             Values.append(ValidIDs[item])
         if len(keys)==0 or len(keys)!=len(Values):#Error Detection
-            self.InfoSQLLock.release()
             return None
         Q=Q+" AND ".join(keys)
         Cursor=self.InfoSQL.execute(Q,tuple(Values)).fetchall()
         if len(Cursor)==0:
-            self.InfoSQLLock.release()
             return None
-        self.InfoSQLLock.release()
         return json.loads(Cursor[0][0])
     def LoadOrSaveUserName(self,UserName,UID):
         '''
@@ -450,16 +444,12 @@ class BCYDownloadUtils(object):
             如果有记录:返回原来的用户名
             否则:建立UserName和UID的记录并返回UserName
         '''
-        self.InfoSQLLock.acquire()
-        Cursor=self.InfoSQL.execute("SELECT UserName FROM UserInfo WHERE uid=?",(str(UID)))
+        Cursor=self.InfoSQL.execute("SELECT UserName FROM UserInfo WHERE uid=(?)",(str(UID),))
         for item in Cursor:
-            self.InfoSQLLock.release()
             return item[0]
         if UserName==None:
-            self.InfoSQLLock.release()
             return None
-        self.InfoSQL.execute("INSERT INTO UserInfo (uid, UserName) VALUES (?,?)",(int(UID),UserName))
-        self.InfoSQLLock.release()
+        self.InfoSQL.execute("INSERT INTO UserInfo (uid, UserName) VALUES (?,?)",(int(UID),UserName,))
         return UserName
     def LoadOrSaveGroupName(self,GroupName,GID):
         '''
@@ -468,24 +458,21 @@ class BCYDownloadUtils(object):
             如果有记录:返回原来的组名
             否则:建立GroupName和GID的记录并返回GroupName
         '''
-        self.InfoSQLLock.acquire()
-        Q="SELECT GroupName FROM GroupInfo WHERE gid="+str(GID)
-        Cursor=self.InfoSQL.execute(Q)
+        Cursor=self.InfoSQL.execute("SELECT GroupName FROM GroupInfo WHERE gid=(?)",(str(GID),))
         for item in Cursor:
-            self.InfoSQLLock.release()
             return item[0]
         if GroupName==None:
-            self.InfoSQLLock.release()
+
             return None
-        self.InfoSQL.execute("INSERT INTO GroupInfo (gid, GroupName) VALUES (?,?)",(int(GID),GroupName))
-        self.InfoSQLLock.release()
+        self.InfoSQL.execute("INSERT INTO GroupInfo (gid, GroupName) VALUES (?,?)",(int(GID),GroupName,))
+
         return GroupName
     def LoadTitle(self,Title,Info):
         '''
         分析数据库并加载可用的标题
         如果不存在记录则不保存
         '''
-        self.InfoSQLLock.acquire()
+
         ValidIDs=dict()
         for key in ["cp_id","rp_id","dp_id","ud_id","post_id"]:
             value=Info.get(key)
@@ -496,21 +483,21 @@ class BCYDownloadUtils(object):
         keys=list()
         Values=list()
         for item in ValidIDs.keys():
-            keys.append(item+"=?")
+            keys.append(item+"=(?)")
             Values.append(ValidIDs[item])
         Q=Q+" AND ".join(keys)
         Cursor=self.InfoSQL.execute(Q,tuple(Values))
         for item in Cursor:
-            self.InfoSQLLock.release()
+
             return item[0]
         #We Don't Save Title as it's handled by SaveInfo
-        self.InfoSQLLock.release()
+
         return Title
     def SaveInfo(self,Title,Info):
         '''
         保存作品信息
         '''
-        self.InfoSQLLock.acquire()
+
         ValidIDs=dict()
         #Prepare Insert Statement
         ValidIDs["Title"]=Title
@@ -531,40 +518,37 @@ class BCYDownloadUtils(object):
             ValuesPlaceHolders.append(u"?")
         InsertQuery=InsertQuery+u",".join(keys)+u")VALUES ("+u",".join(ValuesPlaceHolders)+u")"
         self.InfoSQL.execute(InsertQuery,tuple(Values))
-        self.InfoSQLLock.release()
+
     def cleanup(self):
         '''
         根据Filter清理下载现场
         '''
-        self.InfoSQLLock.acquire()
+
         FolderList=list()
         for UID in self.Filter.UIDList:
             L1Path=int(UID)%10
             L2Path=(int((int(UID)-L1Path)/10))%10
             FolderPath=os.path.join(self.SavePath,str(L1Path),str(L2Path),str(UID))
             FolderList.append(FolderPath)
-            self.InfoSQL.execute("DELETE FROM WorkInfo WHERE UID=?",(str(UID),))
-            self.InfoSQL.execute("DELETE FROM UserInfo WHERE UID=?",(str(UID),))
+            self.InfoSQL.execute("DELETE FROM WorkInfo WHERE UID=(?)",(str(UID),))
+            self.InfoSQL.execute("DELETE FROM UserInfo WHERE UID=(?)",(str(UID),))
         for Path in FolderList:
             if os.path.isdir(Path):
                 self.logger.warning("Removing Folder"+Path)
                 shutil.rmtree(Path)
         shutil.rmtree(os.path.join(self.SavePath,"DownloadTemp"))
-        self.InfoSQLLock.release()
+
     def cancel(self):
         '''
         取消所有任务
         保存SQL
         '''
-        self.Running=False
         self.logger.warning("Clearing Thread Flags")
         self.DownloadWorkerEvent.clear()
         self.QueryEvent.clear()
         if hasattr(self,"verifyEvent"):
             self.verifyEvent.clear()
         self.QueryEvent.clear()
-        self.logger.warning("Obtaining SQL Mutex")
-        self.InfoSQLLock.acquire()
         self.logger.warning("Saving Filter Rules")
         self.Filter.cancel()
         self.logger.warning("Commiting SQLs")
@@ -572,15 +556,12 @@ class BCYDownloadUtils(object):
         self.logger.warning("Closing SQLs")
         self.InfoSQL.close()
         self.logger.warning("Releasing Lock SQLs")
-        self.InfoSQLLock.release()
+
         return
     def join(self):
         '''
         在下载完成前阻塞
         '''
-        if self.Running==False:
-            self.logger.warning("Calling join() on a cancelled instance")
-        return
         while (self.QueryQueue.empty()==False and self.MaxQueryThread>0) or (self.DownloadQueue.empty()==False and self.MaxDownloadThread>0):
             self.logger.warning ("QueryQueue Size:"+str(self.QueryQueue.qsize()))
             self.logger.warning ("DownloadQueue Size:"+str(self.DownloadQueue.qsize()))
