@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
-import os,errno,tempfile,sqlite3,sys,shutil,threading,time,json,struct,requests,logging,re,pkg_resources
-from PyBCY.BCYDownloadFilter import *
+import os,errno,tempfile,sqlite3,sys,shutil,threading,time,json,struct,requests,logging,re,pkg_resources,types
 from PyBCY.BCYCore import *
 from sys import version as python_version
 from cgi import parse_header, parse_multipart
@@ -24,7 +23,7 @@ except ImportError:
     except ImportError:
         raise
 PackageVersion=pkg_resources.get_distribution("PyBCY").version
-__LastStableVersion__="2.7.0"#Last Known Version That Doesn't Require Migration
+__LastStableVersion__="2.7.8"#Last Known Version That Doesn't Require Migration
 
 class ServerHandler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
@@ -67,6 +66,69 @@ class ServerHandler(BaseHTTPRequestHandler):
                 self.server.DownloadUtils.DownloadFromAbstractInfo({"dp_id":dp_id,"rp_id":rp_id})
             else:
                 return
+class BCYDownloadFilter(object):
+    def __init__(self,DB):
+        '''
+        从SQL表加载过滤规则。
+        UID为UID的数字列表。
+        FilterHandlers为函数列表用于详细自定义过滤。被调用方的唯一参数是作品的详细信息,返回：
+        >0  强制不过滤
+        <0  强制过滤
+        =0  运行其余规则后决定
+        其他项都为文本，匹配时自动转换为正则表达式
+        '''
+        self.Database=DB
+        Info=dict()
+        for Value in self.Database.execute("SELECT Value FROM PyBCY WHERE Key=\"BCYDownloadFilter\"").fetchall():
+            Info=json.loads(Value[0][0])
+        self.UIDList=Info.get("UID",list())
+        self.WorkList=Info.get("Work",list())
+        self.TagList=Info.get("Tag",list())
+        self.UserNameList=Info.get("UserName",list())
+        self.FilterHandlers=list()
+        self.logger=logging.getLogger(str(__name__)+"-"+str(hex(id(self))))
+    def ShouldBlockInfo(self,Info):
+        for func in self.FilterHandlers:
+            if isinstance(func, types.FunctionType):
+                ret=func(Info)
+                if ret>0:
+                    return False
+                elif ret<0:
+                    return True
+            else:
+                self.logger.error("%s is not a function!"%(str(func)))
+        for UID in self.UIDList:
+            if int(Info['uid'])==UID:
+                self.logger.debug("%s Filted due to its uid:%i"%(Info,int(Info['uid'])))
+                return True
+        for Tag in self.TagList:
+            Tag=re.compile(Tag)
+            for item in Info["post_tags"]:
+                if Tag.match(item):
+                    self.logger.debug("%s Filted due to its Tag:%s"%(Info,item))
+                    return True
+        for UserName in self.UserNameList:
+            UserName=re.compile(UserName)
+            if UserName.match(Info["profile"]["uname"])!=None:
+                self.logger.debug("%s Filted due to its UserName:%s"%(Info,UserName))
+                return True
+        for WorkName in self.WorkList:
+            WorkName=re.compile(WorkName)
+            if WorkName.match(Info["properties"]["work"])!=None:
+                self.logger.debug("%s Filted due to its UserName:%s"%(Info,UserName))
+                return True
+        return False
+    def cancel(self):
+        '''
+        将过滤规则写回数据库。同样并非线程安全。由BCYDownloadUtils的同名函数中的线程锁保护
+        '''
+        Info=dict()
+        Info["UID"]=list(set(self.UIDList))
+        Info["Work"]=list(set(self.WorkList))
+        Info["Tag"]=list(set(self.TagList))
+        Info["UserName"]=list(set(self.UserNameList))
+        Info=json.dumps(Info,separators=(',', ':'),ensure_ascii=False)
+        self.Database.execute("INSERT INTO PyBCY (Key,Value) VALUES(?,?)",("BCYDownloadFilter",Info,))
 class BCYDownloadUtils(object):
     '''
         self.DownloadProcesses          字典。键为当前正在下载的URL。值为(已下载大小,总大小)的tuple
@@ -98,7 +160,6 @@ class BCYDownloadUtils(object):
         self.SavePath=savepath
         self.logger=logging.getLogger(str(__name__)+"-"+str(hex(id(self))))
         self.logger.addHandler(logging.NullHandler())
-        self.Filter=BCYDownloadFilter()
         self.API=BCYCore()
         self.MaxDownloadThread=MaxDownloadThread
         self.MaxQueryThread=MaxQueryThread
@@ -116,7 +177,7 @@ class BCYDownloadUtils(object):
         self.InfoSQL.execute("CREATE TABLE IF NOT EXISTS UserInfo (uid INTEGER,UserName STRING,UNIQUE(uid) ON CONFLICT IGNORE)")
         self.InfoSQL.execute("CREATE TABLE IF NOT EXISTS GroupInfo (gid INTEGER,GroupName STRING,UNIQUE(gid) ON CONFLICT IGNORE)")
         self.InfoSQL.execute("CREATE TABLE IF NOT EXISTS WorkInfo (uid INTEGER DEFAULT 0,Title STRING NOT NULL DEFAULT '',cp_id INTEGER DEFAULT 0,rp_id INTEGER DEFAULT 0,dp_id INTEGER DEFAULT 0,ud_id INTEGER DEFAULT 0,post_id INTEGER DEFAULT 0,Info STRING NOT NULL DEFAULT '',Tags STRING,UNIQUE(uid,cp_id,rp_id,dp_id,ud_id,post_id) ON CONFLICT REPLACE)")
-        self.InfoSQL.execute("CREATE TABLE IF NOT EXISTS PyBCY (Key STRING DEFAULT '',Value STRING NOT NULL DEFAULT '')")
+        self.InfoSQL.execute("CREATE TABLE IF NOT EXISTS PyBCY (Key STRING DEFAULT '',Value STRING NOT NULL DEFAULT '',UNIQUE(Key) ON CONFLICT IGNORE)")
         self.InfoSQL.execute("PRAGMA journal_mode=WAL;")
         if FirstTime:
             self.InfoSQL.execute("INSERT OR REPLACE INTO PyBCY(Value,Key) VALUES(\""+PackageVersion+"\",\"Version\")")
@@ -124,7 +185,7 @@ class BCYDownloadUtils(object):
             Value=self.InfoSQL.execute("SELECT Value FROM PyBCY WHERE Key=\"Version\"").fetchall()
             if(len(Value)<=0):
                 self.InfoSQL.close()
-                raise RuntimeError("Unknown PyBCY Version.Run migration scripts from https://github.com/Naville/PyBCY/blob/master/README.md or use RunVersionChecks=True to override")
+                raise RuntimeError("Unknown PyBCY Version.Run migration scripts from https://github.com/Naville/PyBCY/blob/master/README.md or use RunVersionChecks=False to override")
                 return None
             else:
                 DBVersion=Value[0][0]
@@ -135,7 +196,7 @@ class BCYDownloadUtils(object):
                 PV=PKGValues[0]*100+PKGValues[1]*10+PKGValues[2]
                 if NumericalVersion<PV:
                     self.InfoSQL.close()
-                    raise RuntimeError("DataBase Version:%s Different From Package Version:%s"%(DBVersion,PackageVersion))
+                    raise RuntimeError("DataBase Version:%s Older Than Last Stable Version: %s.PyBCY's version: %s"%(DBVersion,__LastStableVersion__,PackageVersion))
                     return None
                 pass
         self.InfoSQLLock=threading.Lock()
@@ -171,6 +232,8 @@ class BCYDownloadUtils(object):
             if exception.errno != errno.EEXIST:
                 raise
         self.DownloadProgress=DownloadProgress
+        self.Running=True
+        self.Filter=BCYDownloadFilter(self.InfoSQL)
     def __enter__(self):
         return self
     def __exit__(self, type, value, trace):
@@ -329,6 +392,7 @@ class BCYDownloadUtils(object):
                 AbstractInfo=self.QueryQueue.get()
                 AbstractInfo=AbstractInfo.get("detail",AbstractInfo)
                 Inf=None
+                Save=True
                 if self.UseCachedDetail==True:
                     Inf=self.LoadCachedDetail(AbstractInfo)
                 if Inf==None:
@@ -336,8 +400,10 @@ class BCYDownloadUtils(object):
                         Inf=self.API.queryDetail(AbstractInfo)
                     except:
                         self.FailedInfoList.append(AbstractInfo)
+                else:
+                    Save=False
                 if Inf!=None:
-                    self.DownloadFromInfo(Inf)
+                    self.DownloadFromInfo(Inf,SaveInfo=Save)
                 else:
                     self.FailedInfoList.append(AbstractInfo)
                 self.QueryQueue.task_done()
@@ -385,8 +451,7 @@ class BCYDownloadUtils(object):
             否则:建立UserName和UID的记录并返回UserName
         '''
         self.InfoSQLLock.acquire()
-        Q="SELECT UserName FROM UserInfo WHERE uid="+str(UID)
-        Cursor=self.InfoSQL.execute(Q)
+        Cursor=self.InfoSQL.execute("SELECT UserName FROM UserInfo WHERE uid=?",(str(UID)))
         for item in Cursor:
             self.InfoSQLLock.release()
             return item[0]
@@ -471,22 +536,27 @@ class BCYDownloadUtils(object):
         '''
         根据Filter清理下载现场
         '''
+        self.InfoSQLLock.acquire()
         FolderList=list()
         for UID in self.Filter.UIDList:
             L1Path=int(UID)%10
             L2Path=(int((int(UID)-L1Path)/10))%10
             FolderPath=os.path.join(self.SavePath,str(L1Path),str(L2Path),str(UID))
             FolderList.append(FolderPath)
+            self.InfoSQL.execute("DELETE FROM WorkInfo WHERE UID=?",(str(UID),))
+            self.InfoSQL.execute("DELETE FROM UserInfo WHERE UID=?",(str(UID),))
         for Path in FolderList:
             if os.path.isdir(Path):
                 self.logger.warning("Removing Folder"+Path)
                 shutil.rmtree(Path)
         shutil.rmtree(os.path.join(self.SavePath,"DownloadTemp"))
+        self.InfoSQLLock.release()
     def cancel(self):
         '''
         取消所有任务
         保存SQL
         '''
+        self.Running=False
         self.logger.warning("Clearing Thread Flags")
         self.DownloadWorkerEvent.clear()
         self.QueryEvent.clear()
@@ -495,6 +565,8 @@ class BCYDownloadUtils(object):
         self.QueryEvent.clear()
         self.logger.warning("Obtaining SQL Mutex")
         self.InfoSQLLock.acquire()
+        self.logger.warning("Saving Filter Rules")
+        self.Filter.cancel()
         self.logger.warning("Commiting SQLs")
         self.InfoSQL.commit()
         self.logger.warning("Closing SQLs")
@@ -506,6 +578,9 @@ class BCYDownloadUtils(object):
         '''
         在下载完成前阻塞
         '''
+        if self.Running==False:
+            self.logger.warning("Calling join() on a cancelled instance")
+        return
         while (self.QueryQueue.empty()==False and self.MaxQueryThread>0) or (self.DownloadQueue.empty()==False and self.MaxDownloadThread>0):
             self.logger.warning ("QueryQueue Size:"+str(self.QueryQueue.qsize()))
             self.logger.warning ("DownloadQueue Size:"+str(self.DownloadQueue.qsize()))

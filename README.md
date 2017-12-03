@@ -256,3 +256,17 @@ SQL.close()
 Note that from now on UID's are stored in two-level subfolder.  
 Example:
 User with UID 12345 is now stored at SaveRoot/5/4/12345
+
+## 2.7.8
+Store Filters in Database to simplify initializing process by caller
+Use sqlite3 to create a new database with the following:
+
+```
+CREATE TABLE IF NOT EXISTS UserInfo (uid INTEGER,UserName STRING,UNIQUE(uid) ON CONFLICT IGNORE);
+CREATE TABLE IF NOT EXISTS GroupInfo (gid INTEGER,GroupName STRING,UNIQUE(gid) ON CONFLICT IGNORE);
+CREATE TABLE IF NOT EXISTS WorkInfo (uid INTEGER DEFAULT 0,Title STRING NOT NULL DEFAULT '',cp_id INTEGER DEFAULT 0,rp_id INTEGER DEFAULT 0,dp_id INTEGER DEFAULT 0,ud_id INTEGER DEFAULT 0,post_id INTEGER DEFAULT 0,Info STRING NOT NULL DEFAULT '',Tags STRING,UNIQUE(uid,cp_id,rp_id,dp_id,ud_id,post_id) ON CONFLICT REPLACE);
+CREATE TABLE IF NOT EXISTS PyBCY (Key STRING DEFAULT '',Value STRING NOT NULL DEFAULT '',UNIQUE(Key) ON CONFLICT IGNORE);
+PRAGMA journal_mode=WAL;
+INSERT INTO PyBCY(Key,Value) VALUES("Version","2.7.8");
+```
+Then apply the old dump
