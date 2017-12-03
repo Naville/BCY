@@ -80,7 +80,7 @@ class BCYDownloadFilter(object):
         self.Database=DB
         Info=dict()
         for Value in self.Database.execute("SELECT Value FROM PyBCY WHERE Key=\"BCYDownloadFilter\"").fetchall():
-            Info=json.loads(Value[0][0])
+            Info=json.loads(Value[0])
         self.UIDList=Info.get("UID",list())
         self.WorkList=Info.get("Work",list())
         self.TagList=Info.get("Tag",list())
