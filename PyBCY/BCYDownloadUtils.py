@@ -128,7 +128,7 @@ class BCYDownloadFilter(object):
         Info["Tag"]=list(set(self.TagList))
         Info["UserName"]=list(set(self.UserNameList))
         Info=json.dumps(Info,separators=(',', ':'),ensure_ascii=False)
-        self.Database.execute("INSERT INTO PyBCY (Key,Value) VALUES(?,?)",("BCYDownloadFilter",Info,))
+        self.Database.execute("INSERT OR REPLACE INTO PyBCY (Key,Value) VALUES(?,?)",("BCYDownloadFilter",Info,))
 class BCYDownloadUtils(object):
     '''
         self.DownloadProcesses          字典。键为当前正在下载的URL。值为(已下载大小,总大小)的tuple
@@ -275,7 +275,6 @@ class BCYDownloadUtils(object):
                 pass
             except:
                 self.DownloadQueue.task_done()
-                raise
     def DownloadFromInfo(self,Info,SaveInfo=True):
         '''
         分析作品详情从中:
@@ -396,7 +395,6 @@ class BCYDownloadUtils(object):
                     try:
                         Inf=self.API.queryDetail(AbstractInfo)
                     except:
-                        raise
                         self.FailedInfoList.append(AbstractInfo)
                 else:
                     Save=False
@@ -408,7 +406,6 @@ class BCYDownloadUtils(object):
             except Queue.Empty:
                 pass
             except:
-                raise
                 self.QueryQueue.task_done()
     def LoadCachedDetail(self,Info):
         '''
