@@ -7,13 +7,16 @@ import sys
 import tempfile
 import threading
 from Crypto.Cipher import AES
-
+from sys import version as python_version
 try:
     reload(sys)
     sys.setdefaultencoding('utf8')
 except:
     pass
-
+if python_version.startswith('3'):
+    from urllib.parse import urlparse
+else:
+    from urlparse import urlparse
 
 class BCYCore(object):
     '''
@@ -89,8 +92,8 @@ class BCYCore(object):
             ParamData = json.dumps(Params, separators=(',', ':'), ensure_ascii=False)
         return {"data": base64.b64encode(self.EncryptData(ParamData))}
 
-    def GET(self, URL, Params, **kwargs):
-        return self.session.get(URL, params=Params,timeout=self.Timeout,**kwargs)
+    def GET(self, URL, Params,Headers=dict(),**kwargs):
+        return self.session.get(URL, params=Params,headers=Headers,timeout=self.Timeout,**kwargs)
 
     def POST(self, URL, Params, Auth=True,Encrypt=True, **kwargs):
         if URL.startswith("http") == False:
@@ -107,9 +110,9 @@ class BCYCore(object):
     def userDetail(self, UID):
         return json.loads(self.POST("user/detail", {"face": "b", "uid": UID}).content)
 
-    def downloadWorker(self, URL, Callback=None):
+    def downloadWorker(self, URL,Params=dict(),Headers=dict(),Callback=None):
         Content = None
-        req = self.GET(URL, {}, stream=True)
+        req = self.GET(URL,Params,Headers=Headers,stream=True)
         total_length = int(req.headers.get('Content-Length'))
         if req == None:
             return None
@@ -155,7 +158,11 @@ class BCYCore(object):
                 Progress["coserAllWorks"]=int(items[-1]["ctime"])
                 return items
             items.extend(foo)
-
+    def videoDownload(self,URL, Callback=None):
+        foo=urlparse(URL)
+        Header={"Referer":foo.scheme+"://"+foo.netloc}
+        VideoData=self.downloadWorker(URL,Headers=Header,Callback=Callback).content
+        return VideoData
     def imageDownload(self, ImageInfo, Callback=None):
         '''
         从指定图片URL下载图片

@@ -322,6 +322,11 @@ class BCYDownloadUtils(object):
         L2Path=(int((int(UID)-L1Path)/10))%10
         CoserPath=os.path.join(self.SavePath,str(L1Path),str(L2Path),str(UID))
         WritePathRoot=os.path.join(CoserPath,str(Title).replace("/","-"))
+        '''TODO: ADT Modification To Intergrate VideoDownloader.
+        if Info.get("video_info")!=None:
+            VideoURL=Info["video_info"]["src"]
+            VideoData=self.API.videoDownload(VideoURL)
+        '''
         if Info.get("type")=="larticle" and (type(Info["multi"])==bool or len(Info["multi"])==0):#Long Article. Extract URLs from HTML using regex
             match=re.findall(r"<img src=\"(.{80,100})\" alt=",Info["content"])
             URLs=list()
