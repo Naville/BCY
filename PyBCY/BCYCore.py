@@ -40,7 +40,7 @@ class BCYCore(object):
     自2017年7月左右起半次元API接口开启了同IP的并发请求限制。请求过快或过密会导致服务器不返回正文或者空正文。IP地址也会被Ban
     前者会触发requests.exceptions.ConnectionError异常
     '''
-    APIBase = "http://api.bcy.net/api/"
+    APIBase = "https://api.bcy.net/api/"
     Header = {"User-Agent": "bcy/3.7.1 (iPhone; iOS 9.3.3; Scale/1.00)", "X-BCY-Version": "iOS-3.7.1"}
     APIErrorResponse = "半次元不小心滑了一跤"
     NeedLoginResponse = "阿拉，请先登录半次元"
@@ -577,7 +577,7 @@ class BCYCore(object):
                     for item in itemList:
                         if Callback(item)==True:
                             return items
-        except:
+        except (requests.exceptions.ConnectionError):
             return items
 
     def userRecommends(self, UID, Filter, Callback=None, Progress=dict()):
