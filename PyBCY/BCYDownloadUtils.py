@@ -597,12 +597,10 @@ class BCYDownloadUtils(object):
         for item in Cursor:
             self.verifyQueue.put(item[0])
         def printMsg():
-            self.logger.warning ("Verify Queue Size "+str(self.verifyQueue.qsize()))
-            self.logger.warning ("DownloadQueue Size:"+str(self.DownloadQueue.qsize()))
-        LoggingThread=threading.Timer(5,printMsg)
+            while self.verifyQueue.empty()==False:
+                time.sleep(5)
+                self.logger.warning ("Verify Queue Size "+str(self.verifyQueue.qsize()))
+                self.logger.warning ("DownloadQueue Size:"+str(self.DownloadQueue.qsize()))
+        LoggingThread=threading.Thread(target=printMsg)
         LoggingThread.start()
-        while self.verifyQueue.empty()==False:
-            pass
-        self.logger.warning ("Verify Queue Size "+str(self.verifyQueue.qsize()))
-        self.logger.warning ("DownloadQueue Size:"+str(self.DownloadQueue.qsize()))
-        LoggingThread.cancel()
+        LoggingThread.join()
