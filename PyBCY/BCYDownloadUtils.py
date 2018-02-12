@@ -163,7 +163,7 @@ class BCYDownloadUtils(object):
         self.API=BCYCore()
         self.MaxDownloadThread=MaxDownloadThread
         self.MaxQueryThread=MaxQueryThread
-
+        self.i=0
         self.FailedInfoList=list()
         if email!=None and password!=None:
             self.API.loginWithEmailAndPassWord(email,password)
@@ -596,7 +596,13 @@ class BCYDownloadUtils(object):
             Cursor=reversed(Cursor)
         for item in Cursor:
             self.verifyQueue.put(item[0])
-        while self.verifyQueue.empty()==False:
+        def printMsg():
             self.logger.warning ("Verify Queue Size "+str(self.verifyQueue.qsize()))
             self.logger.warning ("DownloadQueue Size:"+str(self.DownloadQueue.qsize()))
-            time.sleep(3)
+        LoggingThread=threading.Timer(5,printMsg)
+        LoggingThread.start()
+        while self.verifyQueue.empty()==False:
+            pass
+        self.logger.warning ("Verify Queue Size "+str(self.verifyQueue.qsize()))
+        self.logger.warning ("DownloadQueue Size:"+str(self.DownloadQueue.qsize()))
+        LoggingThread.cancel()
