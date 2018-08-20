@@ -1,9 +1,8 @@
 # -*- coding: utf-8 -*-
-import os,errno,tempfile,sqlite3,sys,shutil,threading,time,json,struct,requests,logging,re,pkg_resources,types
+import os,errno,tempfile,sqlite3,sys,shutil,threading,time,json,struct,requests,logging,re,pkg_resources,types,traceback
 from PyBCY.BCYCore import *
 from sys import version as python_version
 from cgi import parse_header, parse_multipart
-
 if python_version.startswith('3'):
     from urllib.parse import parse_qs
     from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -104,7 +103,7 @@ class BCYDownloadFilter(object):
         for Tag in self.TagList:
             Tag=re.compile(Tag)
             for item in Info["post_tags"]:
-                if Tag.match(item):
+                if Tag.match(item["name"]):
                     self.logger.debug("%s Filted due to its Tag:%s"%(Info,item))
                     return True
         for UserName in self.UserNameList:
@@ -176,7 +175,7 @@ class BCYDownloadUtils(object):
         self.InfoSQL.text_factory = str
         self.InfoSQL.execute("CREATE TABLE IF NOT EXISTS UserInfo (uid INTEGER,UserName STRING,UNIQUE(uid) ON CONFLICT IGNORE)")
         self.InfoSQL.execute("CREATE TABLE IF NOT EXISTS GroupInfo (gid INTEGER,GroupName STRING,UNIQUE(gid) ON CONFLICT IGNORE)")
-        self.InfoSQL.execute("CREATE TABLE IF NOT EXISTS WorkInfo (uid INTEGER DEFAULT 0,Title STRING NOT NULL DEFAULT '',cp_id INTEGER DEFAULT 0,rp_id INTEGER DEFAULT 0,dp_id INTEGER DEFAULT 0,ud_id INTEGER DEFAULT 0,post_id INTEGER DEFAULT 0,Info STRING NOT NULL DEFAULT '',Tags STRING,UNIQUE(uid,cp_id,rp_id,dp_id,ud_id,post_id) ON CONFLICT REPLACE)")
+        self.InfoSQL.execute("CREATE TABLE IF NOT EXISTS WorkInfo (uid INTEGER DEFAULT 0,Title STRING NOT NULL DEFAULT '',cp_id INTEGER DEFAULT 0,rp_id INTEGER DEFAULT 0,dp_id INTEGER DEFAULT 0,ud_id INTEGER DEFAULT 0,post_id INTEGER DEFAULT 0,item_id INTEGER DEFAULT 0,Info STRING NOT NULL DEFAULT '',Tags STRING,UNIQUE(uid,cp_id,rp_id,dp_id,ud_id,post_id) ON CONFLICT REPLACE)")
         self.InfoSQL.execute("CREATE TABLE IF NOT EXISTS PyBCY (Key STRING DEFAULT '',Value STRING NOT NULL DEFAULT '',UNIQUE(Key) ON CONFLICT IGNORE)")
         self.InfoSQL.execute("PRAGMA journal_mode=WAL;")
         if FirstTime:
@@ -287,11 +286,13 @@ class BCYDownloadUtils(object):
             return
         UID=Info["uid"]
         Title=Info.get("title",None)
+        if Title==None:
+            Title=Info.get("post_core",dict()).get("name",None)
         CoserName=self.LoadOrSaveUserName(Info["profile"]["uname"],UID)
         WorkID=None
         WorkType=None
-        if self.Filter.ShouldBlockInfo(Info)==True:
-            return
+        #if self.Filter.ShouldBlockInfo(Info)==True:
+            #return
         if "ud_id" in Info.keys():
             WorkID=Info["ud_id"]
             WorkType="daily"
@@ -315,6 +316,11 @@ class BCYDownloadUtils(object):
             GroupName=self.LoadOrSaveGroupName(Info["group"]["name"],GID)
             if(Title==None or len(Title)==0):
                 Title=GroupName+"-"+WorkID
+        elif "item_id" in Info.keys():
+            WorkID=Info["item_id"]
+            WorkType=Info["type"]
+            if(Title==None or len(Title)==0):
+                Title=str(Info["item_id"])
         Title=self.LoadTitle(Title,Info)
         if SaveInfo==True:
             self.SaveInfo(Title,Info)
@@ -322,11 +328,6 @@ class BCYDownloadUtils(object):
         L2Path=(int((int(UID)-L1Path)/10))%10
         CoserPath=os.path.join(self.SavePath,str(L1Path),str(L2Path),str(UID))
         WritePathRoot=os.path.join(CoserPath,str(Title).replace("/","-"))
-        '''TODO: ADT Modification To Intergrate VideoDownloader.
-        if Info.get("video_info")!=None:
-            VideoURL=Info["video_info"]["src"]
-            VideoData=self.API.videoDownload(VideoURL)
-        '''
         if Info.get("type")=="larticle" and (type(Info["multi"])==bool or len(Info["multi"])==0):#Long Article. Extract URLs from HTML using regex
             match=re.findall(r"<img src=\"(.{80,100})\" alt=",Info["content"])
             URLs=list()
@@ -337,7 +338,18 @@ class BCYDownloadUtils(object):
                     temp["path"]=url
                     URLs.append(temp)
             Info["multi"]=URLs
-        for PathDict in Info["multi"]:
+
+        URLs=Info.get("multi",list())
+
+        #self.logger.debug("Found {} Images For Title: {} By UID:{}".format(str(len(URLs)),Title,str(UID)))
+        print("Found {} Images For Title: {} By UID:{}".format(str(len(URLs)),Title,str(UID)))
+        '''
+        if "item_id" in Info.keys():
+            URLList=self.API.image_postCover(WorkID,WorkType)["multi"]
+            if len(URLs)==len(URLList):
+                URLs=URLList
+        '''
+        for PathDict in URLs:
             URL=PathDict["path"]
             if len(URL)==0:
                 continue
@@ -354,35 +366,30 @@ class BCYDownloadUtils(object):
             if os.path.isfile(SavePath)==False:
                 self.DownloadQueue.put([URL,WorkID,WorkType,WritePathRoot,FileName,ctime])
 
-    def DownloadUser(self,UID,Filter):
-        tmp=self.API.userWorkList(UID,Filter,Callback=self.DownloadFromAbstractInfo,Progress=self.Status)
-        self.logger.warning('Found {} works UID:{} Filter: {}'.format(str(len(tmp)), str(UID), Filter))
-    def DownloadGroup(self,GID):
-        tmp=self.API.groupPostList(GID,Progress=self.Status,Callback=self.DownloadFromAbstractInfo)
-        self.logger.warning("Found {} works for GroupGID:{}".format(str(len(tmp)),str(GID)))
-    def DownloadCircle(self,CircleID,Filter):
-        foo=self.API.circleList(CircleID,Filter,Callback=self.DownloadFromAbstractInfo,Progress=self.Status)
-        self.logger.warning("Found {} works CircleID:{} Filter:{}".format(str(len(foo)),str(CircleID),str(Filter)))
+    def DownloadUser(self,UID):
+        tmp=self.API.userWorkList(UID,Callback=self.DownloadFromAbstractInfo)
+        self.logger.warning('Found {} works UID:{}'.format(str(len(tmp)), str(UID)))
     def DownloadTag(self,Tag,Filter):
-        foo=self.API.tagList(Tag,Filter,Callback=self.DownloadFromAbstractInfo,Progress=self.Status)
-        self.logger.warning("Found {} works Tag:{} Filter:{}".format(str(len(foo)), str(Filter), str(Tag)))
-    def DownloadLikedList(self,Filter):
-        foo=self.API.likedList(Filter,Callback=self.DownloadFromAbstractInfo,Progress=self.Status)
-        self.logger.warning("Found {} likedList Filter:{}".format(str(len(foo)), str(Filter)))
-    def DownloadUserRecommends(self,UID,Filter):
-        foo=self.API.userRecommends(UID,Filter,Callback=self.DownloadFromAbstractInfo,Progress=self.Status)
-        self.logger.warning("Found {} User Recommends UID:{} Filter:{}".format(str(len(foo)), str(UID),Filter))
+        foo=self.API.circle_itemrecenttags(Tag,Filter,Callback=self.DownloadFromAbstractInfo)
+        self.logger.warning("Found {} works Tag:{} Filter:{}".format(str(len(foo)),str(Tag),str(Filter)))
+    def DownloadWork(self,WorkID,Filter):
+        foo=self.API.circle_itemrecentworks(WorkID,Filter,Callback=self.DownloadFromAbstractInfo)
+        self.logger.warning("Found {} works WorkID:{} Filter:{}".format(str(len(foo)),str(WorkID),str(Filter)))
+    def DownloadLikedList(self,UID):
+        foo=self.API.likedList(UID,Callback=self.DownloadFromAbstractInfo)
+        self.logger.warning("Found {} likedList".format(str(len(foo))))
     def DownloadSearch(self,Keyword,Type):
-        foo=self.API.search(Keyword,Type,Callback=self.DownloadFromAbstractInfo,Progress=self.Status)
+        foo=self.API.searchContent(Keyword,Type,Callback=self.DownloadFromAbstractInfo)
         self.logger.warning("Found {} Search Keywork:{} Type:{}".format(str(len(foo)), Keyword,Type))
-    def DownloadTimeline(self):
-        foo=self.API.getTimeline(Callback=self.DownloadFromAbstractInfo,Progress=self.Status)
+    def DownloadFollowedTimeline(self):
+        foo=self.API.friendfeed(Callback=self.DownloadFromAbstractInfo)
         self.logger.warning("Found {} In Timeline".format(str(len(foo))))
     def DownloadFromAbstractInfo(self,AbstractInfo):
         '''
         通用的Callback。用于将查询获得的详细信息写入DownloadQueue
         '''
         self.QueryQueue.put(AbstractInfo)
+        return False
     def DownloadFromAbstractInfoWorker(self):
         '''
         供__init__ fork新线程使用。请勿直接调用。
@@ -398,9 +405,9 @@ class BCYDownloadUtils(object):
                     Inf=self.LoadCachedDetail(AbstractInfo)
                 if Inf==None:
                     try:
-                        Inf=self.API.queryDetail(AbstractInfo)
+                        Inf=self.API.queryDetail(AbstractInfo.get("item_detail",AbstractInfo)["item_id"])
                     except:
-                        self.FailedInfoList.append(AbstractInfo)
+                        self.FailedInfoList.append(AbstractInfo.get("item_detail",AbstractInfo)["item_id"])
                 else:
                     Save=False
                 if Inf!=None:
@@ -412,6 +419,8 @@ class BCYDownloadUtils(object):
                 pass
             except:
                 self.QueryQueue.task_done()
+                self.logger.error(traceback.format_exc())
+
     def LoadCachedDetail(self,Info):
         '''
         用于读取本地SQL里的详细信息缓存
@@ -421,7 +430,7 @@ class BCYDownloadUtils(object):
             return None
         Info=Info.get("detail",Info)
         ValidIDs=dict()
-        for key in ["cp_id","rp_id","dp_id","ud_id","post_id"]:
+        for key in ["cp_id","rp_id","dp_id","ud_id","post_id","item_id"]:
             value=Info.get(key)
             if value!=None:
                 ValidIDs[key]=int(value)
@@ -476,8 +485,8 @@ class BCYDownloadUtils(object):
         '''
 
         ValidIDs=dict()
-        for key in ["cp_id","rp_id","dp_id","ud_id","post_id"]:
-            value=Info.get(key)
+        for key in ["cp_id","rp_id","dp_id","ud_id","post_id","item_id"]:
+            value=Info.get(key,None)
             if value!=None:
                 ValidIDs[key]=int(value)
         Q="SELECT Title FROM WorkInfo WHERE "
@@ -490,7 +499,6 @@ class BCYDownloadUtils(object):
         Q=Q+" AND ".join(keys)
         Cursor=self.InfoSQL.execute(Q,tuple(Values))
         for item in Cursor:
-
             return item[0]
         #We Don't Save Title as it's handled by SaveInfo
 
@@ -503,7 +511,7 @@ class BCYDownloadUtils(object):
         ValidIDs=dict()
         #Prepare Insert Statement
         ValidIDs["Title"]=Title
-        for key in ["cp_id","rp_id","dp_id","ud_id","post_id","uid"]:
+        for key in ["cp_id","rp_id","dp_id","ud_id","post_id","uid","item_id"]:
             ValidIDs[key]=int(Info.get(key,0))
         TagList=list()
         for item in Info.get("post_tags",list()):
