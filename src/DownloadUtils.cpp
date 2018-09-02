@@ -75,9 +75,14 @@ void DownloadUtils::downloadFromAbstractInfo(json AbstractInfo) {
     if (stop) {
       return;
     }
+      bool shouldBlock = false;
       try{
-          bool shouldBlock = false;
           shouldBlock = filter->shouldBlock(AbstractInfo["item_detail"]);
+      }
+      catch(exception& exp){
+          cout<<exp.what()<<__FILE__<<":"<<__LINE__<<endl<<AbstractInfo.dump()<<endl;
+      }
+      try{
           if (!shouldBlock) {
               json detail = loadInfo(AbstractInfo["item_detail"]["item_id"]);
               if (detail.is_null()) {
@@ -90,7 +95,7 @@ void DownloadUtils::downloadFromAbstractInfo(json AbstractInfo) {
           }
       }
       catch(exception& exp){
-          cout<<exp.what()<<__FILE__<<":"<<__LINE__<<endl;
+          cout<<exp.what()<<__FILE__<<":"<<__LINE__<<endl<<AbstractInfo.dump()<<endl;
       }
   });
 }
@@ -213,7 +218,7 @@ void DownloadUtils::downloadFromInfo(json Inf, bool save) {
   if (Inf.find("title") != Inf.end()) {
     Title = Inf["title"];
   } else {
-    if (Inf.find("post_core") != Inf.end()) {
+    if (Inf.find("post_core") != Inf.end() && Inf["post_core"].find("name")!=Inf["post_core"].end()) {
       Title = Inf["post_core"]["name"];
     } else {
       if (Inf.find("ud_id") != Inf.end()) {
@@ -350,7 +355,7 @@ void DownloadUtils::downloadFromInfo(json Inf, bool save) {
       boost::system::error_code ec2;
       if (!fs::is_regular_file(FilePath, ec2) ||
           fs::is_regular_file(FilePath / fs::path(".aria2"), ec2)) {
-        if (RPCServer == "") {
+        if (RPCServer == ""||item.find("FileName")!=item.end()) {
           if (stop) {
             return;
           }
@@ -406,6 +411,7 @@ void DownloadUtils::downloadFromInfo(json Inf, bool save) {
   }
 }
 void DownloadUtils::verify() {
+    cout<<"Verifying..."<<endl;
   lock_guard<mutex> guard(dbLock);
   Statement Q(*DB, "SELECT Info FROM WorkInfo");
   while (Q.executeStep()) {
@@ -568,7 +574,7 @@ void DownloadUtils::downloadGroupID(string gid){
   cout << "Found " << l.size() << " Works For GroupID:" << gid << endl;
 }
 void DownloadUtils::downloadUserLiked(string uid){
-  cout << "Iterating Liked Works For UserID:" << uid << endl;
+    cout << "Iterating Liked Works For UserID:" << uid << endl;
   auto l = core.space_getUserLikeTimeLine(uid,downloadCallback);
   cout << "Found " << l.size() << " Liked Works For UserID:" << uid << endl;
 }

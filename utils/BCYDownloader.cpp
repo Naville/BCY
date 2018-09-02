@@ -317,6 +317,10 @@ vector<string> ParseCommand(string Input) {
 [[noreturn]] void JSONMode(int argc, char **argv) {
   string JSONPath = argv[1];
   ifstream JSONStream(JSONPath);
+    if(JSONStream.bad()){
+        cout<<"Failed to Open File!"<<endl;
+        exit(-1);
+    }
   string JSONStr;
   JSONStream.seekg(0, ios::end);
   JSONStr.reserve(JSONStream.tellg());
@@ -359,7 +363,6 @@ vector<string> ParseCommand(string Input) {
     bool flag = j["Compress"];
     DU->allowCompressed = flag;
   }
-
   if (j.find("email") != j.end() && j.find("password") != j.end()) {
     cout << "Logging in..." << endl;
     DU->core.loginWithEmailAndPassword(j["email"], j["password"]);
@@ -404,20 +407,21 @@ vector<string> ParseCommand(string Input) {
 
   DU->downloadTimeline();
   DU->join();
+  DU->verify();
   delete DU;
   exit(0);
 }
 int main(int argc, char **argv) {
-  if (argc == 2) {
+    if(strcmp(argv[argc-1],"-i")==0){
+        Interactive(argc, argv);
+        __builtin_unreachable();
+    }
+  else if (argc == 2) {
     JSONMode(argc, argv);
-    __builtin_unreachable();
-  } else if (argc == 3) {
-    Interactive(argc, argv);
     __builtin_unreachable();
   }
   else{
-    cout<<"Usage"<<endl<<argv[0]<<" /PATH/TO/JSON for non-interactive console"<<endl
-    <<"Appending anything as the third argument setups up a interactive console with the JSON"<<endl
-    <<argv[0]<<" with no arguments starts a clear interactive console"<<endl;
+      cout<<"Usage:"<<endl<<argv[0]<<" /PATH/TO/JSON for non-interactive console"<<endl
+      <<argv[0]<<" [PATH/TO/JSON] -i for interactive console"<<endl;
   }
 }
