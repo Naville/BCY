@@ -412,25 +412,60 @@ void DownloadUtils::downloadFromInfo(json Inf, bool save) {
 }
 void DownloadUtils::verify() {
     cout<<"Verifying..."<<endl;
-  lock_guard<mutex> guard(dbLock);
-  Statement Q(*DB, "SELECT Info FROM WorkInfo");
-  while (Q.executeStep()) {
+    vector<json> Infos;
+    cout<<"Collecting Cached Infos"<<endl;
+    {
+        lock_guard<mutex> guard(dbLock);
+        Statement Q(*DB, "SELECT Info FROM WorkInfo");
+        while (Q.executeStep()) {
+            string InfoStr = Q.getColumn(0).getString();
+            try {
+                json j = json::parse(InfoStr);
+                Infos.push_back(j);
+                if(Infos.size()%1000==0){
+                    cout<<Infos.size()<<" Cache Loaded"<<endl;
+                }
+            } catch (exception &exp) {
+                cout<<exp.what()<<__FILE__<<":"<<__LINE__<<endl;
+            }
+        }
+    }
+    cout<<"Found "<<Infos.size()<<" Cached Info"<<endl;
+    for(int i=0;i<Infos.size();i++){
+        json& j=Infos[i];
+        if(i%1000==0){
+            cout<<"Remaing Caches to Process:"<<Infos.size()-i<<endl;
+        }
+        boost::asio::post(*queryThread, [=]() {
+          if (stop) {
+            return;
+          }
+          downloadFromInfo(j, false);
+        });
+    }
+
+
+  /*while (Q.executeStep()) {
     string InfoStr = Q.getColumn(0).getString();
     try {
       json j = json::parse(InfoStr);
       if (stop) {
         return;
       }
-      boost::asio::post(*queryThread, [=]() {
+      boost::asio::post(*queryThread, [=,&i]() {
         if (stop) {
           return;
         }
         downloadFromInfo(j, false);
+        i++;
+        if(i%10==0){
+          cout<<i<<" Verified"<<endl;
+        }
       });
     } catch (exception &exp) {
       cout<<exp.what()<<__FILE__<<":"<<__LINE__<<endl;
     }
-  }
+  }*/
 }
 void DownloadUtils::cleanup() {
   cout << "Cleaning up..." << endl;

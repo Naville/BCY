@@ -148,7 +148,9 @@ vector<string> ParseCommand(string Input) {
              << "Proxy ProxyURL:" << endl
              << "\tSet ProxyURL" << endl
              << "Aria2 URL [secret]" << endl
-             << "\t Set Aria2's RPC URL And SecretKey" << endl;
+             << "\t Set Aria2's RPC URL And SecretKey" << endl
+             << "verify" << endl
+             << "\t Verify Cached Info" << endl;
         continue;
       } else if (commands[0] == "quit") {
         if (DU != nullptr) {
@@ -165,7 +167,10 @@ vector<string> ParseCommand(string Input) {
         } else {
           cout << "You havn't initialize the downloader yet" << endl;
         }
-      } else if (commands[0] == "work") {
+      } else if (commands[0] == "verify") {
+        DU->verify();
+      }
+      else if (commands[0] == "work") {
         if (DU != nullptr) {
           if (commands.size() == 2) {
             DU->downloadWorkID(commands[1]);
