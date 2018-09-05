@@ -359,6 +359,8 @@ void DownloadUtils::downloadFromInfo(json Inf, bool save) {
           if (stop) {
             return;
           }
+          fs::remove(FilePath / fs::path(".aria2"),ec2);
+          fs::remove(FilePath,ec2);
           boost::asio::post(*downloadThread, [=]() {
             if (stop) {
               return;
@@ -402,7 +404,10 @@ void DownloadUtils::downloadFromInfo(json Inf, bool save) {
           lock_guard<mutex> L(sessLock);
           Sess.SetUrl(Url{RPCServer});
           Sess.SetBody(Body{rpcparams.dump()});
-          Sess.Post();
+          Response X=Sess.Post();
+          if(X.error){
+            core.errorHandler(X.error,"POSTing aria2");
+          }
         }
       }
     }
@@ -703,20 +708,24 @@ DownloadUtils::~DownloadUtils() {
     As long as database is commited properly, eveything else could be
     just killed. Boost's thread_pool implementation doesn't provide access to underlying boost::thread_group object
   */
-  cout<<"Waiting Database Lock"<<endl;
-  lock_guard<mutex> guard(dbLock);
-  cout << "Saving Filters..." << endl;
-  delete filter;
-  filter = nullptr;
-  cout << "Closing SQL Connection..." << endl;
-  delete DB;
-  DB = nullptr;
+  {
+    cout<<"Waiting Database Lock"<<endl;
+    lock_guard<mutex> guard(dbLock);
+    cout << "Saving Filters..." << endl;
+    delete filter;
+    filter = nullptr;
+  }
   cout << "Canceling Query Threads..." << endl;
+  queryThread->stop();
   delete queryThread;
   queryThread = nullptr;
   cout << "Canceling Download Threads..." << endl;
+  downloadThread->stop();
   delete downloadThread;
   downloadThread = nullptr;
+  cout << "Closing SQL Connection..." << endl;
+  delete DB;
+  DB = nullptr;
 }
 
 } // namespace BCY

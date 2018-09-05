@@ -105,7 +105,6 @@ vector<string> ParseCommand(string Input) {
       cout << "Logged in as UID:" << DU->core.UID << endl;
     }
   }
-
   string Prefix = "BCYDownloader"; // After Login we replace this with UserName
   cout << "Entering Interactive Mode..." << endl;
   string command;
@@ -150,7 +149,9 @@ vector<string> ParseCommand(string Input) {
              << "Aria2 URL [secret]" << endl
              << "\t Set Aria2's RPC URL And SecretKey" << endl
              << "verify" << endl
-             << "\t Verify Cached Info" << endl;
+             << "\t Verify Cached Info" << endl
+             << "join" << endl
+             << "\t Join all working threads" << endl;
         continue;
       } else if (commands[0] == "quit") {
         if (DU != nullptr) {
@@ -169,6 +170,9 @@ vector<string> ParseCommand(string Input) {
         }
       } else if (commands[0] == "verify") {
         DU->verify();
+      }
+      else if (commands[0] == "join") {
+        DU->join();
       }
       else if (commands[0] == "work") {
         if (DU != nullptr) {
@@ -412,7 +416,7 @@ vector<string> ParseCommand(string Input) {
 
   DU->downloadTimeline();
   DU->join();
-  DU->verify();
+  //DU->verify();
   delete DU;
   exit(0);
 }
