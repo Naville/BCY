@@ -4,14 +4,19 @@
 #include "Utils.hpp"
 #include <algorithm>
 #include <boost/algorithm/string/trim.hpp>
+#include <boost/program_options.hpp>
 #include <fstream>
 #include <random>
 using namespace BCY;
 using namespace std::placeholders;
 using namespace std;
 using namespace boost;
+namespace po = boost::program_options;
 
 DownloadUtils *DU = nullptr;
+static po::variables_map vm;
+static po::positional_options_description pos;
+static json config;
 
 static string expand_user(string path) {
   if (not path.empty() and path[0] == '~') {
@@ -28,11 +33,16 @@ static string expand_user(string path) {
   }
   return path;
 }
-
-[[noreturn]] void cleanup(int sig) {
+void cleanup(int sig) {
   delete DU;
-  abort();
+  DU = nullptr;
+  kill(getpid(),SIGKILL);
 }
+void cleanup2() {
+  delete DU;
+  DU = nullptr;
+}
+
 vector<string> ParseCommand(string Input) {
   algorithm::trim(Input);
   vector<string> components;
@@ -52,60 +62,55 @@ vector<string> ParseCommand(string Input) {
   }
   return components;
 }
-[[noreturn]] void Interactive(int argc, char **argv) {
-  if (argc == 3) {
-    string JSONPath = argv[1];
-    ifstream JSONStream(JSONPath);
-    string JSONStr;
-    JSONStream.seekg(0, ios::end);
-    JSONStr.reserve(JSONStream.tellg());
-    JSONStream.seekg(0, ios::beg);
-    JSONStr.assign((istreambuf_iterator<char>(JSONStream)),
-                   istreambuf_iterator<char>());
-
-    json j = json::parse(JSONStr);
-    int queryThreadCount = 32;
-    int downloadThreadCount = 64;
-    if (j.find("QueryCount") != j.end()) {
-      queryThreadCount = j["QueryCount"];
-    }
-    if (j.find("DownloadCount") != j.end()) {
-      downloadThreadCount = j["DownloadCount"];
-    }
-    DU =
-        new DownloadUtils(j["SaveBase"], queryThreadCount, downloadThreadCount);
-    signal(SIGINT, cleanup);
-
-    if (j.find("UseCache") != j.end()) {
-      DU->useCachedInfo = j["UseCache"];
-    }
-    if (j.find("HTTPProxy") != j.end()) {
-      DU->core.proxy = {{"http", j["HTTPProxy"]}, {"https", j["HTTPProxy"]}};
-    }
-    if (j.find("Filters") != j.end()) {
-      for (string F : j["Filters"]) {
-        DU->addFilter(F);
-      }
-    }
-
-    if (j.find("aria2") != j.end()) {
-      if (j["aria2"].find("secret") != j["aria2"].end()) {
-        DU->secret = j["aria2"]["secret"];
-      }
-      DU->RPCServer = j["aria2"]["RPCServer"];
-    }
-
-    if (j.find("Compress") != j.end()) {
-      bool flag = j["Compress"];
-      DU->allowCompressed = flag;
-    }
-
-    if (j.find("email") != j.end() && j.find("password") != j.end()) {
-      cout << "Logging in..." << endl;
-      DU->core.loginWithEmailAndPassword(j["email"], j["password"]);
-      cout << "Logged in as UID:" << DU->core.UID << endl;
-    }
+void JSONMode() {
+  if (DU == nullptr) {
+    cout << "You havn't initialize the downloader yet" << endl;
+    return;
   }
+  DU->downloadLiked();
+  mt19937 mt_rand(time(0));
+  vector<string> Tags = config["Tags"];
+  shuffle(Tags.begin(), Tags.end(), mt_rand);
+  for (string item : Tags) {
+    DU->downloadTag(item);
+  }
+
+  vector<string> Searches = config["Searches"];
+  shuffle(Searches.begin(), Searches.end(), mt_rand);
+  for (string item : Searches) {
+    DU->downloadSearchKeyword(item);
+  }
+
+  vector<string> Works = config["Works"];
+  shuffle(Works.begin(), Works.end(), mt_rand);
+  for (string item : Works) {
+    DU->downloadWorkID(item);
+  }
+
+  vector<string> Groups = config["Groups"];
+  shuffle(Groups.begin(), Groups.end(), mt_rand);
+  for (string item : Groups) {
+    DU->downloadGroupID(item);
+  }
+
+  vector<string> Follows = config["Follows"];
+  shuffle(Follows.begin(), Follows.end(), mt_rand);
+  for (string item : Follows) {
+    DU->downloadUserLiked(item);
+  }
+  vector<string> Users = config["Users"];
+  shuffle(Users.begin(), Users.end(), mt_rand);
+  for (string item : Users) {
+    DU->downloadUser(item);
+  }
+
+  DU->downloadTimeline();
+  DU->join();
+  // DU->verify();
+  delete DU;
+  exit(0);
+}
+void Interactive() {
   string Prefix = "BCYDownloader"; // After Login we replace this with UserName
   cout << "Entering Interactive Mode..." << endl;
   string command;
@@ -149,17 +154,23 @@ vector<string> ParseCommand(string Input) {
              << "Proxy ProxyURL:" << endl
              << "\tSet ProxyURL" << endl
              << "Aria2 URL [secret]" << endl
-             << "\t Set Aria2's RPC URL And SecretKey" << endl
+             << "\t Set Aria2's RPC URL And SecretKey.Pass no option to "
+                "disable Aria2 "
+             << endl
              << "verify" << endl
              << "\t Verify Cached Info" << endl
              << "join" << endl
-             << "\t Join all working threads" << endl;
+             << "\t Join all working threads" << endl
+             << "process" << endl
+             << "\t Fallback to JSON Processing Mode" << endl;
         continue;
       } else if (commands[0] == "quit") {
         if (DU != nullptr) {
           delete DU;
         }
         exit(0);
+      } else if (commands[0] == "process") {
+        JSONMode();
       } else if (commands[0] == "liked") {
         if (DU != nullptr) {
           if (commands.size() == 2) {
@@ -261,7 +272,10 @@ vector<string> ParseCommand(string Input) {
       } else if (commands[0] == "aria2") {
         if (DU != nullptr) {
           if (commands.size() < 2) {
-            cout << "Usage:aria2 URL [secret]" << endl;
+            cout << "Disabling Aria2 And Fallback to builtin Downloader"
+                 << endl;
+            DU->RPCServer = "";
+            DU->secret = "";
           } else {
 
             DU->RPCServer = commands[1];
@@ -321,115 +335,92 @@ vector<string> ParseCommand(string Input) {
       cout << "Exception:" << exc.what() << endl;
     }
   }
-  exit(-1);
-}
-[[noreturn]] void JSONMode(int argc, char **argv) {
-  string JSONPath = argv[1];
-  ifstream JSONStream(JSONPath);
-  if (JSONStream.bad()) {
-    cout << "Failed to Open File!" << endl;
-    exit(-1);
-  }
-  string JSONStr;
-  JSONStream.seekg(0, ios::end);
-  JSONStr.reserve(JSONStream.tellg());
-  JSONStream.seekg(0, ios::beg);
-  JSONStr.assign((istreambuf_iterator<char>(JSONStream)),
-                 istreambuf_iterator<char>());
-
-  json j = json::parse(JSONStr);
-  int queryThreadCount = 32;
-  int downloadThreadCount = 64;
-  if (j.find("QueryCount") != j.end()) {
-    queryThreadCount = j["QueryCount"];
-  }
-  if (j.find("DownloadCount") != j.end()) {
-    downloadThreadCount = j["DownloadCount"];
-  }
-  DU = new DownloadUtils(j["SaveBase"], queryThreadCount, downloadThreadCount);
-  signal(SIGINT, cleanup);
-
-  if (j.find("UseCache") != j.end()) {
-    DU->useCachedInfo = j["UseCache"];
-  }
-  if (j.find("HTTPProxy") != j.end()) {
-    DU->core.proxy = {{"http", j["HTTPProxy"]}, {"https", j["HTTPProxy"]}};
-  }
-  if (j.find("Filters") != j.end()) {
-    for (string F : j["Filters"]) {
-      DU->addFilter(F);
-    }
-  }
-
-  if (j.find("aria2") != j.end()) {
-    if (j["aria2"].find("secret") != j["aria2"].end()) {
-      DU->secret = j["aria2"]["secret"];
-    }
-    DU->RPCServer = j["aria2"]["RPCServer"];
-  }
-
-  if (j.find("Compress") != j.end()) {
-    bool flag = j["Compress"];
-    DU->allowCompressed = flag;
-  }
-  if (j.find("email") != j.end() && j.find("password") != j.end()) {
-    cout << "Logging in..." << endl;
-    DU->core.loginWithEmailAndPassword(j["email"], j["password"]);
-    cout << "Logged in as UID:" << DU->core.UID << endl;
-    DU->downloadLiked();
-  }
-  mt19937 mt_rand(time(0));
-  vector<string> Tags = j["Tags"];
-  shuffle(Tags.begin(), Tags.end(), mt_rand);
-  for (string item : Tags) {
-    DU->downloadTag(item);
-  }
-
-  vector<string> Searches = j["Searches"];
-  shuffle(Searches.begin(), Searches.end(), mt_rand);
-  for (string item : Searches) {
-    DU->downloadSearchKeyword(item);
-  }
-
-  vector<string> Works = j["Works"];
-  shuffle(Works.begin(), Works.end(), mt_rand);
-  for (string item : Works) {
-    DU->downloadWorkID(item);
-  }
-
-  vector<string> Groups = j["Groups"];
-  shuffle(Groups.begin(), Groups.end(), mt_rand);
-  for (string item : Groups) {
-    DU->downloadGroupID(item);
-  }
-
-  vector<string> Follows = j["Follows"];
-  shuffle(Follows.begin(), Follows.end(), mt_rand);
-  for (string item : Follows) {
-    DU->downloadUserLiked(item);
-  }
-  vector<string> Users = j["Users"];
-  shuffle(Users.begin(), Users.end(), mt_rand);
-  for (string item : Users) {
-    DU->downloadUser(item);
-  }
-
-  DU->downloadTimeline();
-  DU->join();
-  // DU->verify();
-  delete DU;
-  exit(0);
 }
 int main(int argc, char **argv) {
-  if (strcmp(argv[argc - 1], "-i") == 0) {
-    Interactive(argc, argv);
-    __builtin_unreachable();
-  } else if (argc == 2) {
-    JSONMode(argc, argv);
-    __builtin_unreachable();
-  } else {
-    cout << "Usage:" << endl
-         << argv[0] << " /PATH/TO/JSON for non-interactive console" << endl
-         << argv[0] << " [PATH/TO/JSON] -i for interactive console" << endl;
+  po::options_description desc("BCYDownloader Options");
+  desc.add_options()("help", "Print Usage")(
+      "config", po::value<string>()->default_value(""),
+      "Initialize Downloader using JSON at provided path")(
+      "i", "Interactive Console");
+
+  try {
+    po::store(po::command_line_parser(argc, argv).options(desc).positional(pos).run(), vm);
+    po::notify(vm);
+  } catch (std::exception &exp) {
+    cout << "Parsing Option Error:" << exp.what() << endl;
+    cout << desc << endl;
+    return -1;
   }
+
+  if (vm.count("help")) {
+    cout << desc << endl;
+    return 0;
+  }
+
+  if (vm["config"].as<string>() != "") {
+    string JSONPath = vm["config"].as<string>();
+    ifstream JSONStream(JSONPath);
+    if (JSONStream.bad()) {
+      cout << "Failed to Open File!" << endl;
+      exit(-1);
+    }
+    string JSONStr;
+    JSONStream.seekg(0, ios::end);
+    JSONStr.reserve(JSONStream.tellg());
+    JSONStream.seekg(0, ios::beg);
+    JSONStr.assign((istreambuf_iterator<char>(JSONStream)),
+                   istreambuf_iterator<char>());
+    config = json::parse(JSONStr);
+    int queryThreadCount = 32;
+    int downloadThreadCount = 64;
+    if (config.find("QueryCount") != config.end()) {
+      queryThreadCount = config["QueryCount"];
+    }
+    if (config.find("DownloadCount") != config.end()) {
+      downloadThreadCount = config["DownloadCount"];
+    }
+    DU = new DownloadUtils(config["SaveBase"], queryThreadCount,
+                           downloadThreadCount);
+    signal(SIGINT, cleanup);
+    atexit(cleanup2);
+
+    if (config.find("UseCache") != config.end()) {
+      DU->useCachedInfo = config["UseCache"];
+    }
+    if (config.find("HTTPProxy") != config.end()) {
+      DU->core.proxy = {{"http", config["HTTPProxy"]},
+                        {"https", config["HTTPProxy"]}};
+    }
+    if (config.find("Filters") != config.end()) {
+      for (string F : config["Filters"]) {
+        DU->addFilter(F);
+      }
+    }
+
+    if (config.find("aria2") != config.end()) {
+      if (config["aria2"].find("secret") != config["aria2"].end()) {
+        DU->secret = config["aria2"]["secret"];
+      }
+      DU->RPCServer = config["aria2"]["RPCServer"];
+    }
+
+    if (config.find("Compress") != config.end()) {
+      bool flag = config["Compress"];
+      DU->allowCompressed = flag;
+    }
+    if (config.find("email") != config.end() &&
+        config.find("password") != config.end()) {
+      cout << "Logging in..." << endl;
+      DU->core.loginWithEmailAndPassword(config["email"], config["password"]);
+      cout << "Logged in as UID:" << DU->core.UID << endl;
+    }
+  }
+  if (vm.count("i") || DU == nullptr) {
+    Interactive();
+    return 0;
+  } else {
+    JSONMode();
+  }
+
+  return 0;
 }
