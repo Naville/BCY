@@ -4,7 +4,7 @@
 #include <execinfo.h>
 #include <fstream>
 #include <regex>
-#include <thread>
+#include <boost/thread.hpp>
 using namespace cpr;
 using namespace CryptoPP;
 namespace fs = boost::filesystem;
@@ -14,16 +14,14 @@ using namespace SQLite;
 static const vector<string> InfoKeys = {"cp_id",   "rp_id",   "dp_id", "ud_id",
                                         "post_id", "item_id", "uid"};
 namespace BCY {
-static string ensure_string(json foo){
-  if(foo.is_string()){
+static string ensure_string(json foo) {
+  if (foo.is_string()) {
     return foo;
-  }
-  else if(foo.is_number()){
-    long long num=foo;
+  } else if (foo.is_number()) {
+    long long num = foo;
     return to_string(num);
-  }
-  else{
-    cout<<foo.dump()<<" Can't Be Converted to String"<<endl;
+  } else {
+    cout << foo.dump() << " Can't Be Converted to String" << endl;
     abort();
   }
 }
@@ -75,34 +73,50 @@ void DownloadUtils::downloadFromAbstractInfo(json AbstractInfo) {
     if (stop) {
       return;
     }
-      bool shouldBlock = false;
-      try{
-          shouldBlock = filter->shouldBlock(AbstractInfo["item_detail"]);
-      }
-      catch(exception& exp){
-          cout<<exp.what()<<__FILE__<<":"<<__LINE__<<endl<<AbstractInfo.dump()<<endl;
-      }
-      try{
-          if (!shouldBlock) {
-              json detail = loadInfo(AbstractInfo["item_detail"]["item_id"]);
-              if (detail.is_null()) {
-                  detail =
-                  core.item_detail(AbstractInfo["item_detail"]["item_id"])["data"];
-                  downloadFromInfo(detail, true);
-              } else {
-                  downloadFromInfo(detail, false);
-              }
+    bool shouldBlock = false;
+    boost::this_thread::interruption_point();
+    try {
+      shouldBlock = filter->shouldBlock(AbstractInfo["item_detail"]);
+    } catch (exception &exp) {
+      cout << exp.what() << __FILE__ << ":" << __LINE__ << endl
+           << AbstractInfo.dump() << endl;
+    }
+    try {
+      if (!shouldBlock) {
+        boost::this_thread::interruption_point();
+        json detail = loadInfo(AbstractInfo["item_detail"]["item_id"]);
+        boost::this_thread::interruption_point();
+        if (detail.is_null()) {
+          boost::this_thread::interruption_point();
+          detail =
+              core.item_detail(AbstractInfo["item_detail"]["item_id"])["data"];
+              boost::this_thread::interruption_point();
+          try {
+            downloadFromInfo(detail, true);
+          } catch (boost::thread_interrupted) {
+            cout << "Cancelling Thread:" << boost::this_thread::get_id()
+                 << endl;
           }
+        } else {
+          try {
+            downloadFromInfo(detail, false);
+          } catch (boost::thread_interrupted) {
+            cout << "Cancelling Thread:" << boost::this_thread::get_id()
+                 << endl;
+          }
+        }
       }
-      catch(exception& exp){
-          cout<<exp.what()<<__FILE__<<":"<<__LINE__<<endl<<AbstractInfo.dump()<<endl;
-      }
+    } catch (exception &exp) {
+      cout << exp.what() << __FILE__ << ":" << __LINE__ << endl
+           << AbstractInfo.dump() << endl;
+    }
   });
 }
 string DownloadUtils::loadOrSaveGroupName(string name, string GID) {
   Statement Q(*DB, "SELECT GroupName FROM GroupInfo WHERE gid=(?)");
   Q.bind(0, GID);
   lock_guard<mutex> guard(dbLock);
+  boost::this_thread::interruption_point();
   Q.executeStep();
   if (Q.hasRow()) {
     return Q.getColumn(0).getString();
@@ -111,6 +125,7 @@ string DownloadUtils::loadOrSaveGroupName(string name, string GID) {
         *DB, "INSERT INTO GroupInfo (gid, GroupName) VALUES (?,?)");
     insertQuery.bind(0, GID);
     insertQuery.bind(1, name);
+    boost::this_thread::interruption_point();
     insertQuery.executeStep();
     return name;
   }
@@ -136,6 +151,7 @@ string DownloadUtils::loadTitle(string title, json Inf) {
   for (int i = 0; i < keys.size(); i++) {
     Q.bind(i + 1, vals[i]);
   }
+  boost::this_thread::interruption_point();
   Q.executeStep();
   if (Q.hasRow()) {
     string T = Q.getColumn("Title").getString();
@@ -185,13 +201,18 @@ void DownloadUtils::saveInfo(string title, json Inf) {
   for (int i = 0; i < tmps.size(); i++) {
     Q.bind(i + 1, vals[i]);
   }
+  boost::this_thread::interruption_point();
   Q.executeStep();
+  boost::this_thread::interruption_point();
 }
 void DownloadUtils::insertRecordForCompressedImage(string item_id) {
   lock_guard<mutex> guard(dbLock);
   Statement insertQuery(*DB, "INSERT INTO Compressed (item_id) VALUES (?)");
+  boost::this_thread::interruption_point();
   insertQuery.bind(0, item_id);
+  boost::this_thread::interruption_point();
   insertQuery.executeStep();
+  boost::this_thread::interruption_point();
 }
 json DownloadUtils::loadInfo(string item_id) {
   if (!useCachedInfo) {
@@ -199,8 +220,11 @@ json DownloadUtils::loadInfo(string item_id) {
   }
   lock_guard<mutex> guard(dbLock);
   Statement Q(*DB, "SELECT Info FROM WorkInfo WHERE item_id=?");
+  boost::this_thread::interruption_point();
   Q.bind(1, item_id);
+  boost::this_thread::interruption_point();
   Q.executeStep();
+  boost::this_thread::interruption_point();
   if (Q.hasRow()) {
     return json::parse(Q.getColumn(0).getString());
   } else {
@@ -211,14 +235,15 @@ void DownloadUtils::downloadFromInfo(json Inf, bool save) {
   if (Inf.is_null()) {
     return;
   }
-  string UID=ensure_string(Inf["uid"]);
+  string UID = ensure_string(Inf["uid"]);
   // tyvm cunts at ByteDance
 
   string Title = "";
   if (Inf.find("title") != Inf.end()) {
     Title = Inf["title"];
   } else {
-    if (Inf.find("post_core") != Inf.end() && Inf["post_core"].find("name")!=Inf["post_core"].end()) {
+    if (Inf.find("post_core") != Inf.end() &&
+        Inf["post_core"].find("name") != Inf["post_core"].end()) {
       Title = Inf["post_core"]["name"];
     } else {
       if (Inf.find("ud_id") != Inf.end()) {
@@ -251,12 +276,16 @@ void DownloadUtils::downloadFromInfo(json Inf, bool save) {
       }
     }
   }
+  boost::this_thread::interruption_point();
   Title = loadTitle(Title, Inf);
+  boost::this_thread::interruption_point();
   if (Title == "") {
     Title = ensure_string(Inf["item_id"]);
   }
   if (save) {
+    boost::this_thread::interruption_point();
     saveInfo(Title, Inf);
+    boost::this_thread::interruption_point();
   }
   string tmp = UID;
   while (tmp.length() < 3) {
@@ -291,30 +320,31 @@ void DownloadUtils::downloadFromInfo(json Inf, bool save) {
     Inf["multi"] = URLs;
   }
 
-//videoInfo
-  if(Inf["type"] == "video" && Inf.find("video_info")!=Inf.end()){
-    string vid=Inf["video_info"]["vid"];
-    json F=core.videoInfo(vid);
-    json videoList=F["data"]["video_list"];
+  // videoInfo
+  if (Inf["type"] == "video" && Inf.find("video_info") != Inf.end()) {
+    string vid = Inf["video_info"]["vid"];
+    boost::this_thread::interruption_point();
+    json F = core.videoInfo(vid);
+    boost::this_thread::interruption_point();
+    json videoList = F["data"]["video_list"];
     // Find the most HD one
-    int bitrate=0;
-    string videoID="video_1";
+    int bitrate = 0;
+    string videoID = "video_1";
     for (json::iterator it = videoList.begin(); it != videoList.end(); ++it) {
       string K = it.key();
       json V = it.value();
-      if(V["bitrate"]>bitrate){
-        videoID=K;
+      if (V["bitrate"] > bitrate) {
+        videoID = K;
       }
     }
     //
-    string URL="";
-    Base64::Decode(videoList[videoID]["main_url"],&URL);
-    string FileName=vid+".mp4";
+    string URL = "";
+    Base64::Decode(videoList[videoID]["main_url"], &URL);
+    string FileName = vid + ".mp4";
     json j;
-    j["path"]=URL;
-    j["FileName"]=FileName;
+    j["path"] = URL;
+    j["FileName"] = FileName;
     Inf["multi"].push_back(j);
-
   }
 
   bool isCompressedInfo = false;
@@ -331,6 +361,7 @@ void DownloadUtils::downloadFromInfo(json Inf, bool save) {
   try {
     // map<string/*URL*/,string/*Path*/> URLs;
     for (json item : Inf["multi"]) {
+      boost::this_thread::interruption_point();
       string URL = item["path"];
       string origURL = URL;
       if (!isCompressedInfo) {
@@ -344,9 +375,11 @@ void DownloadUtils::downloadFromInfo(json Inf, bool save) {
         FileName =
             URLWithoutQuery.substr(URLWithoutQuery.find_last_of("/") + 1);
       }
-      if(item.find("FileName")!=item.end()){//Support Video Downloading without Introducing Extra Code
-        FileName =item["FileName"];
-        origURL=item["path"];
+      if (item.find("FileName") !=
+          item.end()) { // Support Video Downloading without Introducing Extra
+                        // Code
+        FileName = item["FileName"];
+        origURL = item["path"];
       }
       fs::path FilePath = SavePath / fs::path(FileName);
       if (!FilePath.has_extension()) {
@@ -355,12 +388,12 @@ void DownloadUtils::downloadFromInfo(json Inf, bool save) {
       boost::system::error_code ec2;
       if (!fs::is_regular_file(FilePath, ec2) ||
           fs::is_regular_file(FilePath / fs::path(".aria2"), ec2)) {
-        if (RPCServer == ""||item.find("FileName")!=item.end()) {
+        if (RPCServer == "" || item.find("FileName") != item.end()) {
           if (stop) {
             return;
           }
-          fs::remove(FilePath / fs::path(".aria2"),ec2);
-          fs::remove(FilePath,ec2);
+          fs::remove(FilePath / fs::path(".aria2"), ec2);
+          fs::remove(FilePath, ec2);
           boost::asio::post(*downloadThread, [=]() {
             if (stop) {
               return;
@@ -404,51 +437,55 @@ void DownloadUtils::downloadFromInfo(json Inf, bool save) {
           lock_guard<mutex> L(sessLock);
           Sess.SetUrl(Url{RPCServer});
           Sess.SetBody(Body{rpcparams.dump()});
-          Response X=Sess.Post();
-          if(X.error){
-            core.errorHandler(X.error,"POSTing aria2");
+          Response X = Sess.Post();
+          if (X.error) {
+            core.errorHandler(X.error, "POSTing aria2");
           }
         }
       }
     }
   } catch (exception &exp) {
-    cout<<exp.what()<<__FILE__<<":"<<__LINE__<<endl;
+    cout << exp.what() << __FILE__ << ":" << __LINE__ << endl;
   }
 }
 void DownloadUtils::verify() {
-    cout<<"Verifying..."<<endl;
-    vector<json> Infos;
-    cout<<"Collecting Cached Infos"<<endl;
-    {
-        lock_guard<mutex> guard(dbLock);
-        Statement Q(*DB, "SELECT Info FROM WorkInfo");
-        while (Q.executeStep()) {
-            string InfoStr = Q.getColumn(0).getString();
-            try {
-                json j = json::parse(InfoStr);
-                Infos.push_back(j);
-                if(Infos.size()%1000==0){
-                    cout<<Infos.size()<<" Cache Loaded"<<endl;
-                }
-            } catch (exception &exp) {
-                cout<<exp.what()<<__FILE__<<":"<<__LINE__<<endl;
-            }
+  cout << "Verifying..." << endl;
+  vector<json> Infos;
+  cout << "Collecting Cached Infos" << endl;
+  {
+    lock_guard<mutex> guard(dbLock);
+    Statement Q(*DB, "SELECT Info FROM WorkInfo");
+    while (Q.executeStep()) {
+      string InfoStr = Q.getColumn(0).getString();
+      try {
+        json j = json::parse(InfoStr);
+        Infos.push_back(j);
+        if (Infos.size() % 1000 == 0) {
+          cout << Infos.size() << " Cache Loaded" << endl;
         }
+      } catch (exception &exp) {
+        cout << exp.what() << __FILE__ << ":" << __LINE__ << endl;
+      }
     }
-    cout<<"Found "<<Infos.size()<<" Cached Info"<<endl;
-    for(int i=0;i<Infos.size();i++){
-        json& j=Infos[i];
-        if(i%1000==0){
-            cout<<"Remaing Caches to Process:"<<Infos.size()-i<<endl;
-        }
-        boost::asio::post(*queryThread, [=]() {
-          if (stop) {
-            return;
-          }
-          downloadFromInfo(j, false);
-        });
+  }
+  cout << "Found " << Infos.size() << " Cached Info" << endl;
+  for (int i = 0; i < Infos.size(); i++) {
+    json &j = Infos[i];
+    if (i % 1000 == 0) {
+      cout << "Remaing Caches to Process:" << Infos.size() - i << endl;
     }
+    boost::asio::post(*queryThread, [=]() {
+      if (stop) {
+        return;
+      }
 
+      try {
+        downloadFromInfo(j,false);
+      } catch (boost::thread_interrupted) {
+        cout << "Cancelling Thread:" << boost::this_thread::get_id() << endl;
+      }
+    });
+  }
 
   /*while (Q.executeStep()) {
     string InfoStr = Q.getColumn(0).getString();
@@ -461,10 +498,10 @@ void DownloadUtils::verify() {
         if (stop) {
           return;
         }
-        downloadFromInfo(j, false);
-        i++;
-        if(i%10==0){
-          cout<<i<<" Verified"<<endl;
+        try{downloadFromInfo(j,
+  false);}catch(boost::thread_interrupted){cout<<"Cancelling
+  Thread:"<<boost::this_thread::get_id()<<endl;} i++; if(i%10==0){ cout<<i<<"
+  Verified"<<endl;
         }
       });
     } catch (exception &exp) {
@@ -540,47 +577,44 @@ string DownloadUtils::md5(string &str) {
                new HashFilter(md5, new HexEncoder(new StringSink(digest))));
   return digest;
 }
-void DownloadUtils::downloadLiked(){
-  if(core.UID!=""){
+void DownloadUtils::downloadLiked() {
+  if (core.UID != "") {
     downloadUserLiked(core.UID);
-  }
-  else{
-    cout<<"Not Logged In. Can't Download Liked Work"<<endl;
+  } else {
+    cout << "Not Logged In. Can't Download Liked Work" << endl;
   }
 }
-void DownloadUtils::downloadSearchKeyword(string KW){
+void DownloadUtils::downloadSearchKeyword(string KW) {
   cout << "Iterating Searched Works For Keyword:" << KW << endl;
-  auto l = core.search(KW, SearchType::Content,downloadCallback);
+  auto l = core.search(KW, SearchType::Content, downloadCallback);
 
-  cout << "Found " << l.size() << " Searched Works For Keyword:" << KW
-       << endl;
+  cout << "Found " << l.size() << " Searched Works For Keyword:" << KW << endl;
 }
-void DownloadUtils::downloadUser(string uid){
+void DownloadUtils::downloadUser(string uid) {
   cout << "Iterating Original Works For UserID:" << uid << endl;
-  auto l = core.timeline_getUserPostTimeLine(uid,downloadCallback);
-  cout << "Found " << l.size() << " Original Works For UserID:" << uid
-       << endl;
+  auto l = core.timeline_getUserPostTimeLine(uid, downloadCallback);
+  cout << "Found " << l.size() << " Original Works For UserID:" << uid << endl;
 }
-void DownloadUtils::downloadTag(string TagName){
+void DownloadUtils::downloadTag(string TagName) {
   if (Filters.size() == 0) {
     cout << "Iterating Works For Tag:" << TagName << endl;
     auto coser = core.circle_itemrecenttags(TagName, "all", downloadCallback);
     cout << "Found " << coser.size() << " Works For Tag:" << TagName << endl;
   } else {
     json rep = core.tag_status(TagName);
-      if(rep.is_null()){
-          cout<<"Status for Tag:"<<TagName<<" is null"<<endl;
-          return;
-      }
-      int foo=rep["data"]["tag_id"];
+    if (rep.is_null()) {
+      cout << "Status for Tag:" << TagName << " is null" << endl;
+      return;
+    }
+    int foo = rep["data"]["tag_id"];
     string circle_id = to_string(foo);
     json FilterList =
-      core.circle_filterlist(circle_id, CircleType::Tag, TagName);
-      if(FilterList.is_null()){
-          cout<<"FilterList For Tag:"<<TagName<<" is null";
-          return;
-      }
-    FilterList=FilterList["data"];
+        core.circle_filterlist(circle_id, CircleType::Tag, TagName);
+    if (FilterList.is_null()) {
+      cout << "FilterList For Tag:" << TagName << " is null";
+      return;
+    }
+    FilterList = FilterList["data"];
     for (json j : FilterList) {
       string name = j["name"];
       int id = 0;
@@ -590,17 +624,17 @@ void DownloadUtils::downloadTag(string TagName){
       }
       if (find(Filters.begin(), Filters.end(), name) != Filters.end()) {
         if (id >= 1 && id <= 3) { // First class
-          cout << "Iterating Works For Tag:" << TagName << " and Filter:" << name
-               << endl;
-          auto foo =
-              core.search_item_bytag({name}, static_cast<PType>(id), downloadCallback);
+          cout << "Iterating Works For Tag:" << TagName
+               << " and Filter:" << name << endl;
+          auto foo = core.search_item_bytag({name}, static_cast<PType>(id),
+                                            downloadCallback);
           cout << "Found " << foo.size() << " Works For Tag:" << TagName
                << " and Filter:" << name << endl;
         } else {
-          cout << "Iterating Works For Tag:" << TagName << " and Filter:" << name
-               << endl;
-          auto foo =
-              core.search_item_bytag({TagName, name}, PType::Undef, downloadCallback);
+          cout << "Iterating Works For Tag:" << TagName
+               << " and Filter:" << name << endl;
+          auto foo = core.search_item_bytag({TagName, name}, PType::Undef,
+                                            downloadCallback);
           cout << "Found " << foo.size() << " Works For Tag:" << TagName
                << " and Filter:" << name << endl;
         }
@@ -608,17 +642,17 @@ void DownloadUtils::downloadTag(string TagName){
     }
   }
 }
-void DownloadUtils::downloadGroupID(string gid){
+void DownloadUtils::downloadGroupID(string gid) {
   cout << "Iterating Works For GroupID:" << gid << endl;
-  auto l = core.group_listPosts(gid,downloadCallback);
+  auto l = core.group_listPosts(gid, downloadCallback);
   cout << "Found " << l.size() << " Works For GroupID:" << gid << endl;
 }
-void DownloadUtils::downloadUserLiked(string uid){
-    cout << "Iterating Liked Works For UserID:" << uid << endl;
-  auto l = core.space_getUserLikeTimeLine(uid,downloadCallback);
+void DownloadUtils::downloadUserLiked(string uid) {
+  cout << "Iterating Liked Works For UserID:" << uid << endl;
+  auto l = core.space_getUserLikeTimeLine(uid, downloadCallback);
   cout << "Found " << l.size() << " Liked Works For UserID:" << uid << endl;
 }
-void DownloadUtils::downloadItemID(string item_id){
+void DownloadUtils::downloadItemID(string item_id) {
   if (stop) {
     return;
   }
@@ -626,42 +660,50 @@ void DownloadUtils::downloadItemID(string item_id){
     if (stop) {
       return;
     }
-      json detail = loadInfo(item_id);
+    boost::this_thread::interruption_point();
+    json detail = loadInfo(item_id);
+    if (detail.is_null()) {
+      boost::this_thread::interruption_point();
+      detail = core.item_detail(item_id);
+      boost::this_thread::interruption_point();
       if (detail.is_null()) {
-        detail =
-          core.item_detail(item_id);
-          if(detail.is_null()){
-              cout<<"Querying detail for item_id:"<<item_id<<" results in null"<<endl;
-          }
-          else{
-              detail=detail["data"];
-          }
-        downloadFromInfo(detail, true);
+        cout << "Querying detail for item_id:" << item_id << " results in null"
+             << endl;
       } else {
-        downloadFromInfo(detail, false);
+        detail = detail["data"];
       }
+      try {
+        downloadFromInfo(detail, true);
+      } catch (boost::thread_interrupted) {
+        cout << "Cancelling Thread:" << boost::this_thread::get_id() << endl;
+      }
+    } else {
+      try {
+        downloadFromInfo(detail, false);
+      } catch (boost::thread_interrupted) {
+        cout << "Cancelling Thread:" << boost::this_thread::get_id() << endl;
+      }
+    }
   });
 }
-void DownloadUtils::downloadWorkID(string item){
+void DownloadUtils::downloadWorkID(string item) {
   if (Filters.size() == 0) {
     cout << "Iterating Works For WorkID:" << item << endl;
-    auto l = core.circle_itemRecentWorks(item,downloadCallback);
+    auto l = core.circle_itemRecentWorks(item, downloadCallback);
     cout << "Found " << l.size() << " Works For WorkID:" << item << endl;
   } else {
-      json rep = core.core_status(item);
-      if(rep.is_null()){
-          cout<<"Status for WorkID:"<<item<<" is null"<<endl;
-          return;
-      }
-      string WorkName=rep["data"]["real_name"];
-    json FilterList =
-      core.circle_filterlist(item, CircleType::Work, WorkName);
-      if(FilterList.is_null()){
-        cout<<"FilterList For WorkID:"<<item<<" is null";
-      }
-      else{
-          FilterList=FilterList["data"];
-      }
+    json rep = core.core_status(item);
+    if (rep.is_null()) {
+      cout << "Status for WorkID:" << item << " is null" << endl;
+      return;
+    }
+    string WorkName = rep["data"]["real_name"];
+    json FilterList = core.circle_filterlist(item, CircleType::Work, WorkName);
+    if (FilterList.is_null()) {
+      cout << "FilterList For WorkID:" << item << " is null";
+    } else {
+      FilterList = FilterList["data"];
+    }
     for (json j : FilterList) {
       string name = j["name"];
       int id = 0;
@@ -673,15 +715,15 @@ void DownloadUtils::downloadWorkID(string item){
         if (id >= 1 && id <= 3) { // First class
           cout << "Iterating Works For WorkID:" << item
                << " and Filter:" << name << endl;
-          auto foo =
-              core.search_item_bytag({name}, static_cast<PType>(id),downloadCallback);
+          auto foo = core.search_item_bytag({name}, static_cast<PType>(id),
+                                            downloadCallback);
           cout << "Found " << foo.size() << " Works For WorkID:" << item
                << " and Filter:" << name << endl;
         } else {
           cout << "Iterating Works For WorkID:" << item
                << " and Filter:" << name << endl;
-          auto foo =
-              core.search_item_bytag({WorkName, name}, PType::Undef,downloadCallback);
+          auto foo = core.search_item_bytag({WorkName, name}, PType::Undef,
+                                            downloadCallback);
           cout << "Found " << foo.size() << " Works For WorkID:" << item
                << " and Filter:" << name << endl;
         }
@@ -689,10 +731,8 @@ void DownloadUtils::downloadWorkID(string item){
     }
   }
 }
-void DownloadUtils::addFilter(string filter){
-  Filters.insert(filter);
-}
-void DownloadUtils::downloadTimeline(){
+void DownloadUtils::addFilter(string filter) { Filters.insert(filter); }
+void DownloadUtils::downloadTimeline() {
   cout << "Downloading Friend Feed" << endl;
   core.timeline_friendfeed(downloadCallback);
 }
@@ -706,15 +746,9 @@ DownloadUtils::~DownloadUtils() {
   stop = true;
   /*
     As long as database is commited properly, eveything else could be
-    just killed. Boost's thread_pool implementation doesn't provide access to underlying boost::thread_group object
+    just killed. Boost's thread_pool implementation doesn't provide access to
+    underlying boost::thread_group object
   */
-  {
-    cout<<"Waiting Database Lock"<<endl;
-    lock_guard<mutex> guard(dbLock);
-    cout << "Saving Filters..." << endl;
-    delete filter;
-    filter = nullptr;
-  }
   cout << "Canceling Query Threads..." << endl;
   queryThread->stop();
   delete queryThread;
@@ -723,6 +757,13 @@ DownloadUtils::~DownloadUtils() {
   downloadThread->stop();
   delete downloadThread;
   downloadThread = nullptr;
+  {
+    cout << "Waiting Database Lock" << endl;
+    lock_guard<mutex> guard(dbLock);
+    cout << "Saving Filters..." << endl;
+    delete filter;
+    filter = nullptr;
+  }
   cout << "Closing SQL Connection..." << endl;
   delete DB;
   DB = nullptr;

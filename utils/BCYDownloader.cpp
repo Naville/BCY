@@ -53,7 +53,7 @@ vector<string> ParseCommand(string Input) {
   return components;
 }
 [[noreturn]] void Interactive(int argc, char **argv) {
-  if(argc==3){
+  if (argc == 3) {
     string JSONPath = argv[1];
     ifstream JSONStream(JSONPath);
     string JSONStr;
@@ -72,7 +72,8 @@ vector<string> ParseCommand(string Input) {
     if (j.find("DownloadCount") != j.end()) {
       downloadThreadCount = j["DownloadCount"];
     }
-    DU = new DownloadUtils(j["SaveBase"], queryThreadCount, downloadThreadCount);
+    DU =
+        new DownloadUtils(j["SaveBase"], queryThreadCount, downloadThreadCount);
     signal(SIGINT, cleanup);
 
     if (j.find("UseCache") != j.end()) {
@@ -143,7 +144,8 @@ vector<string> ParseCommand(string Input) {
              << "\tDownload item_id" << endl
              << "liked [UID]:" << endl
              << "\tDownload UID's liked works if UID is provided, else "
-                "download current user's liked works"<<endl
+                "download current user's liked works"
+             << endl
              << "Proxy ProxyURL:" << endl
              << "\tSet ProxyURL" << endl
              << "Aria2 URL [secret]" << endl
@@ -170,11 +172,9 @@ vector<string> ParseCommand(string Input) {
         }
       } else if (commands[0] == "verify") {
         DU->verify();
-      }
-      else if (commands[0] == "join") {
+      } else if (commands[0] == "join") {
         DU->join();
-      }
-      else if (commands[0] == "work") {
+      } else if (commands[0] == "work") {
         if (DU != nullptr) {
           if (commands.size() == 2) {
             DU->downloadWorkID(commands[1]);
@@ -326,10 +326,10 @@ vector<string> ParseCommand(string Input) {
 [[noreturn]] void JSONMode(int argc, char **argv) {
   string JSONPath = argv[1];
   ifstream JSONStream(JSONPath);
-    if(JSONStream.bad()){
-        cout<<"Failed to Open File!"<<endl;
-        exit(-1);
-    }
+  if (JSONStream.bad()) {
+    cout << "Failed to Open File!" << endl;
+    exit(-1);
+  }
   string JSONStr;
   JSONStream.seekg(0, ios::end);
   JSONStr.reserve(JSONStream.tellg());
@@ -380,57 +380,56 @@ vector<string> ParseCommand(string Input) {
   }
   mt19937 mt_rand(time(0));
   vector<string> Tags = j["Tags"];
-  shuffle(Tags.begin(),Tags.end(),mt_rand);
+  shuffle(Tags.begin(), Tags.end(), mt_rand);
   for (string item : Tags) {
     DU->downloadTag(item);
   }
 
   vector<string> Searches = j["Searches"];
-  shuffle(Searches.begin(), Searches.end(),mt_rand);
+  shuffle(Searches.begin(), Searches.end(), mt_rand);
   for (string item : Searches) {
     DU->downloadSearchKeyword(item);
   }
 
   vector<string> Works = j["Works"];
-  shuffle(Works.begin(), Works.end(),mt_rand);
+  shuffle(Works.begin(), Works.end(), mt_rand);
   for (string item : Works) {
     DU->downloadWorkID(item);
   }
 
   vector<string> Groups = j["Groups"];
-  shuffle(Groups.begin(), Groups.end(),mt_rand);
+  shuffle(Groups.begin(), Groups.end(), mt_rand);
   for (string item : Groups) {
     DU->downloadGroupID(item);
   }
 
   vector<string> Follows = j["Follows"];
-  shuffle(Follows.begin(), Follows.end(),mt_rand);
+  shuffle(Follows.begin(), Follows.end(), mt_rand);
   for (string item : Follows) {
     DU->downloadUserLiked(item);
   }
   vector<string> Users = j["Users"];
-  shuffle(Users.begin(), Users.end(),mt_rand);
+  shuffle(Users.begin(), Users.end(), mt_rand);
   for (string item : Users) {
     DU->downloadUser(item);
   }
 
   DU->downloadTimeline();
   DU->join();
-  //DU->verify();
+  // DU->verify();
   delete DU;
   exit(0);
 }
 int main(int argc, char **argv) {
-    if(strcmp(argv[argc-1],"-i")==0){
-        Interactive(argc, argv);
-        __builtin_unreachable();
-    }
-  else if (argc == 2) {
+  if (strcmp(argv[argc - 1], "-i") == 0) {
+    Interactive(argc, argv);
+    __builtin_unreachable();
+  } else if (argc == 2) {
     JSONMode(argc, argv);
     __builtin_unreachable();
-  }
-  else{
-      cout<<"Usage:"<<endl<<argv[0]<<" /PATH/TO/JSON for non-interactive console"<<endl
-      <<argv[0]<<" [PATH/TO/JSON] -i for interactive console"<<endl;
+  } else {
+    cout << "Usage:" << endl
+         << argv[0] << " /PATH/TO/JSON for non-interactive console" << endl
+         << argv[0] << " [PATH/TO/JSON] -i for interactive console" << endl;
   }
 }

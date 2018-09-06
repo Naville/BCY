@@ -23,9 +23,10 @@ string BCY::generateRandomString(string alphabet, size_t length) {
   stringstream ss;
   random_device rd;                // obtain a random number from hardware
   default_random_engine eng(rd()); // seed the generator
-  uniform_int_distribution<> distr(0, alphabet.length()-1); // define the range
+  uniform_int_distribution<> distr(0,
+                                   alphabet.length() - 1); // define the range
   for (size_t i = 0; i < length; i++) {
-    ss<<alphabet[distr(eng)];
+    ss << alphabet[distr(eng)];
   }
   return ss.str();
 }

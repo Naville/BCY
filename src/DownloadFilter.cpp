@@ -1,7 +1,7 @@
 #include "DownloadFilter.hpp"
 #include <algorithm>
-#include <regex>
 #include <fstream>
+#include <regex>
 using namespace std;
 using namespace SQLite;
 namespace BCY {

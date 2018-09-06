@@ -1,11 +1,11 @@
 #include "Core.hpp"
 #include "Base64.h"
 #include "Utils.hpp"
-#include <ctime>
-#include <curl/curl.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/regex.hpp>
 #include <boost/regex.hpp>
+#include <ctime>
+#include <curl/curl.h>
 using namespace std;
 using namespace CryptoPP;
 using namespace cpr;
@@ -13,28 +13,28 @@ using namespace boost;
 #define BCY_KEY "com_banciyuan_AI"
 static const string APIBase = "https://api.bcy.net/";
 #warning Add Remaining Video CDN URLs and update CDN choosing Algorithm
-static const vector<string> VideoCDNURLs={"https://ib.365yg.com/video/urls/v/1/toutiao/mp4"};
+static const vector<string> VideoCDNURLs = {
+    "https://ib.365yg.com/video/urls/v/1/toutiao/mp4"};
 namespace BCY {
 Core::Core() {
   string alp = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-  Params =
-      Parameters{{"version_code", "4.3.2"},
-                 {"mix_mode", "1"},
-                 {"account_sdk_source", "app"},
-                 {"language", "en-US"},
-                 {"channel", "App Store"},
-                 {"resolution", "2880*1800"},
-                 {"aid", "1250"},
-                 {"screen_width", "2880"},
-                 {"os_api", "18"},
-                 {"ac", "WIFI"},
-                 {"os_version", "16.0.0"},
-                 {"device_platform", "iphone"},
-                 {"device_type", "iPhone14,5"},
-                 {"vid", ""},
-                 {"device_id", generateRandomString("1234567890", 11)},
-                 {"openudid", generateRandomString(alp, 40)},
-                 {"idfa", ""}};
+  Params = Parameters{{"version_code", "4.3.2"},
+                      {"mix_mode", "1"},
+                      {"account_sdk_source", "app"},
+                      {"language", "en-US"},
+                      {"channel", "App Store"},
+                      {"resolution", "2880*1800"},
+                      {"aid", "1250"},
+                      {"screen_width", "2880"},
+                      {"os_api", "18"},
+                      {"ac", "WIFI"},
+                      {"os_version", "16.0.0"},
+                      {"device_platform", "iphone"},
+                      {"device_type", "iPhone14,5"},
+                      {"vid", ""},
+                      {"device_id", generateRandomString("1234567890", 11)},
+                      {"openudid", generateRandomString(alp, 40)},
+                      {"idfa", ""}};
   Sess.SetHeader(Header{
       {"User-Agent",
        "bcy 4.3.2 rv:4.3.2.6146 (iPad; iPhone OS 9.3.3; en_US) Cronet"}});
@@ -52,7 +52,7 @@ string Core::EncryptData(string Input) {
                                      StreamTransformationFilter::PKCS_PADDING));
   return output;
 }
-Response Core::GET(string URL,json Para,Parameters Par) {
+Response Core::GET(string URL, json Para, Parameters Par) {
   vector<Pair> payloads;
   for (json::iterator it = Para.begin(); it != Para.end(); ++it) {
     string K = it.key();
@@ -62,14 +62,13 @@ Response Core::GET(string URL,json Para,Parameters Par) {
   Payload p(payloads.begin(), payloads.end());
   for (auto i = 0; i < retry; i++) {
     lock_guard<mutex> guard(sessionLock);
-      Sess.SetTimeout(Timeout(timeout));
+    Sess.SetTimeout(Timeout(timeout));
     Sess.SetUrl(URL);
     Sess.SetPayload(p);
     Sess.SetProxies(proxy);
-    if(Par.content!=""){
+    if (Par.content != "") {
       Sess.SetParameters(Par);
-    }
-    else{
+    } else {
       Sess.SetParameters(Params);
     }
     Response tmp = Sess.Get();
@@ -79,18 +78,18 @@ Response Core::GET(string URL,json Para,Parameters Par) {
   }
   lock_guard<mutex> guard(sessionLock);
   Sess.SetUrl(URL);
-  if(Par.content!=""){
+  if (Par.content != "") {
     Sess.SetParameters(Par);
-  }
-  else{
+  } else {
     Sess.SetParameters(Params);
   }
-    Sess.SetTimeout(Timeout(timeout));
+  Sess.SetTimeout(Timeout(timeout));
   Sess.SetPayload(p);
   Sess.SetProxies(proxy);
   return Sess.Get();
 }
-Response Core::POST(string URL, json Para, bool Auth, bool Encrypt,Parameters Par) {
+Response Core::POST(string URL, json Para, bool Auth, bool Encrypt,
+                    Parameters Par) {
   if (URL.find(APIBase) == string::npos) {
     URL = APIBase + URL;
   }
@@ -114,13 +113,12 @@ Response Core::POST(string URL, json Para, bool Auth, bool Encrypt,Parameters Pa
 
     lock_guard<mutex> guard(sessionLock);
     Sess.SetUrl(URL);
-      Sess.SetTimeout(Timeout(timeout));
+    Sess.SetTimeout(Timeout(timeout));
     Payload p(payloads.begin(), payloads.end());
     Sess.SetPayload(p);
-    if(Par.content!=""){
+    if (Par.content != "") {
       Sess.SetParameters(Par);
-    }
-    else{
+    } else {
       Sess.SetParameters(Params);
     }
     Sess.SetProxies(proxy);
@@ -133,11 +131,10 @@ Response Core::POST(string URL, json Para, bool Auth, bool Encrypt,Parameters Pa
   Sess.SetUrl(URL);
   Payload p(payloads.begin(), payloads.end());
   Sess.SetPayload(p);
-    Sess.SetTimeout(Timeout(timeout));
-  if(Par.content!=""){
+  Sess.SetTimeout(Timeout(timeout));
+  if (Par.content != "") {
     Sess.SetParameters(Par);
-  }
-  else{
+  } else {
     Sess.SetParameters(Params);
   }
   Sess.SetProxies(proxy);
@@ -150,42 +147,47 @@ json Core::mixHEXParam(json Params) {
   }
   return j;
 }
-json Core::ParamByCRC32URL(string FullURL){
+json Core::ParamByCRC32URL(string FullURL) {
   // First a 16digit random number is generated and appended as param r=
-  // So for example if baseurl is https://123456.com/item/detail/a , then random number is generated and appended
-  // which makes the new URL https://123456.com/item/detail/a?r=8329376462157075
-  // Then a CRC 32 is calculated among the part /item/detail/a?r=8329376462157075
-  // Which in this case is c8cbae96 , then we convert the hex to decimal representation , which is 3368791702 in this case
-  // Finally we append the crc32 value to the URL as param s, so in this case the final URL is https://123456.com/item/detail/a?r=8329376462157075&s=3368791702
+  // So for example if baseurl is https://123456.com/item/detail/a , then random
+  // number is generated and appended which makes the new URL
+  // https://123456.com/item/detail/a?r=8329376462157075 Then a CRC 32 is
+  // calculated among the part /item/detail/a?r=8329376462157075 Which in this
+  // case is c8cbae96 , then we convert the hex to decimal representation ,
+  // which is 3368791702 in this case Finally we append the crc32 value to the
+  // URL as param s, so in this case the final URL is
+  // https://123456.com/item/detail/a?r=8329376462157075&s=3368791702
   std::vector<std::string> results;
   stringstream tmp;
-  split(results,FullURL, [](char c){return c == '/';});
-  tmp<<"/";
-  for(int i=3;i<results.size();i++){
-    tmp<<results[i]<<"/";
+  split(results, FullURL, [](char c) { return c == '/'; });
+  tmp << "/";
+  for (int i = 3; i < results.size(); i++) {
+    tmp << results[i] << "/";
   }
-  string CRC32Candidate=tmp.str();
-  CRC32Candidate=CRC32Candidate.substr(0,CRC32Candidate.length()-1);
-  string nonce=generateRandomString("1234567890",16);
-  CRC32Candidate=CRC32Candidate+"?r="+nonce;
+  string CRC32Candidate = tmp.str();
+  CRC32Candidate = CRC32Candidate.substr(0, CRC32Candidate.length() - 1);
+  string nonce = generateRandomString("1234567890", 16);
+  CRC32Candidate = CRC32Candidate + "?r=" + nonce;
   CRC32 hash;
   unsigned int crc32_hash;
-  CryptoPP::CRC32().CalculateDigest((byte*)&crc32_hash,(byte*)CRC32Candidate.c_str(), CRC32Candidate.size());
+  CryptoPP::CRC32().CalculateDigest((byte *)&crc32_hash,
+                                    (byte *)CRC32Candidate.c_str(),
+                                    CRC32Candidate.size());
   json j;
-  j["r"]=nonce;
-  j["s"]=to_string(crc32_hash);
+  j["r"] = nonce;
+  j["s"] = to_string(crc32_hash);
   return j;
-
 }
-json Core::videoInfo(string video_id){
+json Core::videoInfo(string video_id) {
   // A few baseURLs, presumably CDN URLs.
-  // The BaseURL is conjugated with the rest of the items. We should reverse the algo to choose the correct CDN URL?
-  string BaseURL=VideoCDNURLs[0];
-  json CRC=ParamByCRC32URL(BaseURL+"/"+video_id);
-  string nonce=CRC["r"];
-  string crc=CRC["s"];
-  Parameters P{{"r",nonce}, {"s", crc}};
-  Response R=GET(BaseURL+"/"+video_id,json(),P);
+  // The BaseURL is conjugated with the rest of the items. We should reverse the
+  // algo to choose the correct CDN URL?
+  string BaseURL = VideoCDNURLs[0];
+  json CRC = ParamByCRC32URL(BaseURL + "/" + video_id);
+  string nonce = CRC["r"];
+  string crc = CRC["s"];
+  Parameters P{{"r", nonce}, {"s", crc}};
+  Response R = GET(BaseURL + "/" + video_id, json(), P);
   if (R.error) {
     errorHandler(R.error, __func__);
     return json();
@@ -212,7 +214,7 @@ string Core::bda_hexMixedString(string input) {
   os << os2.str();
   return string_to_hex(os.str());
 }
-json Core::space_me(){
+json Core::space_me() {
   json j;
   auto R = POST("api/space/me", j, true, true);
   if (R.error) {
@@ -232,9 +234,9 @@ json Core::loginWithEmailAndPassword(string email, string password) {
     return json();
   }
   json LoginResponse = json::parse(R.text);
-  if(LoginResponse["message"]=="error"){
-    string msg=LoginResponse["data"]["description"];
-    errorHandler(Error(67/*CURLE_LOGIN_DENIED*/,msg),msg);
+  if (LoginResponse["message"] == "error") {
+    string msg = LoginResponse["data"]["description"];
+    errorHandler(Error(67 /*CURLE_LOGIN_DENIED*/, msg), msg);
     return json();
   }
   sessionKey = LoginResponse["data"]["session_key"];
