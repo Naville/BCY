@@ -3,9 +3,13 @@
 #include "DownloadUtils.hpp"
 #include "Utils.hpp"
 #include <algorithm>
+#include <boost/log/support/date_time.hpp>
 #include <boost/algorithm/string/trim.hpp>
 #include <boost/program_options.hpp>
 #include <boost/log/trivial.hpp>
+#include <boost/log/core.hpp>
+#include <boost/log/expressions.hpp>
+#include <boost/log/utility/setup.hpp>
 #include <fstream>
 #include <random>
 #include "json.hpp"
@@ -15,6 +19,11 @@ using namespace std;
 using namespace boost;
 using namespace nlohmann;
 namespace po = boost::program_options;
+namespace logging=boost::log;
+namespace src = boost::log::sources;
+namespace sinks = boost::log::sinks;
+namespace keywords = boost::log::keywords;
+namespace expr = boost::log::expressions;
 
 DownloadUtils *DU = nullptr;
 static po::variables_map vm;
@@ -356,11 +365,13 @@ void Interactive() {
     }
 }
 int main(int argc, char **argv) {
+    logging::add_common_attributes();
     po::options_description desc("BCYDownloader Options");
     desc.add_options()
     ("help", "Print Usage")
     ("config", po::value<string>()->default_value(""),"Initialize Downloader using JSON at provided path")
     ("i", "Interactive Console")
+    ("log-level",po::value<int>()->default_value(0),"Log Level")
     ;
     try {
         po::store(po::command_line_parser(argc, argv).options(desc).positional(pos).run(), vm);
@@ -370,6 +381,16 @@ int main(int argc, char **argv) {
         cout << desc << endl;
         return -1;
     }
+    auto fmtTimeStamp = expr::
+    format_date_time<posix_time::ptime>("TimeStamp", "%Y-%m-%d %H:%M:%S");
+    auto fmtSeverity = expr::
+    attr<logging::trivial::severity_level>("Severity");
+    log::formatter logFmt =
+    logging::expressions::format("[%1%] [%2%] %3%")
+    % fmtTimeStamp % fmtSeverity % expr::smessage;
+    auto consoleSink = log::add_console_log(std::clog);
+    consoleSink->set_formatter(logFmt);
+    logging::core::get()->set_filter(logging::trivial::severity>=vm["log-level"].as<int>());
     
     if (vm.count("help")) {
         cout << desc << endl;

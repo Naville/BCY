@@ -23,7 +23,7 @@ namespace BCY {
         j["Tag"] = TagList;
         j["UserName"] = UserNameList;
         j["Type"] = TypeList;
-        Database DB(DBPath,SQLite::OPEN_READWRITE);
+        Database DB(DBPath,OPEN_READWRITE);
         Statement Q(DB, "INSERT OR REPLACE INTO PyBCY (Key,Value) VALUES(?,?)");
         Q.bind(1, "BCYDownloadFilter");
         Q.bind(2, j.dump());

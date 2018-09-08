@@ -13,6 +13,8 @@ using namespace boost::asio;
 using namespace std;
 using namespace SQLite;
 using namespace nlohmann;
+namespace keywords = boost::log::keywords;
+namespace expr = boost::log::expressions;
 static const vector<string> InfoKeys = {"cp_id",   "rp_id",   "dp_id", "ud_id",
     "post_id", "item_id", "uid"};
 namespace BCY {
@@ -125,7 +127,7 @@ namespace BCY {
     }
     string DownloadUtils::loadOrSaveGroupName(string name, string GID) {
         lock_guard<mutex> guard(dbLock);
-        Database DB(DBPath,SQLite::OPEN_CREATE||OPEN_READWRITE);
+        Database DB(DBPath,SQLite::OPEN_READWRITE);
         Statement Q(DB, "SELECT GroupName FROM GroupInfo WHERE gid=(?)");
         Q.bind(1, GID);
         boost::this_thread::interruption_point();
@@ -159,7 +161,7 @@ namespace BCY {
         }
         query << ::BCY::join(tmps.begin(), tmps.end(), " AND ");
         lock_guard<mutex> guard(dbLock);
-        Database DB(DBPath,SQLite::OPEN_CREATE||OPEN_READONLY);
+        Database DB(DBPath,OPEN_READONLY);
         Statement Q(DB, query.str());
         for (int i = 0; i < keys.size(); i++) {
             Q.bind(i + 1, vals[i]);
@@ -210,7 +212,7 @@ namespace BCY {
         query << ::BCY::join(keys.begin(), keys.end(), ",") << ") VALUES ("
         << ::BCY::join(tmps.begin(), tmps.end(), ",") << ")";
         lock_guard<mutex> guard(dbLock);
-        Database DB(DBPath,SQLite::OPEN_CREATE||OPEN_READWRITE);
+        Database DB(DBPath,SQLite::OPEN_READWRITE);
         Statement Q(DB, query.str());
         for (int i = 0; i < tmps.size(); i++) {
             Q.bind(i + 1, vals[i]);
@@ -221,7 +223,7 @@ namespace BCY {
     }
     void DownloadUtils::insertRecordForCompressedImage(string item_id) {
         lock_guard<mutex> guard(dbLock);
-        Database DB(DBPath,SQLite::OPEN_CREATE||OPEN_READWRITE);
+        Database DB(DBPath,SQLite::OPEN_READWRITE);
         Statement insertQuery(DB, "INSERT INTO Compressed (item_id) VALUES (?)");
         boost::this_thread::interruption_point();
         insertQuery.bind(0, item_id);
@@ -234,7 +236,7 @@ namespace BCY {
             return json();
         }
         lock_guard<mutex> guard(dbLock);
-        Database DB(DBPath,SQLite::OPEN_CREATE||OPEN_READONLY);
+        Database DB(DBPath,SQLite::OPEN_READONLY);
         Statement Q(DB, "SELECT Info FROM WorkInfo WHERE item_id=?");
         boost::this_thread::interruption_point();
         Q.bind(1, item_id);
@@ -485,7 +487,7 @@ namespace BCY {
         BOOST_LOG_TRIVIAL(info) << "Collecting Cached Infos" << endl;
         {
             lock_guard<mutex> guard(dbLock);
-            Database DB(DBPath,SQLite::OPEN_CREATE||OPEN_READONLY);
+            Database DB(DBPath,SQLite::OPEN_READONLY);
             Statement Q(DB, "SELECT Info FROM WorkInfo");
             while (Q.executeStep()) {
                 string InfoStr = Q.getColumn(0).getString();
@@ -536,7 +538,7 @@ namespace BCY {
                 BOOST_LOG_TRIVIAL(info) << "Removed " << UserPath.string() << endl;
             }
             lock_guard<mutex> guard(dbLock);
-            Database DB(DBPath,SQLite::OPEN_CREATE||OPEN_READWRITE);
+            Database DB(DBPath,SQLite::OPEN_READWRITE);
             Statement Q(DB, "DELETE FROM WorkInfo WHERE UID=" + UID);
             Q.executeStep();
         }
@@ -544,7 +546,7 @@ namespace BCY {
         for (string Tag : filter->TagList) {
             BOOST_LOG_TRIVIAL(info) << "Cleaning up Tag:" << Tag << endl;
             lock_guard<mutex> guard(dbLock);
-            Database DB(DBPath,SQLite::OPEN_CREATE||OPEN_READWRITE);
+            Database DB(DBPath,SQLite::OPEN_READWRITE);
             Statement Q(DB, "SELECT UID,Title,Info FROM WorkInfo WHERE Tags Like ?");
             Q.bind(1, "%%\"" + Tag + "\"%%");
             while (Q.executeStep()) {
@@ -576,7 +578,7 @@ namespace BCY {
                 << " Info to be removed from Database" << endl;
             }
             lock_guard<mutex> guard(dbLock);
-            Database DB(DBPath,SQLite::OPEN_CREATE||OPEN_READWRITE);
+            Database DB(DBPath,SQLite::OPEN_READWRITE);
             Statement Q(DB, "DELETE FROM WorkInfo WHERE Info=?");
             Q.bind(1, Info);
             Q.executeStep();
