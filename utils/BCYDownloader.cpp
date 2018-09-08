@@ -364,6 +364,34 @@ void Interactive() {
         }
     }
 }
+std::istream& operator>>(std::istream& in, logging::trivial::severity_level& sl)
+{
+    std::string token;
+    in >> token;
+    transform(token.begin(), token.end(), token.begin(), ::tolower);
+    if (token == "info"){
+        sl=boost::log::trivial::info;
+    }
+    else if (token == "trace"){
+        sl=boost::log::trivial::trace;
+    }
+    else if (token == "debug"){
+        sl=boost::log::trivial::debug;
+    }
+    else if (token == "warning"){
+        sl=boost::log::trivial::warning;
+    }
+    else if (token == "error"){
+        sl=boost::log::trivial::error;
+    }
+    else if (token == "fatal"){
+        sl=boost::log::trivial::fatal;
+    }
+    else{
+        in.setstate(std::ios_base::failbit);
+    }
+    return in;
+}
 int main(int argc, char **argv) {
     logging::add_common_attributes();
     po::options_description desc("BCYDownloader Options");
@@ -371,7 +399,7 @@ int main(int argc, char **argv) {
     ("help", "Print Usage")
     ("config", po::value<string>()->default_value(""),"Initialize Downloader using JSON at provided path")
     ("i", "Interactive Console")
-    ("log-level",po::value<int>()->default_value(0),"Log Level")
+    ("log-level",po::value<logging::trivial::severity_level>()->default_value(logging::trivial::info),"Log Level")
     ;
     try {
         po::store(po::command_line_parser(argc, argv).options(desc).positional(pos).run(), vm);
@@ -390,7 +418,7 @@ int main(int argc, char **argv) {
     % fmtTimeStamp % fmtSeverity % expr::smessage;
     auto consoleSink = log::add_console_log(std::clog);
     consoleSink->set_formatter(logFmt);
-    logging::core::get()->set_filter(logging::trivial::severity>=vm["log-level"].as<int>());
+    logging::core::get()->set_filter(logging::trivial::severity>=vm["log-level"].as<logging::trivial::severity_level>());
     
     if (vm.count("help")) {
         cout << desc << endl;
