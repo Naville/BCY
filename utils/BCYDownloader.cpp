@@ -175,6 +175,7 @@ void Interactive() {
             } else if (commands[0] == "quit") {
                 if (DU != nullptr) {
                     delete DU;
+                    DU=nullptr;
                 }
                 exit(0);
             } else if (commands[0] == "process") {
