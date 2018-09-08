@@ -22,19 +22,28 @@ namespace BCY {
         } else if (foo.is_number()) {
             long long num = foo;
             return to_string(num);
-        } else {
-            BOOST_LOG_TRIVIAL(error) << foo.dump() << " Can't Be Converted to String" << endl;
-            abort();
+        }
+        else if (foo.is_null()) {
+            return "";
+        }
+        else {
+            throw std::invalid_argument(foo.dump()+" Can't Be Converted to String");
         }
     }
     DownloadUtils::DownloadUtils(string PathBase, int queryThreadCount,
-                                 int downloadThreadCount) {
+                                 int downloadThreadCount,string Path) {
         
         saveRoot = PathBase;
         fs::path dir(PathBase);
         fs::path file("BCYInfo.db");
         fs::path full_path = dir / file;
-        DB = new Database(full_path.string(), SQLite::OPEN_READWRITE | OPEN_CREATE);
+        if(DBPath!=""){
+            DBPath=Path;
+        }
+        else{
+            DBPath=full_path.string();
+        }
+        Database DB(DBPath, SQLite::OPEN_READWRITE | OPEN_CREATE);
         if (queryThreadCount == -1) {
             queryThreadCount = std::thread::hardware_concurrency() / 2;
         }
@@ -45,23 +54,23 @@ namespace BCY {
         queryThread = new thread_pool(queryThreadCount);
         downloadThread = new thread_pool(downloadThreadCount);
         lock_guard<mutex> guard(dbLock);
-        DB->exec("CREATE TABLE IF NOT EXISTS UserInfo (uid INTEGER,UserName "
-                 "STRING,UNIQUE(uid) ON CONFLICT IGNORE)");
-        DB->exec("CREATE TABLE IF NOT EXISTS GroupInfo (gid INTEGER,GroupName "
-                 "STRING,UNIQUE(gid) ON CONFLICT IGNORE)");
-        DB->exec(
-                 "CREATE TABLE IF NOT EXISTS WorkInfo (uid INTEGER DEFAULT 0,Title STRING "
-                 "NOT NULL DEFAULT '',cp_id INTEGER DEFAULT 0,rp_id INTEGER DEFAULT "
-                 "0,dp_id INTEGER DEFAULT 0,ud_id INTEGER DEFAULT 0,post_id INTEGER "
-                 "DEFAULT 0,item_id INTEGER DEFAULT 0,Info STRING NOT NULL DEFAULT "
-                 "'',Tags STRING,UNIQUE(uid,cp_id,rp_id,dp_id,ud_id,post_id,item_id) ON "
-                 "CONFLICT REPLACE)");
-        DB->exec("CREATE TABLE IF NOT EXISTS PyBCY (Key STRING DEFAULT '',Value "
-                 "STRING NOT NULL DEFAULT '',UNIQUE(Key) ON CONFLICT IGNORE)");
-        DB->exec("CREATE TABLE IF NOT EXISTS Compressed (item_id STRING NOT NULL "
-                 "DEFAULT '',UNIQUE(item_id) ON CONFLICT IGNORE)");
-        DB->exec("PRAGMA journal_mode=WAL;");
-        filter = new BCYDownloadFilter(DB);
+        DB.exec("CREATE TABLE IF NOT EXISTS UserInfo (uid INTEGER,UserName "
+                "STRING,UNIQUE(uid) ON CONFLICT IGNORE)");
+        DB.exec("CREATE TABLE IF NOT EXISTS GroupInfo (gid INTEGER,GroupName "
+                "STRING,UNIQUE(gid) ON CONFLICT IGNORE)");
+        DB.exec(
+                "CREATE TABLE IF NOT EXISTS WorkInfo (uid INTEGER DEFAULT 0,Title STRING "
+                "NOT NULL DEFAULT '',cp_id INTEGER DEFAULT 0,rp_id INTEGER DEFAULT "
+                "0,dp_id INTEGER DEFAULT 0,ud_id INTEGER DEFAULT 0,post_id INTEGER "
+                "DEFAULT 0,item_id INTEGER DEFAULT 0,Info STRING NOT NULL DEFAULT "
+                "'',Tags STRING,UNIQUE(uid,cp_id,rp_id,dp_id,ud_id,post_id,item_id) ON "
+                "CONFLICT REPLACE)");
+        DB.exec("CREATE TABLE IF NOT EXISTS PyBCY (Key STRING DEFAULT '',Value "
+                "STRING NOT NULL DEFAULT '',UNIQUE(Key) ON CONFLICT IGNORE)");
+        DB.exec("CREATE TABLE IF NOT EXISTS Compressed (item_id STRING NOT NULL "
+                "DEFAULT '',UNIQUE(item_id) ON CONFLICT IGNORE)");
+        DB.exec("PRAGMA journal_mode=WAL;");
+        filter = new BCYDownloadFilter(DBPath);
         // Create Download Temp First
         boost::system::error_code ec;
         fs::path TempPath = fs::path(PathBase) / fs::path("DownloadTemp");
@@ -115,16 +124,17 @@ namespace BCY {
         });
     }
     string DownloadUtils::loadOrSaveGroupName(string name, string GID) {
-        Statement Q(*DB, "SELECT GroupName FROM GroupInfo WHERE gid=(?)");
-        Q.bind(0, GID);
         lock_guard<mutex> guard(dbLock);
+        Database DB(DBPath,SQLite::OPEN_CREATE||OPEN_READWRITE);
+        Statement Q(DB, "SELECT GroupName FROM GroupInfo WHERE gid=(?)");
+        Q.bind(1, GID);
         boost::this_thread::interruption_point();
         Q.executeStep();
         if (Q.hasRow()) {
             return Q.getColumn(0).getString();
         } else {
             Statement insertQuery(
-                                  *DB, "INSERT INTO GroupInfo (gid, GroupName) VALUES (?,?)");
+                                  DB, "INSERT INTO GroupInfo (gid, GroupName) VALUES (?,?)");
             insertQuery.bind(0, GID);
             insertQuery.bind(1, name);
             boost::this_thread::interruption_point();
@@ -149,7 +159,8 @@ namespace BCY {
         }
         query << ::BCY::join(tmps.begin(), tmps.end(), " AND ");
         lock_guard<mutex> guard(dbLock);
-        Statement Q(*DB, query.str());
+        Database DB(DBPath,SQLite::OPEN_CREATE||OPEN_READONLY);
+        Statement Q(DB, query.str());
         for (int i = 0; i < keys.size(); i++) {
             Q.bind(i + 1, vals[i]);
         }
@@ -199,7 +210,8 @@ namespace BCY {
         query << ::BCY::join(keys.begin(), keys.end(), ",") << ") VALUES ("
         << ::BCY::join(tmps.begin(), tmps.end(), ",") << ")";
         lock_guard<mutex> guard(dbLock);
-        Statement Q(*DB, query.str());
+        Database DB(DBPath,SQLite::OPEN_CREATE||OPEN_READWRITE);
+        Statement Q(DB, query.str());
         for (int i = 0; i < tmps.size(); i++) {
             Q.bind(i + 1, vals[i]);
         }
@@ -209,7 +221,8 @@ namespace BCY {
     }
     void DownloadUtils::insertRecordForCompressedImage(string item_id) {
         lock_guard<mutex> guard(dbLock);
-        Statement insertQuery(*DB, "INSERT INTO Compressed (item_id) VALUES (?)");
+        Database DB(DBPath,SQLite::OPEN_CREATE||OPEN_READWRITE);
+        Statement insertQuery(DB, "INSERT INTO Compressed (item_id) VALUES (?)");
         boost::this_thread::interruption_point();
         insertQuery.bind(0, item_id);
         boost::this_thread::interruption_point();
@@ -221,7 +234,8 @@ namespace BCY {
             return json();
         }
         lock_guard<mutex> guard(dbLock);
-        Statement Q(*DB, "SELECT Info FROM WorkInfo WHERE item_id=?");
+        Database DB(DBPath,SQLite::OPEN_CREATE||OPEN_READONLY);
+        Statement Q(DB, "SELECT Info FROM WorkInfo WHERE item_id=?");
         boost::this_thread::interruption_point();
         Q.bind(1, item_id);
         boost::this_thread::interruption_point();
@@ -261,7 +275,8 @@ namespace BCY {
                 } else if (Inf.find("post_id") != Inf.end()) {
                     string GID = ensure_string(Inf["group"]["gid"]);
                     string GroupName = loadOrSaveGroupName(Inf["group"]["name"], GID);
-                    string val = ensure_string(Inf["ud_id"]);
+                    string val="";
+                    val = ensure_string(Inf["ud_id"]);
                     Title = GroupName + "-" + val;
                 } else if (Inf.find("item_id") != Inf.end()) {
                     string val = ensure_string(Inf["item_id"]);
@@ -370,7 +385,8 @@ namespace BCY {
                     continue;
                 }
                 string origURL = URL;
-                if (!isCompressedInfo) {
+                string tmp=URL.substr(URL.find_last_of("/"),string::npos);
+                if (!isCompressedInfo && tmp.find(".")==string::npos) {
                     origURL = URL.substr(0, URL.find_last_of("/"));
                 }
                 string FileName = "";
@@ -453,7 +469,7 @@ namespace BCY {
                                 BOOST_LOG_TRIVIAL(info)<<origURL<<" Registered in Aria2 with GID:"<<rep["result"].dump()<<endl;
                             }
                             else{
-                                BOOST_LOG_TRIVIAL(error)<<origURL<<" Failed to Register with Aria2. Response:"<<X.text<<" Original Info:"<<Inf.dump()<<endl;
+                                BOOST_LOG_TRIVIAL(error)<<origURL<<" Failed to Register with Aria2. Response:"<<X.text<<" OrigURL:"<<endl;
                             }
                         }
                     }
@@ -469,7 +485,8 @@ namespace BCY {
         BOOST_LOG_TRIVIAL(info) << "Collecting Cached Infos" << endl;
         {
             lock_guard<mutex> guard(dbLock);
-            Statement Q(*DB, "SELECT Info FROM WorkInfo");
+            Database DB(DBPath,SQLite::OPEN_CREATE||OPEN_READONLY);
+            Statement Q(DB, "SELECT Info FROM WorkInfo");
             while (Q.executeStep()) {
                 string InfoStr = Q.getColumn(0).getString();
                 try {
@@ -519,14 +536,16 @@ namespace BCY {
                 BOOST_LOG_TRIVIAL(info) << "Removed " << UserPath.string() << endl;
             }
             lock_guard<mutex> guard(dbLock);
-            Statement Q(*DB, "DELETE FROM WorkInfo WHERE UID=" + UID);
+            Database DB(DBPath,SQLite::OPEN_CREATE||OPEN_READWRITE);
+            Statement Q(DB, "DELETE FROM WorkInfo WHERE UID=" + UID);
             Q.executeStep();
         }
         vector<string> Infos;
         for (string Tag : filter->TagList) {
             BOOST_LOG_TRIVIAL(info) << "Cleaning up Tag:" << Tag << endl;
             lock_guard<mutex> guard(dbLock);
-            Statement Q(*DB, "SELECT UID,Title,Info FROM WorkInfo WHERE Tags Like ?");
+            Database DB(DBPath,SQLite::OPEN_CREATE||OPEN_READWRITE);
+            Statement Q(DB, "SELECT UID,Title,Info FROM WorkInfo WHERE Tags Like ?");
             Q.bind(1, "%%\"" + Tag + "\"%%");
             while (Q.executeStep()) {
                 string UID = Q.getColumn(0).getString();
@@ -557,7 +576,8 @@ namespace BCY {
                 << " Info to be removed from Database" << endl;
             }
             lock_guard<mutex> guard(dbLock);
-            Statement Q(*DB, "DELETE FROM WorkInfo WHERE Info=?");
+            Database DB(DBPath,SQLite::OPEN_CREATE||OPEN_READWRITE);
+            Statement Q(DB, "DELETE FROM WorkInfo WHERE Info=?");
             Q.bind(1, Info);
             Q.executeStep();
         }
@@ -757,8 +777,6 @@ namespace BCY {
             filter = nullptr;
         }
         BOOST_LOG_TRIVIAL(info) << "Closing SQL Connection..." << endl;
-        delete DB;
-        DB = nullptr;
     }
     
 } // namespace BCY

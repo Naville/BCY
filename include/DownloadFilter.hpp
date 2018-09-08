@@ -8,7 +8,7 @@ namespace BCY {
     public:
         BCYDownloadFilter() = delete;
         ~BCYDownloadFilter();
-        BCYDownloadFilter(SQLite::Database *DB);
+        BCYDownloadFilter(std::string DBPath);
         SQLite::Database *DB = nullptr;
         bool shouldBlock(nlohmann::json abstract);
         void loadRulesFromJSON(nlohmann::json rules);
@@ -21,6 +21,7 @@ namespace BCY {
         
     private:
         std::vector<BCYFilterHandler> FilterHandlers;
+        std::string DBPath;
     };
 } // namespace BCY
 #endif

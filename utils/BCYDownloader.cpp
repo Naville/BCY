@@ -361,7 +361,6 @@ int main(int argc, char **argv) {
     ("config", po::value<string>()->default_value(""),"Initialize Downloader using JSON at provided path")
     ("i", "Interactive Console")
     ;
-    
     try {
         po::store(po::command_line_parser(argc, argv).options(desc).positional(pos).run(), vm);
         po::notify(vm);
@@ -375,7 +374,6 @@ int main(int argc, char **argv) {
         cout << desc << endl;
         return 0;
     }
-    
     if (vm["config"].as<string>() != "") {
         string JSONPath = vm["config"].as<string>();
         ifstream JSONStream(JSONPath);

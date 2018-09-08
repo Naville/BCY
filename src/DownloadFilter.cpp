@@ -6,9 +6,10 @@ using namespace std;
 using namespace SQLite;
 using namespace nlohmann;
 namespace BCY {
-    BCYDownloadFilter::BCYDownloadFilter(Database *db) {
-        DB = db;
-        Statement Q(*DB, "SELECT Value FROM PyBCY WHERE Key=\"BCYDownloadFilter\"");
+    BCYDownloadFilter::BCYDownloadFilter(string Path) {
+        DBPath=Path;
+        Database DB(DBPath,SQLite::OPEN_CREATE||OPEN_READWRITE);
+        Statement Q(DB, "SELECT Value FROM PyBCY WHERE Key=\"BCYDownloadFilter\"");
         Q.executeStep();
         if (Q.hasRow()) {
             json j = json::parse(Q.getColumn(0).getString());
@@ -22,7 +23,8 @@ namespace BCY {
         j["Tag"] = TagList;
         j["UserName"] = UserNameList;
         j["Type"] = TypeList;
-        Statement Q(*DB, "INSERT OR REPLACE INTO PyBCY (Key,Value) VALUES(?,?)");
+        Database DB(DBPath,SQLite::OPEN_CREATE||OPEN_READWRITE);
+        Statement Q(DB, "INSERT OR REPLACE INTO PyBCY (Key,Value) VALUES(?,?)");
         Q.bind(1, "BCYDownloadFilter");
         Q.bind(2, j.dump());
         Q.executeStep();

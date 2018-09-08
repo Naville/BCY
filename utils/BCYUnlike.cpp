@@ -3,10 +3,12 @@
 #include <boost/asio.hpp>
 #include <fstream>
 #include <random>
+#include "json.hpp"
 using namespace BCY;
 using namespace std;
 using namespace std::placeholders;
 using namespace boost::asio;
+using namespace nlohmann;
 
 DownloadUtils *DU = nullptr;
 

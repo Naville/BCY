@@ -15,7 +15,6 @@ namespace BCY {
     public:
         Core core;
         BCYDownloadFilter *filter = nullptr;
-        SQLite::Database *DB = nullptr;
         bool useCachedInfo = true;    // Would be really slow for large databases
         bool allowCompressed = false; // if enabled, downloader will try to use the
         // official API to download compressed
@@ -27,7 +26,7 @@ namespace BCY {
         DownloadUtils(DownloadUtils &) = delete;
         DownloadUtils() = delete;
         DownloadUtils(std::string PathBase, int queryThreadCount = -1,
-                      int downloadThreadCount = -1); //-1 to use hardware thread count
+                      int downloadThreadCount = -1,std::string DBPath=""); //-1 to use hardware thread count
         void downloadFromAbstractInfo(nlohmann::json Inf);
         void downloadFromInfo(nlohmann::json Inf, bool save = true);
         std::string loadTitle(std::string title, nlohmann::json Inf);
@@ -57,6 +56,7 @@ namespace BCY {
         std::string saveRoot;
         cpr::Session Sess;
         std::mutex sessLock;
+        std::string DBPath;
         std::set<std::string> Filters;
         std::function<bool(nlohmann::json)> downloadCallback = [&](nlohmann::json j) {
             this->downloadFromAbstractInfo(j);
