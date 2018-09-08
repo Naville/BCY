@@ -2,6 +2,7 @@
 #define BCY_UTILS_HPP
 #include <sstream>
 #include <string>
+#include "json.hpp"
 namespace BCY {
 std::string string_to_hex(const std::string &input);
 std::string generateRandomString(std::string alphabet, size_t length);

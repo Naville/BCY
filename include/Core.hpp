@@ -11,8 +11,7 @@
 #include <iostream>
 #include <mutex>
 #include <string>
-using json = nlohmann::json;
-typedef std::function<bool(json &)>
+typedef std::function<bool(nlohmann::json &)>
     BCYListIteratorCallback; // Return false so the iterators leave early
 
 namespace BCY {
@@ -41,60 +40,60 @@ public:
   cpr::Proxies proxy;
   std::string UID = "";
   int retry = 3;
-    int timeout = 10000;
+  int timeout = 10000;
   std::function<void(cpr::Error, std::string)> errorHandler;
   std::string EncryptData(std::string Input);
-  json EncryptParam(json Params);
-  json mixHEXParam(json Params);
-  cpr::Response POST(std::string URL, json Payload=json(), bool Auth=true,
+  nlohmann::json EncryptParam(nlohmann::json Params);
+  nlohmann::json mixHEXParam(nlohmann::json Params);
+  cpr::Response POST(std::string URL, nlohmann::json Payload=nlohmann::json(), bool Auth=true,
                      bool EncryptParam=true,cpr::Parameters Para=cpr::Parameters());
-  cpr::Response GET(std::string URL,json Payload=json(),cpr::Parameters Para=cpr::Parameters());
-  json user_detail(std::string UID);
-  json image_postCover(std::string item_id, std::string type);
+  cpr::Response GET(std::string URL,nlohmann::json Payload=nlohmann::json(),cpr::Parameters Para=cpr::Parameters());
+  nlohmann::json user_detail(std::string UID);
+  nlohmann::json image_postCover(std::string item_id, std::string type);
   bool user_follow(std::string uid, bool isFollow);
-  json space_me();
-  json loginWithEmailAndPassword(std::string email, std::string password);
-  json item_detail(std::string item_id, bool autoFollow = true);
+  nlohmann::json space_me();
+  nlohmann::json loginWithEmailAndPassword(std::string email, std::string password);
+  nlohmann::json item_detail(std::string item_id, bool autoFollow = true);
   bool item_doPostLike(std::string item_id);
   bool item_cancelPostLike(std::string item_id);
-  json tag_status(std::string TagName);
-  json circle_filterlist(std::string circle_id, CircleType circle_type,
+  nlohmann::json tag_status(std::string TagName);
+  nlohmann::json circle_filterlist(std::string circle_id, CircleType circle_type,
                          std::string circle_name);
-  json circle_itemhottags(std::string item_id);
-  json group_detail(std::string GID);
-  json core_status(std::string WorkID);
-  json ParamByCRC32URL(std::string FullURL);
-  json videoInfo(std::string video_id);
-  std::vector<json> circle_itemrecenttags(
+  nlohmann::json circle_itemhottags(std::string item_id);
+  nlohmann::json group_detail(std::string GID);
+  nlohmann::json core_status(std::string WorkID);
+  nlohmann::json ParamByCRC32URL(std::string FullURL);
+  nlohmann::json videoInfo(std::string video_id);
+  std::vector<nlohmann::json> circle_itemrecenttags(
       std::string TagName, std::string Filter,
       BCYListIteratorCallback callback = BCYListIteratorCallback());
-  std::vector<json>
+  std::vector<nlohmann::json>
   item_getReply(std::string item_id,
                 BCYListIteratorCallback callback = BCYListIteratorCallback());
-  std::vector<json> search_item_bytag(
+  std::vector<nlohmann::json> search_item_bytag(
       std::list<std::string> TagNames, PType ptype = PType::Undef,
       BCYListIteratorCallback callback = BCYListIteratorCallback());
-  std::vector<json> circle_itemRecentWorks(
+  std::vector<nlohmann::json> circle_itemRecentWorks(
       std::string WorkID,
       BCYListIteratorCallback callback = BCYListIteratorCallback());
-  std::vector<json> timeline_getUserPostTimeLine(
+  std::vector<nlohmann::json> timeline_getUserPostTimeLine(
       std::string UID,
       BCYListIteratorCallback callback = BCYListIteratorCallback());
-  std::vector<json> space_getUserLikeTimeLine(
+  std::vector<nlohmann::json> space_getUserLikeTimeLine(
       std::string UID,
       BCYListIteratorCallback callback = BCYListIteratorCallback());
-  std::vector<json>
+  std::vector<nlohmann::json>
   search(std::string keyword, SearchType type,
          BCYListIteratorCallback callback = BCYListIteratorCallback());
-  std::vector<json>
+  std::vector<nlohmann::json>
   group_listPosts(std::string GID,
                   BCYListIteratorCallback callback = BCYListIteratorCallback());
-  std::vector<json> timeline_friendfeed(
+  std::vector<nlohmann::json> timeline_friendfeed(
       BCYListIteratorCallback callback = BCYListIteratorCallback());
-  std::vector<json> circle_itemhotworks(
+  std::vector<nlohmann::json> circle_itemhotworks(
       std::string circle_id,
       BCYListIteratorCallback callback = BCYListIteratorCallback());
-  std::vector<json> item_favor_itemlist(
+  std::vector<nlohmann::json> item_favor_itemlist(
       BCYListIteratorCallback callback = BCYListIteratorCallback());
 private:
   std::mutex sessionLock;
