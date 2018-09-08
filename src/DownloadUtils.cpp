@@ -34,7 +34,7 @@ namespace BCY {
     }
     DownloadUtils::DownloadUtils(string PathBase, int queryThreadCount,
                                  int downloadThreadCount,string Path) {
-        
+
         saveRoot = PathBase;
         fs::path dir(PathBase);
         fs::path file("BCYInfo.db");
@@ -52,7 +52,7 @@ namespace BCY {
         if (downloadThreadCount == -1) {
             downloadThreadCount = std::thread::hardware_concurrency() / 2;
         }
-        
+
         queryThread = new thread_pool(queryThreadCount);
         downloadThread = new thread_pool(downloadThreadCount);
         lock_guard<mutex> guard(dbLock);
@@ -205,7 +205,7 @@ namespace BCY {
         keys.push_back("Info");
         tmps.push_back("(?)");
         vals.push_back(Inf.dump());
-        
+
         keys.push_back("Title");
         tmps.push_back("(?)");
         vals.push_back(title);
@@ -256,7 +256,7 @@ namespace BCY {
         }
         string UID = ensure_string(Inf["uid"]);
         // tyvm cunts at ByteDance
-        
+
         string Title = "";
         if (Inf.find("title") != Inf.end()) {
             Title = Inf["title"];
@@ -339,7 +339,7 @@ namespace BCY {
             }
             Inf["multi"] = URLs;
         }
-        
+
         // videoInfo
         if (Inf["type"] == "video" && Inf.find("video_info") != Inf.end()) {
             string vid = Inf["video_info"]["vid"];
@@ -366,7 +366,7 @@ namespace BCY {
             j["FileName"] = FileName;
             Inf["multi"].push_back(j);
         }
-        
+
         bool isCompressedInfo = false;
         if (allowCompressed && Inf.find("item_id") != Inf.end() &&
             Inf.find("type") != Inf.end()) {
@@ -450,7 +450,7 @@ namespace BCY {
                         options["out"] = FilePath.filename().string();
                         options["auto-file-renaming"] = "false";
                         options["allow-overwrite"] = "false";
-                        
+
                         string gid = md5(origURL).substr(0, 16);
                         options["gid"] = gid;
                         params.push_back(options);
@@ -471,7 +471,7 @@ namespace BCY {
                                 BOOST_LOG_TRIVIAL(info)<<origURL<<" Registered in Aria2 with GID:"<<rep["result"].dump()<<endl;
                             }
                             else{
-                                BOOST_LOG_TRIVIAL(error)<<origURL<<" Failed to Register with Aria2. Response:"<<X.text<<" OrigURL:"<<endl;
+                                BOOST_LOG_TRIVIAL(error)<<origURL<<" Failed to Register with Aria2. Response:"<<X.text<<" OrigURL:"<<URL<<endl;
                             }
                         }
                     }
@@ -601,7 +601,7 @@ namespace BCY {
     void DownloadUtils::downloadSearchKeyword(string KW) {
         BOOST_LOG_TRIVIAL(info) << "Iterating Searched Works For Keyword:" << KW << endl;
         auto l = core.search(KW, SearchType::Content, downloadCallback);
-        
+
         BOOST_LOG_TRIVIAL(info) << "Found " << l.size() << " Searched Works For Keyword:" << KW << endl;
     }
     void DownloadUtils::downloadUser(string uid) {
@@ -780,5 +780,5 @@ namespace BCY {
         }
         BOOST_LOG_TRIVIAL(info) << "Closing SQL Connection..." << endl;
     }
-    
+
 } // namespace BCY
