@@ -109,6 +109,7 @@ namespace BCY {
                         } catch (boost::thread_interrupted) {
                             BOOST_LOG_TRIVIAL(debug) << "Cancelling Thread:" << boost::this_thread::get_id()
                             << endl;
+                            return ;
                         }
                     } else {
                         try {
@@ -116,6 +117,7 @@ namespace BCY {
                         } catch (boost::thread_interrupted) {
                             BOOST_LOG_TRIVIAL(debug) << "Cancelling Thread:" << boost::this_thread::get_id()
                             << endl;
+                            return ;
                         }
                     }
                 }
@@ -258,7 +260,7 @@ namespace BCY {
         // tyvm cunts at ByteDance
 
         string Title = "";
-        if (Inf.find("title") != Inf.end()) {
+        if (Inf.find("title") != Inf.end() && Inf["title"]!="") {
             Title = Inf["title"];
         } else {
             if (Inf.find("post_core") != Inf.end() &&
@@ -296,7 +298,11 @@ namespace BCY {
                 }
             }
         }
+        if(Title==""){
+          Title=ensure_string(Inf["item_id"]);
+        }
         boost::this_thread::interruption_point();
+        BOOST_LOG_TRIVIAL(debug) << "Loading Title For:"<<Title<< endl;
         Title = loadTitle(Title, Inf);
         boost::this_thread::interruption_point();
         if (Title == "") {
@@ -304,6 +310,7 @@ namespace BCY {
         }
         if (save) {
             boost::this_thread::interruption_point();
+            BOOST_LOG_TRIVIAL(debug) << "Saving Info For: "<<Title<< endl;
             saveInfo(Title, Inf);
             boost::this_thread::interruption_point();
         }
@@ -374,6 +381,7 @@ namespace BCY {
             json covers = core.image_postCover(item_id, Inf["type"])["data"];
             if (!covers.is_null() && covers.find("multi") != covers.end()) {
                 Inf["multi"] = covers["multi"];
+                BOOST_LOG_TRIVIAL(debug) << "Inserting Compressed Images Record For item_id: "<<item_id<< endl;
                 insertRecordForCompressedImage(item_id);
                 isCompressedInfo = true;
             }
@@ -516,6 +524,7 @@ namespace BCY {
                     downloadFromInfo(j,false);
                 } catch (boost::thread_interrupted) {
                     BOOST_LOG_TRIVIAL(debug) << "Cancelling Thread:" << boost::this_thread::get_id() << endl;
+                    return;
                 }
             });
         }
@@ -690,12 +699,14 @@ namespace BCY {
                     downloadFromInfo(detail, true);
                 } catch (boost::thread_interrupted) {
                     BOOST_LOG_TRIVIAL(debug) << "Cancelling Thread:" << boost::this_thread::get_id() << endl;
+                    return ;
                 }
             } else {
                 try {
                     downloadFromInfo(detail, false);
                 } catch (boost::thread_interrupted) {
                     BOOST_LOG_TRIVIAL(debug) << "Cancelling Thread:" << boost::this_thread::get_id() << endl;
+                    return;
                 }
             }
         });
