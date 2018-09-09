@@ -476,17 +476,17 @@ namespace BCY {
                         else{
                             json rep=json::parse(X.text);
                             if(rep.find("result")!=rep.end()){
-                                BOOST_LOG_TRIVIAL(info)<<origURL<<" Registered in Aria2 with GID:"<<rep["result"].dump()<<endl;
+                                BOOST_LOG_TRIVIAL(debug)<<origURL<<" Registered in Aria2 with GID:"<<rep["result"].dump()<<endl;
                             }
                             else{
-                                BOOST_LOG_TRIVIAL(error)<<origURL<<" Failed to Register with Aria2. Response:"<<X.text<<" OrigURL:"<<URL<<endl;
+                                BOOST_LOG_TRIVIAL(debug)<<origURL<<" Failed to Register with Aria2. Response:"<<X.text<<" OrigURL:"<<URL<<endl;
                             }
                         }
                     }
                 }
             }
         } catch (exception &exp) {
-            BOOST_LOG_TRIVIAL(error) << exp.what() << __FILE__ << ":" << __LINE__ << endl;
+            BOOST_LOG_TRIVIAL(error) << exp.what()<<" "<< __FILE__ << ":" << __LINE__ << endl;
         }
     }
     void DownloadUtils::verify() {
@@ -514,7 +514,7 @@ namespace BCY {
         for (int i = 0; i < Infos.size(); i++) {
             json &j = Infos[i];
             if (i % 1000 == 0) {
-                BOOST_LOG_TRIVIAL(info) << "Remaing Caches to Process:" << Infos.size() - i << endl;
+                BOOST_LOG_TRIVIAL(info) << "Remaining Caches to Process:" << Infos.size() - i << endl;
             }
             boost::asio::post(*queryThread, [=]() {
                 if (stop) {
@@ -789,7 +789,6 @@ namespace BCY {
             delete filter;
             filter = nullptr;
         }
-        BOOST_LOG_TRIVIAL(info) << "Closing SQL Connection..." << endl;
     }
 
 } // namespace BCY
