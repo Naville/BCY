@@ -492,7 +492,7 @@ namespace BCY {
         }
     }
     void DownloadUtils::verifyUID(string UID){
-      verify("WHERE UID=?",{UID});
+      verify("WHERE uid=?",{UID});
     }
     void DownloadUtils::verifyTag(string Tag){
       verify("WHERE Tags LIKE ?",{"%"+Tag+"%"});
@@ -506,7 +506,7 @@ namespace BCY {
             Database DB(DBPath,SQLite::OPEN_READONLY);
             Statement Q(DB, "SELECT Info FROM WorkInfo "+condition);
             for(auto i=1;i<=args.size();i++){
-              Q.bind(i,args[i]);
+              Q.bind(i,args[i-1]);
             }
             while (Q.executeStep()) {
                 string InfoStr = Q.getColumn(0).getString();
