@@ -15,8 +15,7 @@ using namespace SQLite;
 using namespace nlohmann;
 namespace keywords = boost::log::keywords;
 namespace expr = boost::log::expressions;
-static const vector<string> InfoKeys = {"cp_id",   "rp_id",   "dp_id", "ud_id",
-    "post_id", "item_id", "uid"};
+static const vector<string> InfoKeys = {"item_id", "uid"};
 namespace BCY {
     static string ensure_string(json foo) {
         if (foo.is_string()) {
