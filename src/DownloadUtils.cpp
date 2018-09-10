@@ -60,13 +60,7 @@ namespace BCY {
                 "STRING,UNIQUE(uid) ON CONFLICT IGNORE)");
         DB.exec("CREATE TABLE IF NOT EXISTS GroupInfo (gid INTEGER,GroupName "
                 "STRING,UNIQUE(gid) ON CONFLICT IGNORE)");
-        DB.exec(
-                "CREATE TABLE IF NOT EXISTS WorkInfo (uid INTEGER DEFAULT 0,Title STRING "
-                "NOT NULL DEFAULT '',cp_id INTEGER DEFAULT 0,rp_id INTEGER DEFAULT "
-                "0,dp_id INTEGER DEFAULT 0,ud_id INTEGER DEFAULT 0,post_id INTEGER "
-                "DEFAULT 0,item_id INTEGER DEFAULT 0,Info STRING NOT NULL DEFAULT "
-                "'',Tags STRING,UNIQUE(uid,cp_id,rp_id,dp_id,ud_id,post_id,item_id) ON "
-                "CONFLICT REPLACE)");
+        DB.exec("CREATE TABLE IF NOT EXISTS WorkInfo (uid INTEGER DEFAULT 0,Title STRING NOT NULL DEFAULT '',item_id INTEGER DEFAULT 0,Info STRING NOT NULL DEFAULT '',Tags STRING NOT NULL DEFAULT '[]',UNIQUE (item_id) ON CONFLICT REPLACE)");
         DB.exec("CREATE TABLE IF NOT EXISTS PyBCY (Key STRING DEFAULT '',Value "
                 "STRING NOT NULL DEFAULT '',UNIQUE(Key) ON CONFLICT IGNORE)");
         DB.exec("CREATE TABLE IF NOT EXISTS Compressed (item_id STRING NOT NULL "
@@ -432,7 +426,9 @@ namespace BCY {
                             if (stop) {
                                 return;
                             }
+                            boost::this_thread::interruption_point();
                             auto R = core.GET(origURL);
+                            boost::this_thread::interruption_point();
                             if (R.error) {
 #ifdef DEBUG
                                 core.errorHandler(R.error,
@@ -441,12 +437,15 @@ namespace BCY {
                                 core.errorHandler(R.error, "imageDownload");
 #endif
                             } else {
+                                boost::this_thread::interruption_point();
                                 ofstream ofs(FilePath.string(), ios::binary);
                                 ofs.write(R.text.c_str(), R.text.length());
                                 ofs.close();
+                                boost::this_thread::interruption_point();
                             }
                         });
                     } else {
+                      boost::this_thread::interruption_point();
                         json rpcparams;
                         json params = json(); // Inner Param
                         json URLs = json();
@@ -468,10 +467,12 @@ namespace BCY {
                         rpcparams["jsonrpc"] = "2.0";
                         rpcparams["id"] = json();
                         rpcparams["method"] = "aria2.addUri";
+                        boost::this_thread::interruption_point();
                         lock_guard<mutex> L(sessLock);
                         Sess.SetUrl(Url{RPCServer});
                         Sess.SetBody(Body{rpcparams.dump()});
                         Response X = Sess.Post();
+                        boost::this_thread::interruption_point();
                         if (X.error) {
                             core.errorHandler(X.error, "POSTing aria2");
                         }

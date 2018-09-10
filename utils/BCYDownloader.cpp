@@ -91,25 +91,25 @@ void JSONMode() {
     for (string item : Tags) {
         DU->downloadTag(item);
     }
-    
+
     vector<string> Searches = config["Searches"];
     shuffle(Searches.begin(), Searches.end(), mt_rand);
     for (string item : Searches) {
         DU->downloadSearchKeyword(item);
     }
-    
+
     vector<string> Works = config["Works"];
     shuffle(Works.begin(), Works.end(), mt_rand);
     for (string item : Works) {
         DU->downloadWorkID(item);
     }
-    
+
     vector<string> Groups = config["Groups"];
     shuffle(Groups.begin(), Groups.end(), mt_rand);
     for (string item : Groups) {
         DU->downloadGroupID(item);
     }
-    
+
     vector<string> Follows = config["Follows"];
     shuffle(Follows.begin(), Follows.end(), mt_rand);
     for (string item : Follows) {
@@ -120,7 +120,7 @@ void JSONMode() {
     for (string item : Users) {
         DU->downloadUser(item);
     }
-    
+
     DU->downloadTimeline();
     if (config.find("Verify") != config.end()) {
         bool ver = config["Verify"];
@@ -290,7 +290,7 @@ void Interactive() {
                 } else {
                     cout << "You havn't initialize the downloader yet" << endl;
                 }
-                
+
             } else if (commands[0] == "tag") {
                 if (DU != nullptr) {
                     if (commands.size() == 2) {
@@ -330,7 +330,7 @@ void Interactive() {
                     } else {
                         DU->core.proxy = {{"http", commands[1]}, {"https", commands[1]}};
                     }
-                    
+
                 } else {
                     cout << "You havn't initialize the downloader yet" << endl;
                 }
@@ -342,13 +342,13 @@ void Interactive() {
                         DU->RPCServer = "";
                         DU->secret = "";
                     } else {
-                        
+
                         DU->RPCServer = commands[1];
                         if (commands.size() > 2) {
                             DU->secret = commands[2];
                         }
                     }
-                    
+
                 } else {
                     cout << "You havn't initialize the downloader yet" << endl;
                 }
@@ -391,7 +391,7 @@ void Interactive() {
                 }
                 continue;
             }
-            
+
             else {
                 cout << "Unknown command:" << command << ". Use help for command list"
                 << endl;
@@ -456,7 +456,7 @@ int main(int argc, char **argv) {
     auto consoleSink = log::add_console_log(std::clog);
     consoleSink->set_formatter(logFmt);
     logging::core::get()->set_filter(logging::trivial::severity>=vm["log-level"].as<logging::trivial::severity_level>());
-    
+
     if (vm.count("help")) {
         cout << desc << endl;
         return 0;
@@ -487,7 +487,7 @@ int main(int argc, char **argv) {
                                downloadThreadCount);
         signal(SIGINT, cleanup);
         atexit(cleanup2);
-        
+
         if (config.find("UseCache") != config.end()) {
             DU->useCachedInfo = config["UseCache"];
         }
@@ -500,14 +500,14 @@ int main(int argc, char **argv) {
                 DU->addFilter(F);
             }
         }
-        
+
         if (config.find("aria2") != config.end()) {
             if (config["aria2"].find("secret") != config["aria2"].end()) {
                 DU->secret = config["aria2"]["secret"];
             }
             DU->RPCServer = config["aria2"]["RPCServer"];
         }
-        
+
         if (config.find("Compress") != config.end()) {
             bool flag = config["Compress"];
             DU->allowCompressed = flag;
@@ -531,6 +531,6 @@ int main(int argc, char **argv) {
     } else {
         JSONMode();
     }
-    
+
     return 0;
 }
