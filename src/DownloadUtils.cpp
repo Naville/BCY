@@ -6,6 +6,7 @@
 #include <regex>
 #include <boost/thread.hpp>
 #include <boost/log/trivial.hpp>
+#include <boost/lockfree/stack.hpp>
 using namespace cpr;
 using namespace CryptoPP;
 namespace fs = boost::filesystem;
@@ -33,7 +34,7 @@ namespace BCY {
     }
     DownloadUtils::DownloadUtils(string PathBase, int queryThreadCount,
                                  int downloadThreadCount,string Path) {
-
+        
         saveRoot = PathBase;
         fs::path dir(PathBase);
         fs::path file("BCYInfo.db");
@@ -51,7 +52,7 @@ namespace BCY {
         if (downloadThreadCount == -1) {
             downloadThreadCount = std::thread::hardware_concurrency() / 2;
         }
-
+        
         queryThread = new thread_pool(queryThreadCount);
         downloadThread = new thread_pool(downloadThreadCount);
         lock_guard<mutex> guard(dbLock);
@@ -79,16 +80,9 @@ namespace BCY {
             if (stop) {
                 return;
             }
-            bool shouldBlock = false;
             boost::this_thread::interruption_point();
             try {
-                shouldBlock = filter->shouldBlock(AbstractInfo["item_detail"]);
-            } catch (exception &exp) {
-                BOOST_LOG_TRIVIAL(error) << exp.what() << __FILE__ << ":" << __LINE__ << endl
-                << AbstractInfo.dump() << endl;
-            }
-            try {
-                if (!shouldBlock) {
+                if (!filter->shouldBlock(AbstractInfo["item_detail"])) {
                     boost::this_thread::interruption_point();
                     json detail = loadInfo(AbstractInfo["item_detail"]["item_id"]);
                     boost::this_thread::interruption_point();
@@ -166,7 +160,7 @@ namespace BCY {
         if (Q.hasRow()) {
             string T = Q.getColumn("Title").getString();
             if (T!=""){
-              return T;
+                return T;
             }
         }
         return title;
@@ -202,7 +196,7 @@ namespace BCY {
         keys.push_back("Info");
         tmps.push_back("(?)");
         vals.push_back(Inf.dump());
-
+        
         keys.push_back("Title");
         tmps.push_back("(?)");
         vals.push_back(title);
@@ -253,13 +247,13 @@ namespace BCY {
         }
         string UID = ensure_string(Inf["uid"]);
         // tyvm cunts at ByteDance
-
+        
         string Title = "";
         if (Inf.find("title") != Inf.end() && Inf["title"]!="") {
             Title = Inf["title"];
         } else {
             if (Inf.find("post_core") != Inf.end() &&
-                Inf["post_core"].find("name") != Inf["post_core"].end()) {
+                Inf["post_core"].find("name") != Inf["post_core"].end()&&Inf["post_core"]["name"].is_string()) {
                 Title = Inf["post_core"]["name"];
             } else {
                 if (Inf.find("ud_id") != Inf.end()) {
@@ -294,7 +288,7 @@ namespace BCY {
             }
         }
         if(Title==""){
-          Title=ensure_string(Inf["item_id"]);
+            Title=ensure_string(Inf["item_id"]);
         }
         boost::this_thread::interruption_point();
         BOOST_LOG_TRIVIAL(debug) << "Loading Title For:"<<Title<< endl;
@@ -324,7 +318,7 @@ namespace BCY {
         boost::system::error_code ec;
         fs::create_directories(SavePath, ec);
         if(ec){
-          BOOST_LOG_TRIVIAL(error)<<"FileSystem Error: "<<ec.message()<<"@"<<__FILE__<<":"<<__LINE__<<endl;
+            BOOST_LOG_TRIVIAL(error)<<"FileSystem Error: "<<ec.message()<<"@"<<__FILE__<<":"<<__LINE__<<endl;
         }
         if (Inf.find("multi") == Inf.end()) {
             Inf["multi"] = {};
@@ -344,7 +338,7 @@ namespace BCY {
             }
             Inf["multi"] = URLs;
         }
-
+        
         // videoInfo
         if (Inf["type"] == "video" && Inf.find("video_info") != Inf.end()) {
             string vid = Inf["video_info"]["vid"];
@@ -371,7 +365,7 @@ namespace BCY {
             j["FileName"] = FileName;
             Inf["multi"].push_back(j);
         }
-
+        
         bool isCompressedInfo = false;
         if (allowCompressed && Inf.find("item_id") != Inf.end() &&
             Inf.find("type") != Inf.end()) {
@@ -384,167 +378,192 @@ namespace BCY {
                 isCompressedInfo = true;
             }
         }
-        try {
-            // map<string/*URL*/,string/*Path*/> URLs;
-            for (json item : Inf["multi"]) {
-                boost::this_thread::interruption_point();
-                string URL = item["path"];
-                if(URL.length()==0){
-                    continue;
-                }
-                string origURL = URL;
-                string tmp=URL.substr(URL.find_last_of("/"),string::npos);
-                if (!isCompressedInfo && tmp.find(".")==string::npos) {
-                    origURL = URL.substr(0, URL.find_last_of("/"));
-                }
-                string FileName = "";
-                if (!isCompressedInfo) {
-                    FileName = origURL.substr(origURL.find_last_of("/") + 1);
-                } else {
-                    string URLWithoutQuery = origURL.substr(0, origURL.find_last_of("?"));
-                    FileName =
-                    URLWithoutQuery.substr(URLWithoutQuery.find_last_of("/") + 1);
-                }
-                if (item.find("FileName") !=
-                    item.end()) { // Support Video Downloading without Introducing Extra
-                    // Code
-                    FileName = item["FileName"];
-                    origURL = item["path"];
-                }
-                fs::path FilePath = SavePath / fs::path(FileName);
-                if (!FilePath.has_extension()) {
-                    FilePath.replace_extension(".jpg");
-                }
-                boost::system::error_code ec2;
-                auto a2confPath=fs::path(FilePath.string()+".aria2");
-                bool shouldDL=(!fs::exists(FilePath, ec2) ||
-                    fs::exists(a2confPath, ec2));
-
-                if (shouldDL) {
-                    if (RPCServer == "" || item.find("FileName") != item.end()) {
+        for (json item : Inf["multi"]) {
+            boost::this_thread::interruption_point();
+            string URL = item["path"];
+            if(URL.find("http:")!=0){
+                // Some old API bug that results in rubbish URL in response
+                // Because ByteDance sucks dick
+                continue;
+            }
+            if(URL.length()==0){
+                continue;
+            }
+            string origURL = URL;
+            string tmp=URL.substr(URL.find_last_of("/"),string::npos);
+            if (!isCompressedInfo && tmp.find(".")==string::npos) {
+                origURL = URL.substr(0, URL.find_last_of("/"));
+            }
+            string FileName = "";
+            if (!isCompressedInfo) {
+                FileName = origURL.substr(origURL.find_last_of("/") + 1);
+            } else {
+                string URLWithoutQuery = origURL.substr(0, origURL.find_last_of("?"));
+                FileName =
+                URLWithoutQuery.substr(URLWithoutQuery.find_last_of("/") + 1);
+            }
+            if (item.find("FileName") !=
+                item.end()) { // Support Video Downloading without Introducing Extra
+                // Code
+                FileName = item["FileName"];
+                origURL = item["path"];
+            }
+            fs::path FilePath = SavePath / fs::path(FileName);
+            if (!FilePath.has_extension()) {
+                FilePath.replace_extension(".jpg");
+            }
+            boost::system::error_code ec2;
+            auto a2confPath=fs::path(FilePath.string()+".aria2");
+            bool shouldDL=(!fs::exists(FilePath, ec2) ||
+                           fs::exists(a2confPath, ec2));
+            
+            if (shouldDL) {
+                if (RPCServer == "" || item.find("FileName") != item.end()) {
+                    if (stop) {
+                        return;
+                    }
+                    fs::remove(a2confPath, ec2);
+                    fs::remove(FilePath, ec2);
+                    boost::asio::post(*downloadThread, [=]() {
                         if (stop) {
                             return;
                         }
-                        fs::remove(a2confPath, ec2);
-                        fs::remove(FilePath, ec2);
-                        boost::asio::post(*downloadThread, [=]() {
-                            if (stop) {
-                                return;
-                            }
-                            boost::this_thread::interruption_point();
-                            auto R = core.GET(origURL);
-                            boost::this_thread::interruption_point();
-                            if (R.error) {
+                        boost::this_thread::interruption_point();
+                        auto R = core.GET(origURL);
+                        boost::this_thread::interruption_point();
+                        if (R.error) {
 #ifdef DEBUG
-                                core.errorHandler(R.error,
-                                                  string(__FILE__) + ":" + to_string(__LINE__));
+                            core.errorHandler(R.error,
+                                              string(__FILE__) + ":" + to_string(__LINE__));
 #else
-                                core.errorHandler(R.error, "imageDownload");
+                            core.errorHandler(R.error, "imageDownload");
 #endif
-                            } else {
-                                boost::this_thread::interruption_point();
-                                ofstream ofs(FilePath.string(), ios::binary);
-                                ofs.write(R.text.c_str(), R.text.length());
-                                ofs.close();
-                                boost::this_thread::interruption_point();
-                            }
-                        });
-                    } else {
-                      boost::this_thread::interruption_point();
-                        json rpcparams;
-                        json params = json(); // Inner Param
-                        json URLs = json();
-                        URLs.push_back(origURL);
-                        if (secret != "") {
-                            params.push_back("token:" + secret);
+                        } else {
+                            boost::this_thread::interruption_point();
+                            ofstream ofs(FilePath.string(), ios::binary);
+                            ofs.write(R.text.c_str(), R.text.length());
+                            ofs.close();
+                            boost::this_thread::interruption_point();
                         }
-                        params.push_back(URLs);
-                        json options;
-                        options["dir"] = SavePath.string();
-                        options["out"] = FilePath.filename().string();
-                        options["auto-file-renaming"] = "false";
-                        options["allow-overwrite"] = "false";
-                        options["user-agent"] = "bcy 4.3.2 rv:4.3.2.6146 (iPad; iPhone OS 9.3.3; en_US) Cronet";
-                        string gid = md5(origURL).substr(0, 16);
-                        options["gid"] = gid;
-                        params.push_back(options);
-                        rpcparams["params"] = params;
-                        rpcparams["jsonrpc"] = "2.0";
-                        rpcparams["id"] = json();
-                        rpcparams["method"] = "aria2.addUri";
-                        boost::this_thread::interruption_point();
-                        lock_guard<mutex> L(sessLock);
-                        Sess.SetUrl(Url{RPCServer});
-                        Sess.SetBody(Body{rpcparams.dump()});
-                        Response X = Sess.Post();
-                        boost::this_thread::interruption_point();
-                        if (X.error) {
-                            core.errorHandler(X.error, "POSTing aria2");
+                    });
+                } else {
+                    boost::this_thread::interruption_point();
+                    json rpcparams;
+                    json params = json(); // Inner Param
+                    json URLs = json();
+                    URLs.push_back(origURL);
+                    if (secret != "") {
+                        params.push_back("token:" + secret);
+                    }
+                    params.push_back(URLs);
+                    json options;
+                    options["dir"] = SavePath.string();
+                    options["out"] = FilePath.filename().string();
+                    options["auto-file-renaming"] = "false";
+                    options["allow-overwrite"] = "false";
+                    options["user-agent"] = "bcy 4.3.2 rv:4.3.2.6146 (iPad; iPhone OS 9.3.3; en_US) Cronet";
+                    string gid = md5(origURL).substr(0, 16);
+                    options["gid"] = gid;
+                    params.push_back(options);
+                    rpcparams["params"] = params;
+                    rpcparams["jsonrpc"] = "2.0";
+                    rpcparams["id"] = json();
+                    rpcparams["method"] = "aria2.addUri";
+                    boost::this_thread::interruption_point();
+                    lock_guard<mutex> L(sessLock);
+                    Sess.SetUrl(Url{RPCServer});
+                    Sess.SetBody(Body{rpcparams.dump()});
+                    Response X = Sess.Post();
+                    boost::this_thread::interruption_point();
+                    if (X.error) {
+                        core.errorHandler(X.error, "POSTing aria2");
+                    }
+                    else{
+                        json rep=json::parse(X.text);
+                        if(rep.find("result")!=rep.end()){
+                            BOOST_LOG_TRIVIAL(debug)<<origURL<<" Registered in Aria2 with GID:"<<rep["result"].dump()<<endl;
                         }
                         else{
-                            json rep=json::parse(X.text);
-                            if(rep.find("result")!=rep.end()){
-                                BOOST_LOG_TRIVIAL(debug)<<origURL<<" Registered in Aria2 with GID:"<<rep["result"].dump()<<endl;
-                            }
-                            else{
-                                BOOST_LOG_TRIVIAL(debug)<<origURL<<" Failed to Register with Aria2. Response:"<<X.text<<" OrigURL:"<<URL<<endl;
-                            }
+                            BOOST_LOG_TRIVIAL(debug)<<origURL<<" Failed to Register with Aria2. Response:"<<X.text<<" OrigURL:"<<URL<<endl;
                         }
                     }
                 }
             }
-        } catch (exception &exp) {
-            BOOST_LOG_TRIVIAL(error) << exp.what()<<" "<< __FILE__ << ":" << __LINE__ << endl;
         }
+        
     }
     void DownloadUtils::verifyUID(string UID){
-      verify("WHERE uid=?",{UID});
+        verify("WHERE uid=?",{UID});
     }
     void DownloadUtils::verifyTag(string Tag){
-      verify("WHERE Tags LIKE ?",{"%"+Tag+"%"});
+        verify("WHERE Tags LIKE ?",{"%"+Tag+"%"});
     }
-    void DownloadUtils::verify(string condition,vector<string> args) {
+    void DownloadUtils::verify(string condition,vector<string> args,unsigned int threadCount) {
         BOOST_LOG_TRIVIAL(info) << "Verifying..." << endl;
+        vector<boost::thread*> threads;
         vector<json> Infos;
+        std::mutex vectorLock;
+        bool quit=false;
+        if(threadCount==0){
+           threadCount = std::thread::hardware_concurrency() / 2;
+        }
+        for(unsigned int i=0;i<threadCount;i++){
+            auto thread=new boost::thread([&quit,this,&Infos,&vectorLock](){
+                while(quit==false){
+                    json j=json();
+                    {
+                        lock_guard<mutex> guard(vectorLock);
+                        if(Infos.size()==0){
+                            continue;
+                        }
+                        j=Infos.back();
+                        Infos.pop_back();
+                    }
+                    try{
+                        downloadFromInfo(j,false);
+                    }catch (boost::thread_interrupted) {
+                        BOOST_LOG_TRIVIAL(debug) << "Cancelling Thread:" << boost::this_thread::get_id() << endl;
+                    }
+                    catch(exception& exp){
+                        BOOST_LOG_TRIVIAL(error)<<"Verification Error:"<<exp.what()
+                        <<" Info:"<<j.dump()<<endl;
+                    }
+                    
+                }
+                
+            });
+            threads.push_back(thread);
+        }
         BOOST_LOG_TRIVIAL(info) << "Collecting Cached Infos" << endl;
         {
+            int i=0;
             lock_guard<mutex> guard(dbLock);
             Database DB(DBPath,SQLite::OPEN_READONLY);
             Statement Q(DB, "SELECT Info FROM WorkInfo "+condition);
             for(auto i=1;i<=args.size();i++){
-              Q.bind(i,args[i-1]);
+                Q.bind(i,args[i-1]);
             }
             while (Q.executeStep()) {
                 string InfoStr = Q.getColumn(0).getString();
-                try {
-                    json j = json::parse(InfoStr);
-                    Infos.push_back(j);
-                    if (Infos.size() % 1000 == 0) {
-                        BOOST_LOG_TRIVIAL(info) << Infos.size() << " Cache Loaded" << endl;
-                    }
-                } catch (exception &exp) {
-                    BOOST_LOG_TRIVIAL(info) << exp.what() << __FILE__ << ":" << __LINE__ << endl;
+                Infos.push_back(json::parse(InfoStr));
+                i++;
+                if (i % 1000 == 0) {
+                    BOOST_LOG_TRIVIAL(info) << i << " Cache Loaded" << endl;
                 }
+                
             }
         }
-        BOOST_LOG_TRIVIAL(info) << "Found " << Infos.size() << " Cached Info" << endl;
-        for (int i = 0; i < Infos.size(); i++) {
-            json &j = Infos[i];
-            if (i % 1000 == 0) {
-                BOOST_LOG_TRIVIAL(info) << "Remaining Caches to Process:" << Infos.size() - i << endl;
-            }
-            boost::asio::post(*queryThread, [=]() {
-                if (stop) {
-                    return;
-                }
-                try {
-                    downloadFromInfo(j,false);
-                } catch (boost::thread_interrupted) {
-                    BOOST_LOG_TRIVIAL(debug) << "Cancelling Thread:" << boost::this_thread::get_id() << endl;
-                    return;
-                }
-            });
+        while (Infos.size()!=0){
+            BOOST_LOG_TRIVIAL(info)<<"Remaining Info To Verify:"<<Infos.size()<<endl;
+            sleep(5);
         }
+        quit=true;
+        BOOST_LOG_TRIVIAL(info)<<"Wait For Threads to Exit"<<endl;
+        for(auto t:threads){
+            t->join();
+            delete t;
+        }
+        BOOST_LOG_TRIVIAL(info)<<"Verification Done"<<endl;
     }
     void DownloadUtils::cleanup() {
         BOOST_LOG_TRIVIAL(info) << "Cleaning up..." << endl;
@@ -561,13 +580,13 @@ namespace BCY {
             fs::path(L2Path) / fs::path(UID);
             bool isDirec=is_directory(UserPath, ec);
             if(ec){
-              BOOST_LOG_TRIVIAL(error)<<"FileSystem Error: "<<ec.message()<<endl;
+                BOOST_LOG_TRIVIAL(error)<<"FileSystem Error: "<<ec.message()<<endl;
             }
             if (isDirec) {
                 fs::remove_all(UserPath, ec);
                 BOOST_LOG_TRIVIAL(info) << "Removed " << UserPath.string() << endl;
             }
-
+            
             lock_guard<mutex> guard(dbLock);
             Database DB(DBPath,SQLite::OPEN_READWRITE);
             Statement Q(DB, "DELETE FROM WorkInfo WHERE UID=" + UID);
@@ -596,15 +615,15 @@ namespace BCY {
                 fs::path(L2Path) / fs::path(UID) / fs::path(Title);
                 bool isDirec=is_directory(UserPath, ec);
                 if(ec){
-                  BOOST_LOG_TRIVIAL(error)<<"FileSystem Error: "<<ec.message()<<"@"<<__FILE__<<":"<<__LINE__<<endl;
+                    BOOST_LOG_TRIVIAL(error)<<"FileSystem Error: "<<ec.message()<<"@"<<__FILE__<<":"<<__LINE__<<endl;
                 }
                 if (isDirec) {
                     fs::remove_all(UserPath, ec);
                     if(ec){
-                      BOOST_LOG_TRIVIAL(error)<<"FileSystem Error: "<<ec.message()<<"@"<<__FILE__<<":"<<__LINE__<<endl;
+                        BOOST_LOG_TRIVIAL(error)<<"FileSystem Error: "<<ec.message()<<"@"<<__FILE__<<":"<<__LINE__<<endl;
                     }
                     else{
-                      BOOST_LOG_TRIVIAL(info) << "Removed " << UserPath.string() << endl;
+                        BOOST_LOG_TRIVIAL(info) << "Removed " << UserPath.string() << endl;
                     }
                 }
             }
@@ -641,7 +660,7 @@ namespace BCY {
     void DownloadUtils::downloadSearchKeyword(string KW) {
         BOOST_LOG_TRIVIAL(info) << "Iterating Searched Works For Keyword:" << KW << endl;
         auto l = core.search(KW, SearchType::Content, downloadCallback);
-
+        
         BOOST_LOG_TRIVIAL(info) << "Found " << l.size() << " Searched Works For Keyword:" << KW << endl;
     }
     void DownloadUtils::downloadUser(string uid) {
@@ -821,5 +840,5 @@ namespace BCY {
             filter = nullptr;
         }
     }
-
+    
 } // namespace BCY
