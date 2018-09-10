@@ -323,6 +323,9 @@ namespace BCY {
         fs::path SavePath = UserPath / fs::path(tmpTitleString);
         boost::system::error_code ec;
         fs::create_directories(SavePath, ec);
+        if(ec){
+          BOOST_LOG_TRIVIAL(error)<<"FileSystem Error: "<<ec.message()<<"@"<<__FILE__<<":"<<__LINE__<<endl;
+        }
         if (Inf.find("multi") == Inf.end()) {
             Inf["multi"] = {};
         }
@@ -413,8 +416,11 @@ namespace BCY {
                     FilePath.replace_extension(".jpg");
                 }
                 boost::system::error_code ec2;
-                if (!fs::is_regular_file(FilePath, ec2) ||
-                    fs::is_regular_file(FilePath / fs::path(".aria2"), ec2)) {
+                auto a2confPath=fs::path(FilePath.string()+".aria2");
+                bool shouldDL=(!fs::exists(FilePath, ec2) ||
+                    fs::exists(a2confPath, ec2));
+
+                if (shouldDL) {
                     if (RPCServer == "" || item.find("FileName") != item.end()) {
                         if (stop) {
                             return;
@@ -553,10 +559,15 @@ namespace BCY {
             boost::system::error_code ec;
             fs::path UserPath = fs::path(saveRoot) / fs::path(L1Path) /
             fs::path(L2Path) / fs::path(UID);
-            if (is_directory(UserPath, ec)) {
+            bool isDirec=is_directory(UserPath, ec);
+            if(ec){
+              BOOST_LOG_TRIVIAL(error)<<"FileSystem Error: "<<ec.message()<<endl;
+            }
+            if (isDirec) {
                 fs::remove_all(UserPath, ec);
                 BOOST_LOG_TRIVIAL(info) << "Removed " << UserPath.string() << endl;
             }
+
             lock_guard<mutex> guard(dbLock);
             Database DB(DBPath,SQLite::OPEN_READWRITE);
             Statement Q(DB, "DELETE FROM WorkInfo WHERE UID=" + UID);
@@ -583,9 +594,18 @@ namespace BCY {
                 boost::system::error_code ec;
                 fs::path UserPath = fs::path(saveRoot) / fs::path(L1Path) /
                 fs::path(L2Path) / fs::path(UID) / fs::path(Title);
-                if (is_directory(UserPath, ec)) {
+                bool isDirec=is_directory(UserPath, ec);
+                if(ec){
+                  BOOST_LOG_TRIVIAL(error)<<"FileSystem Error: "<<ec.message()<<"@"<<__FILE__<<":"<<__LINE__<<endl;
+                }
+                if (isDirec) {
                     fs::remove_all(UserPath, ec);
-                    BOOST_LOG_TRIVIAL(info) << "Removed " << UserPath.string() << endl;
+                    if(ec){
+                      BOOST_LOG_TRIVIAL(error)<<"FileSystem Error: "<<ec.message()<<"@"<<__FILE__<<":"<<__LINE__<<endl;
+                    }
+                    else{
+                      BOOST_LOG_TRIVIAL(info) << "Removed " << UserPath.string() << endl;
+                    }
                 }
             }
         }
