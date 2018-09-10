@@ -172,7 +172,9 @@ namespace BCY {
         Q.executeStep();
         if (Q.hasRow()) {
             string T = Q.getColumn("Title").getString();
-            return T;
+            if (T!=""){
+              return T;
+            }
         }
         return title;
     }
@@ -458,7 +460,7 @@ namespace BCY {
                         options["out"] = FilePath.filename().string();
                         options["auto-file-renaming"] = "false";
                         options["allow-overwrite"] = "false";
-
+                        options["user-agent"] = "bcy 4.3.2 rv:4.3.2.6146 (iPad; iPhone OS 9.3.3; en_US) Cronet";
                         string gid = md5(origURL).substr(0, 16);
                         options["gid"] = gid;
                         params.push_back(options);
@@ -489,14 +491,23 @@ namespace BCY {
             BOOST_LOG_TRIVIAL(error) << exp.what()<<" "<< __FILE__ << ":" << __LINE__ << endl;
         }
     }
-    void DownloadUtils::verify() {
+    void DownloadUtils::verifyUID(string UID){
+      verify("WHERE UID=?",{UID});
+    }
+    void DownloadUtils::verifyTag(string Tag){
+      verify("WHERE Tags LIKE ?",{"%"+Tag+"%"});
+    }
+    void DownloadUtils::verify(string condition,vector<string> args) {
         BOOST_LOG_TRIVIAL(info) << "Verifying..." << endl;
         vector<json> Infos;
         BOOST_LOG_TRIVIAL(info) << "Collecting Cached Infos" << endl;
         {
             lock_guard<mutex> guard(dbLock);
             Database DB(DBPath,SQLite::OPEN_READONLY);
-            Statement Q(DB, "SELECT Info FROM WorkInfo");
+            Statement Q(DB, "SELECT Info FROM WorkInfo "+condition);
+            for(auto i=1;i<=args.size();i++){
+              Q.bind(i,args[i]);
+            }
             while (Q.executeStep()) {
                 string InfoStr = Q.getColumn(0).getString();
                 try {

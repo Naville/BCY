@@ -34,9 +34,11 @@ namespace BCY {
         nlohmann::json loadInfo(std::string item_id);
         std::string loadOrSaveGroupName(std::string name, std::string GID);
         void insertRecordForCompressedImage(std::string item_id);
-        void verify();
         void cleanup();
         void join();
+        void verify(std::string condition="",std::vector<std::string> args={});
+        void verifyUID(std::string UID);
+        void verifyTag(std::string Tag);
         void addFilter(std::string filter);
         void downloadGroupID(std::string gid);
         void downloadWorkID(std::string item);
@@ -47,7 +49,7 @@ namespace BCY {
         void downloadSearchKeyword(std::string KW);
         void downloadTimeline();
         void downloadItemID(std::string item_id);
-        
+
     private:
         std::string md5(std::string &str);
         boost::asio::thread_pool *queryThread = nullptr;
