@@ -425,7 +425,7 @@ namespace BCY {
                         if (stop) {
                             return;
                         }
-                        fs::remove(FilePath / fs::path(".aria2"), ec2);
+                        fs::remove(a2confPath, ec2);
                         fs::remove(FilePath, ec2);
                         boost::asio::post(*downloadThread, [=]() {
                             if (stop) {
