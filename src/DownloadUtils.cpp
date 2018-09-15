@@ -505,6 +505,27 @@ namespace BCY {
     void DownloadUtils::verifyTag(string Tag){
         verify("WHERE Tags LIKE ?",{"%"+Tag+"%"});
     }
+    void DownloadUtils::unlikeCached(){
+      vector<json> Liked = core.space_getUserLikeTimeLine(core.UID);
+      BOOST_LOG_TRIVIAL(info) << "Found " << Liked.size() << " Liked Works" << endl;
+      thread_pool *t = new thread_pool(16);
+      for (json j : Liked) {
+        string item_id = j["item_detail"]["item_id"];
+        boost::asio::post(*t, [=] {
+          if (!loadInfo(item_id).is_null()) {
+            if (core.item_cancelPostLike(item_id)) {
+              BOOST_LOG_TRIVIAL(info) << "Unlike item_id: " << item_id << " Success" << endl;
+            } else {
+              BOOST_LOG_TRIVIAL(info) << "Unlike item_id: " << item_id << " Failed" << endl;
+            }
+          } else {
+            BOOST_LOG_TRIVIAL(info) << "item_id: " << item_id << " Not Found In Local Cache" << endl;
+          }
+        });
+      }
+      BOOST_LOG_TRIVIAL(info) << "Joining Unlike Threads\n";
+      t->join();
+    }
     void DownloadUtils::verify(string condition,vector<string> args) {
            BOOST_LOG_TRIVIAL(info) << "Verifying..." << endl;
            vector<json> Infos;
@@ -652,7 +673,7 @@ namespace BCY {
         BOOST_LOG_TRIVIAL(info) << "Found " << l.size() << " Original Works For UserID:" << uid << endl;
     }
     void DownloadUtils::downloadTag(string TagName) {
-        if (Filters.size() == 0) {
+        if (typeFilters.size() == 0) {
             BOOST_LOG_TRIVIAL(info) << "Iterating Works For Tag:" << TagName << endl;
             auto coser = core.circle_itemrecenttags(TagName, "all", downloadCallback);
             BOOST_LOG_TRIVIAL(info) << "Found " << coser.size() << " Works For Tag:" << TagName << endl;
@@ -678,7 +699,7 @@ namespace BCY {
                 if (idstr != "") {
                     id = std::stoi(idstr);
                 }
-                if (find(Filters.begin(), Filters.end(), name) != Filters.end()) {
+                if (find(typeFilters.begin(), typeFilters.end(), name) != typeFilters.end()) {
                     if (id >= 1 && id <= 3) { // First class
                         BOOST_LOG_TRIVIAL(info) << "Iterating Works For Tag:" << TagName
                         << " and Filter:" << name << endl;
@@ -745,7 +766,7 @@ namespace BCY {
         });
     }
     void DownloadUtils::downloadWorkID(string item) {
-        if (Filters.size() == 0) {
+        if (typeFilters.size() == 0) {
             BOOST_LOG_TRIVIAL(info) << "Iterating Works For WorkID:" << item << endl;
             auto l = core.circle_itemRecentWorks(item, downloadCallback);
             BOOST_LOG_TRIVIAL(info) << "Found " << l.size() << " Works For WorkID:" << item << endl;
@@ -769,7 +790,7 @@ namespace BCY {
                 if (idstr != "") {
                     id = std::stoi(idstr);
                 }
-                if (find(Filters.begin(), Filters.end(), name) != Filters.end()) {
+                if (find(typeFilters.begin(), typeFilters.end(), name) != typeFilters.end()) {
                     if (id >= 1 && id <= 3) { // First class
                         BOOST_LOG_TRIVIAL(info) << "Iterating Works For WorkID:" << item
                         << " and Filter:" << name << endl;
@@ -789,7 +810,7 @@ namespace BCY {
             }
         }
     }
-    void DownloadUtils::addFilter(string filter) { Filters.insert(filter); }
+    void DownloadUtils::addTypeFilter(string filter) { typeFilters.insert(filter); }
     void DownloadUtils::downloadTimeline() {
         BOOST_LOG_TRIVIAL(info) << "Downloading Friend Feed" << endl;
         core.timeline_friendfeed(downloadCallback);

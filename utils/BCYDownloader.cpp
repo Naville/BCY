@@ -30,7 +30,10 @@ static po::variables_map vm;
 static po::positional_options_description pos;
 static json config;
 static string Prefix = "BCYDownloader"; // After Login we replace this with UserName
-
+typedef std::function<void(vector<string>)> commHandle;
+static map<string,commHandle> handlers;
+static map<string,string> handlerMsgs;
+void JSONMode();
 void cleanup(int sig) {
     if(DU!=nullptr){
         delete DU;
@@ -43,6 +46,235 @@ void cleanup2() {
         delete DU;
         DU = nullptr;
     }
+}
+void Init(){
+    commHandle quitHandle=[=](vector<string>)->void{
+        if (DU != nullptr) {
+            delete DU;
+            DU=nullptr;
+        }
+        exit(0);
+    };
+    commHandle a2Handle=[=](vector<string> commands){
+        if (commands.size() < 2) {
+            cout << "Disabling Aria2 And Fallback to builtin Downloader"
+            << endl;
+            DU->RPCServer = "";
+            DU->secret = "";
+        } else {
+
+            DU->RPCServer = commands[1];
+            if (commands.size() > 2) {
+                DU->secret = commands[2];
+            }
+        }
+
+    };
+    commHandle processHandle=[=](vector<string> commands){
+        JSONMode();
+    };
+    commHandle unlikeHandle=[=](vector<string> commands){
+        DU->unlikeCached();
+    };
+    commHandle likedHandle=[=](vector<string> commands)
+    {
+        if (commands.size() == 2) {
+            DU->downloadUserLiked(commands[1]);
+        } else {
+            DU->downloadLiked();
+        }
+
+    };
+    commHandle loginHandle=[=](vector<string> commands){
+        if (DU->core.UID == "") {
+            json Res =
+            DU->core.loginWithEmailAndPassword(commands[1], commands[2]);
+            if (!Res.is_null()) {
+                Prefix = Res["data"]["uname"];
+            } else {
+                cout << "Login Failed" << endl;
+            }
+        } else {
+            cout << "Already logged in as UID:" << DU->core.UID << endl;
+        }
+    };
+    commHandle initHandle=[=](vector<string> commands){
+        if (DU == nullptr) {
+            if (commands.size() < 2) {
+                cout << "Invalid Argument"<<endl;
+                return;
+            } else {
+                while (commands.size() < 4) {
+                    commands.push_back("16");
+                }
+                DU = new DownloadUtils(commands[1], stoi(commands[2]),
+                                       stoi(commands[3]));
+                signal(SIGINT, cleanup);
+            }
+        } else {
+            cout << "Already Initialized" << endl;
+        }
+    };
+    commHandle userHandle=[=](vector<string> commands){
+        if (DU != nullptr) {
+            if (commands.size() == 2) {
+                DU->downloadUser(commands[1]);
+            } else {
+                cout << "Invalid Argument"<<endl;
+            }
+        } else {
+            cout << "You havn't initialize the downloader yet" << endl;
+        }
+    };
+    commHandle tagHandle=[=](vector<string> commands){
+        if (commands.size() == 2) {
+            DU->downloadTag(commands[1]);
+        } else {
+            cout << "Invalid Argument"<<endl;
+        }
+
+    };
+    commHandle addtypeHandle=[=](vector<string> commands){
+        if (commands.size() != 2) {
+            cout << "Invalid Argument"<<endl;
+        } else {
+            DU->addTypeFilter(commands[1]);
+        }
+
+
+    };
+    commHandle itemHandle=[=](vector<string> commands){
+                if (commands.size() == 2) {
+                    DU->downloadItemID(commands[1]);
+                } else {
+                    cout << "Invalid Argument"<<endl;
+                }
+
+    };
+    commHandle verifyUIDHandle=[=](vector<string> commands){
+        if (commands.size() == 2) {
+            DU->verifyUID(commands[1]);
+        } else {
+            cout << "Invalid Argument"<<endl;
+        }
+    };
+    commHandle verifyTagHandle=[=](vector<string> commands){
+        if (commands.size() == 2) {
+            DU->verifyTag(commands[1]);
+        } else {
+            cout << "Invalid Argument"<<endl;
+        }
+    };
+    commHandle workHandle=[=](vector<string> commands){
+        if (commands.size() == 2) {
+            DU->downloadWorkID(commands[1]);
+        } else {
+            cout << "Invalid Argument"<<endl;
+        }
+    };
+    commHandle groupHandle=[=](vector<string> commands){
+        if (commands.size() == 2) {
+            DU->downloadGroupID(commands[1]);
+        } else {
+            cout << "Invalid Argument"<<endl;
+        }
+    };
+    commHandle proxyHandle=[=](vector<string> commands){
+            if (commands.size() != 2) {
+                cout << "Invalid Argument"<<endl;
+            } else {
+                DU->core.proxy = {{"http", commands[1]}, {"https", commands[1]}};
+            }
+
+    };
+    commHandle cleanupHandle=[=](vector<string> commands){DU->cleanup();};
+    commHandle joinHandle=[=](vector<string> commands){DU->join();};
+    commHandle verifyHandle=[=](vector<string> commands){DU->verify();};
+    commHandle forcequitHandle=[=](vector<string> commands){
+        kill(getpid(), 9);
+    };
+    commHandle searchHandle=[=](vector<string> commands){
+        if (commands.size() == 2) {
+            DU->downloadSearchKeyword(commands[1]);
+        } else {
+            cout << "Invalid Argument"<<endl;
+        }
+    };
+    commHandle helpHandle=[=](vector<string> commands){
+        if(commands.size()==2 && handlerMsgs.find(commands[1])!=handlerMsgs.end()){
+            cout<<handlerMsgs[commands[1]]<<endl;
+        }
+        else{
+            for(map<string,string>::iterator it=handlerMsgs.begin();it!=handlerMsgs.end();it++){
+                cout << it->first  // string (key)
+                << endl
+                << it->second   // string's value
+                << endl<<endl ;
+            }
+        }
+    };
+    commHandle itemDetailHandle=[=](vector<string> commands){
+        if(commands.size()!=2){cout << "Invalid Argument"<<endl;return;}
+        cout<<DU->core.item_detail(commands[1],false).dump()<<endl;
+    };
+    commHandle followHandle=[=](vector<string> commands){
+        if(commands.size()!=2){cout << "Invalid Argument"<<endl;return;}
+        cout<<DU->core.user_follow(commands[1],true)<<endl;
+    };
+    commHandle unfollowHandle=[=](vector<string> commands){
+        if(commands.size()!=2){cout << "Invalid Argument"<<endl;return;}
+        cout<<DU->core.user_follow(commands[1],false)<<endl;
+    };
+    handlers["quit"]=quitHandle;
+    handlerMsgs["quit"]="Cancel Pending Queries And Quit";
+    handlers["process"]=processHandle;
+    handlerMsgs["process"]="Fallback to JSON Processing Mode";
+    handlers["aria2"]=a2Handle;
+    handlerMsgs["aria2"]="Usage:aria2 URL [secret] \n\t Set Aria2's RPC URL And SecretKey.Pass no option to disable Aria2";
+    handlers["unlike"]=unlikeHandle;
+    handlerMsgs["unlike"]="Unlike Cached Works";
+    handlers["liked"]=likedHandle;
+    handlerMsgs["liked"]="Usage:liked [UID]\nDescription: Download UID's liked works if UID is provided, else download current user's liked works";
+    handlers["login"]=loginHandle;
+    handlerMsgs["login"]="Usage:login EMAIL PASSWORD\nDescription: Login";
+    handlers["init"]=initHandle;
+    handlerMsgs["init"]="Usage:init /SAVE/PATH/ [QueryThreadCount] [DownloadThreadCount]\nDescription: Initialize the Downloader";
+    handlers["user"]=userHandle;
+    handlerMsgs["user"]="Usage:User UID\nDescription: Download Original Works By UID";
+    handlers["tag"]=tagHandle;
+    handlerMsgs["tag"]="Usage:Tag TagName\nDescription: Download Works By TagName";
+    handlers["addtype"]=addtypeHandle;
+    handlerMsgs["addtype"]="Usage:AddType DownloadTypeFilterName\nDescription: Apply the Download Type Filter to Supported Operations";
+    handlers["item"]=itemHandle;
+    handlerMsgs["item"]="Usage:Item item_id\nDescription: Download item_id";
+    handlers["cleanup"]=cleanupHandle;
+    handlerMsgs["cleanup"]="Usage:cleanup\nDescription: Cleanup";
+    handlers["join"]=joinHandle;
+    handlerMsgs["join"]="Usage:Join\nDescription: Join all working threads";
+    handlers["verifyuid"]=verifyUIDHandle;
+    handlerMsgs["verifyuid"]="Usage:verifyUID UID\nDescription: Verify Work By UID";
+    handlers["verifytag"]=verifyUIDHandle;
+    handlerMsgs["verifytag"]="Usage:verifyTag TagName\nDescription: Verify Work By TagName";
+    handlers["verify"]=verifyHandle;
+    handlerMsgs["verify"]="Usage: verify \nDescription: Verify All Cached Info";
+    handlers["work"]=workHandle;
+    handlerMsgs["work"]="Usage:Work WorkID\nDescription: Download WorkCircle By WorkID";
+    handlers["group"]=groupHandle;
+    handlerMsgs["group"]="Usage:Group GroupID\nDescription: Download GroupID";
+    handlers["proxy"]=proxyHandle;
+    handlerMsgs["proxy"]="Usage:Proxy ProxyURL\nDescription: Set ProxyURL";
+    handlers["forcequit"]=forcequitHandle;
+    handlerMsgs["forcequit"]="Usage:forcequit\nDescription: Force Quit";
+    handlers["search"]=searchHandle;
+    handlerMsgs["search"]="Usage:Search Keyword\nDescription: Search And Download Works By Keyword";
+    handlers["help"]=helpHandle;
+    handlerMsgs["help"]="Usage:help\nDescription: Display This Help Message";
+    handlers["detail"]=itemDetailHandle;
+    handlerMsgs["detail"]="Usage:detail item_id\nDescription: Display Detail Info of item_id";
+    handlers["follow"]=followHandle;
+    handlerMsgs["follow"]="Usage:follow UID\nDescription: Follow UID";
+    handlers["unfollow"]=unfollowHandle;
+    handlerMsgs["unfollow"]="Usage:unfollow UID\nDescription: Unfollow UID";
 }
 
 vector<string> ParseCommand(string Input) {
@@ -128,258 +360,19 @@ void Interactive() {
         }
         try {
             vector<string> commands = ParseCommand(command);
-            if (commands[0] == "help") {
-                cout << "Commands List:" << endl
-                << "Login EMAIL PASSWORD:" << endl
-                << "\tLogin" << endl
-                << "Init /SAVE/PATH/ [QueryThreadCount] [DownloadThreadCount]:"
-                << endl
-                << "\tInitialize the Downloader" << endl
-                << "Quit:" << endl
-                << "\tCancel Pending Queries And Quit" << endl
-                << "ForceQuit:" << endl
-                << "\tForce Quit" << endl
-                << "AddFilter DownloadFilterName:" << endl
-                << "\tApply the DownloadFilter to Supported Operations" << endl
-                << "User UID:" << endl
-                << "\tDownload Original Works By UID" << endl
-                << "Work WorkID:" << endl
-                << "\tDownload WorkCircle By UID" << endl
-                << "Group GroupID:" << endl
-                << "\tDownload GroupID" << endl
-                << "Search Keyword:" << endl
-                << "\tSearch And Download Works By Keyword" << endl
-                << "Tag TagName:" << endl
-                << "\tDownload Works By TagName" << endl
-                << "Item item_id:" << endl
-                << "\tDownload item_id" << endl
-                << "liked [UID]:" << endl
-                << "\tDownload UID's liked works if UID is provided, else "
-                "download current user's liked works"
-                << endl
-                << "Proxy ProxyURL:" << endl
-                << "\tSet ProxyURL" << endl
-                << "Aria2 URL [secret]" << endl
-                << "\t Set Aria2's RPC URL And SecretKey.Pass no option to "
-                "disable Aria2 "
-                << endl
-                << "verify" << endl
-                << "\t Verify All Cached Info" << endl
-                << "join" << endl
-                << "\t Join all working threads" << endl
-                << "process" << endl
-                << "\t Fallback to JSON Processing Mode" << endl
-                << "cleanup" << endl
-                << "\t Cleanup Download Folder based on Filters" << endl
-                << "verifyUID UID" << endl
-                << "\t Verify Work By UID" << endl
-                << "verifyTag TagName" << endl
-                << "\t Verify Work By TagName" << endl;
-                continue;
-            } else if (commands[0] == "quit") {
-                if (DU != nullptr) {
-                    delete DU;
-                    DU=nullptr;
-                }
-                exit(0);
-            } else if (commands[0] == "process") {
-                JSONMode();
+            if(commands[0]=="init"){
+                handlers["init"](commands);
             }
-            else if (commands[0] == "cleanup") {
-                DU->cleanup();
-            } else if (commands[0] == "liked") {
-                if (DU != nullptr) {
-                    if (commands.size() == 2) {
-                        DU->downloadUserLiked(commands[1]);
-                    } else {
-                        DU->downloadLiked();
-                    }
-                } else {
-                    cout << "You havn't initialize the downloader yet" << endl;
-                }
-            } else if (commands[0] == "verify") {
-                if (DU != nullptr) {
-                    DU->verify();
-                }
-                else{
-                    cout << "You havn't initialize the downloader yet" << endl;
-                }
-            }else if (commands[0] == "verifyuid") {
-                if (DU != nullptr) {
-                    if (commands.size() == 2) {
-                        DU->verifyUID(commands[1]);
-                    } else {
-                        cout << "Usage:verifyUID UID" << endl;
-                    }
-                }
-                else{
-                    cout << "You havn't initialize the downloader yet" << endl;
+            else if(handlers.find(commands[0])!=handlers.end()){
+                if(DU==nullptr){
+                    cout<<"You need to initialze the downloader first"<<endl;
+                }else{
+                    auto fn=handlers[commands[0]];
+                    fn(commands);
                 }
             }
-            else if (commands[0] == "verifytag") {
-                if (DU != nullptr) {
-                    if (commands.size() == 2) {
-                        DU->verifyTag(commands[1]);
-                    } else {
-                        cout << "Usage:verifyTag TagName" << endl;
-                    }
-                }
-                else{
-                    cout << "You havn't initialize the downloader yet" << endl;
-                }
-            }
-            else if (commands[0] == "join") {
-                if (DU != nullptr) {
-                    DU->join();
-                }
-                else{
-                    cout << "You havn't initialize the downloader yet" << endl;
-                }
-            } else if (commands[0] == "work") {
-                if (DU != nullptr) {
-                    if (commands.size() == 2) {
-                        DU->downloadWorkID(commands[1]);
-                    } else {
-                        cout << "Usage:Work WorkIDToDownload" << endl;
-                    }
-                } else {
-                    cout << "You havn't initialize the downloader yet" << endl;
-                }
-            } else if (commands[0] == "group") {
-                if (DU != nullptr) {
-                    if (commands.size() == 2) {
-                        DU->downloadGroupID(commands[1]);
-                    } else {
-                        cout << "Usage:Group GroupIDToDownload" << endl;
-                    }
-                } else {
-                    cout << "You havn't initialize the downloader yet" << endl;
-                }
-            } else if (commands[0] == "item") {
-                if (DU != nullptr) {
-                    if (commands.size() == 2) {
-                        DU->downloadItemID(commands[1]);
-                    } else {
-                        cout << "Usage:item item_id" << endl;
-                    }
-                } else {
-                    cout << "You havn't initialize the downloader yet" << endl;
-                }
-            } else if (commands[0] == "search") {
-                if (DU != nullptr) {
-                    if (commands.size() == 2) {
-                        DU->downloadSearchKeyword(commands[1]);
-                    } else {
-                        cout << "Usage:search Keyword" << endl;
-                    }
-                } else {
-                    cout << "You havn't initialize the downloader yet" << endl;
-                }
-
-            } else if (commands[0] == "tag") {
-                if (DU != nullptr) {
-                    if (commands.size() == 2) {
-                        DU->downloadTag(commands[1]);
-                    } else {
-                        cout << "Usage:Tag TagNameToDownload" << endl;
-                    }
-                } else {
-                    cout << "You havn't initialize the downloader yet" << endl;
-                }
-            } else if (commands[0] == "user") {
-                if (DU != nullptr) {
-                    if (commands.size() == 2) {
-                        DU->downloadUser(commands[1]);
-                    } else {
-                        cout << "Usage:user UIDToDownload" << endl;
-                    }
-                } else {
-                    cout << "You havn't initialize the downloader yet" << endl;
-                }
-            } else if (commands[0] == "forcequit") {
-                kill(getpid(), 9);
-            } else if (commands[0] == "addfilter") {
-                if (DU != nullptr) {
-                    if (commands.size() != 2) {
-                        cout << "Usage:addfilter FilterName" << endl;
-                    } else {
-                        DU->addFilter(commands[1]);
-                    }
-                } else {
-                    cout << "You havn't initialize the downloader yet" << endl;
-                }
-            } else if (commands[0] == "proxy") {
-                if (DU != nullptr) {
-                    if (commands.size() != 2) {
-                        cout << "Usage:proxy URL" << endl;
-                    } else {
-                        DU->core.proxy = {{"http", commands[1]}, {"https", commands[1]}};
-                    }
-
-                } else {
-                    cout << "You havn't initialize the downloader yet" << endl;
-                }
-            } else if (commands[0] == "aria2") {
-                if (DU != nullptr) {
-                    if (commands.size() < 2) {
-                        cout << "Disabling Aria2 And Fallback to builtin Downloader"
-                        << endl;
-                        DU->RPCServer = "";
-                        DU->secret = "";
-                    } else {
-
-                        DU->RPCServer = commands[1];
-                        if (commands.size() > 2) {
-                            DU->secret = commands[2];
-                        }
-                    }
-
-                } else {
-                    cout << "You havn't initialize the downloader yet" << endl;
-                }
-            } else if (commands[0] == "login") {
-                if (DU != nullptr) {
-                    if (DU->core.UID == "") {
-                        if (commands.size() != 3) {
-                            cout << "Usage:login email password" << endl;
-                        } else {
-                            json Res =
-                            DU->core.loginWithEmailAndPassword(commands[1], commands[2]);
-                            if (!Res.is_null()) {
-                                Prefix = Res["data"]["uname"];
-                            } else {
-                                cout << "Login Failed" << endl;
-                            }
-                        }
-                    } else {
-                        cout << "Already logged in as UID:" << DU->core.UID << endl;
-                    }
-                } else {
-                    cout << "You havn't initialize the downloader yet" << endl;
-                }
-            } else if (commands[0] == "init") {
-                if (DU == nullptr) {
-                    if (commands.size() < 2) {
-                        cout << "Usage:init /SAVE/PATH/ [QueryThreadCount] "
-                        "[DownloadThreadCount]"
-                        << endl;
-                    } else {
-                        while (commands.size() < 4) {
-                            commands.push_back("16");
-                        }
-                        DU = new DownloadUtils(commands[1], stoi(commands[2]),
-                                               stoi(commands[3]));
-                        signal(SIGINT, cleanup);
-                    }
-                } else {
-                    cout << "Already Initialized" << endl;
-                }
-                continue;
-            }
-
-            else {
-                cout << "Unknown command:" << command << ". Use help for command list"
-                << endl;
+            else{
+                handlers["help"](vector<string>());
             }
         } catch (const std::exception &exc) {
             cout << "Exception:" << exc.what() << endl;
@@ -415,6 +408,7 @@ std::istream& operator>>(std::istream& in, logging::trivial::severity_level& sl)
     return in;
 }
 int main(int argc, char **argv) {
+    Init();
     logging::add_common_attributes();
     po::options_description desc("BCYDownloader Options");
     desc.add_options()
@@ -480,9 +474,9 @@ int main(int argc, char **argv) {
             DU->core.proxy = {{"http", config["HTTPProxy"]},
                 {"https", config["HTTPProxy"]}};
         }
-        if (config.find("Filters") != config.end()) {
-            for (string F : config["Filters"]) {
-                DU->addFilter(F);
+        if (config.find("Types") != config.end()) {
+            for (string F : config["Types"]) {
+                DU->addTypeFilter(F);
             }
         }
 

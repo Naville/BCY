@@ -39,7 +39,7 @@ namespace BCY {
         void verify(std::string condition="",std::vector<std::string> args={});
         void verifyUID(std::string UID);
         void verifyTag(std::string Tag);
-        void addFilter(std::string filter);
+        void addTypeFilter(std::string filter);
         void downloadGroupID(std::string gid);
         void downloadWorkID(std::string item);
         void downloadUserLiked(std::string uid);
@@ -49,6 +49,7 @@ namespace BCY {
         void downloadSearchKeyword(std::string KW);
         void downloadTimeline();
         void downloadItemID(std::string item_id);
+        void unlikeCached();
 
     private:
         std::string md5(std::string &str);
@@ -59,7 +60,7 @@ namespace BCY {
         cpr::Session Sess;
         std::mutex sessLock;
         std::string DBPath;
-        std::set<std::string> Filters;
+        std::set<std::string> typeFilters;
         std::function<bool(nlohmann::json)> downloadCallback = [&](nlohmann::json j) {
             this->downloadFromAbstractInfo(j);
             return true;
