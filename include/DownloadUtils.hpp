@@ -36,7 +36,7 @@ namespace BCY {
         void insertRecordForCompressedImage(std::string item_id);
         void cleanup();
         void join();
-        void verify(std::string condition="",std::vector<std::string> args={},unsigned int threadCount=0);
+        void verify(std::string condition="",std::vector<std::string> args={});
         void verifyUID(std::string UID);
         void verifyTag(std::string Tag);
         void addFilter(std::string filter);

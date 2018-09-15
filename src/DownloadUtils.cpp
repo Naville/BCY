@@ -34,7 +34,7 @@ namespace BCY {
     }
     DownloadUtils::DownloadUtils(string PathBase, int queryThreadCount,
                                  int downloadThreadCount,string Path) {
-        
+
         saveRoot = PathBase;
         fs::path dir(PathBase);
         fs::path file("BCYInfo.db");
@@ -52,7 +52,7 @@ namespace BCY {
         if (downloadThreadCount == -1) {
             downloadThreadCount = std::thread::hardware_concurrency() / 2;
         }
-        
+
         queryThread = new thread_pool(queryThreadCount);
         downloadThread = new thread_pool(downloadThreadCount);
         lock_guard<mutex> guard(dbLock);
@@ -196,7 +196,7 @@ namespace BCY {
         keys.push_back("Info");
         tmps.push_back("(?)");
         vals.push_back(Inf.dump());
-        
+
         keys.push_back("Title");
         tmps.push_back("(?)");
         vals.push_back(title);
@@ -247,7 +247,7 @@ namespace BCY {
         }
         string UID = ensure_string(Inf["uid"]);
         // tyvm cunts at ByteDance
-        
+
         string Title = "";
         if (Inf.find("title") != Inf.end() && Inf["title"]!="") {
             Title = Inf["title"];
@@ -338,7 +338,7 @@ namespace BCY {
             }
             Inf["multi"] = URLs;
         }
-        
+
         // videoInfo
         if (Inf["type"] == "video" && Inf.find("video_info") != Inf.end()) {
             string vid = Inf["video_info"]["vid"];
@@ -365,7 +365,7 @@ namespace BCY {
             j["FileName"] = FileName;
             Inf["multi"].push_back(j);
         }
-        
+
         bool isCompressedInfo = false;
         if (allowCompressed && Inf.find("item_id") != Inf.end() &&
             Inf.find("type") != Inf.end()) {
@@ -416,7 +416,7 @@ namespace BCY {
             auto a2confPath=fs::path(FilePath.string()+".aria2");
             bool shouldDL=(!fs::exists(FilePath, ec2) ||
                            fs::exists(a2confPath, ec2));
-            
+
             if (shouldDL) {
                 if (RPCServer == "") {
                     if (stop) {
@@ -497,7 +497,7 @@ namespace BCY {
                 }
             }
         }
-        
+
     }
     void DownloadUtils::verifyUID(string UID){
         verify("WHERE uid=?",{UID});
@@ -505,73 +505,49 @@ namespace BCY {
     void DownloadUtils::verifyTag(string Tag){
         verify("WHERE Tags LIKE ?",{"%"+Tag+"%"});
     }
-    void DownloadUtils::verify(string condition,vector<string> args,unsigned int threadCount) {
-        BOOST_LOG_TRIVIAL(info) << "Verifying..." << endl;
-        vector<boost::thread*> threads;
-        vector<json> Infos;
-        std::mutex vectorLock;
-        bool quit=false;
-        if(threadCount==0){
-           threadCount = std::thread::hardware_concurrency() / 2;
-        }
-        for(unsigned int i=0;i<threadCount;i++){
-            auto thread=new boost::thread([&quit,this,&Infos,&vectorLock](){
-                while(quit==false){
-                    json j=json();
-                    {
-                        lock_guard<mutex> guard(vectorLock);
-                        if(Infos.size()==0){
-                            continue;
-                        }
-                        j=Infos.back();
-                        Infos.pop_back();
-                    }
-                    try{
-                        downloadFromInfo(j,false);
-                    }catch (boost::thread_interrupted) {
-                        BOOST_LOG_TRIVIAL(debug) << "Cancelling Thread:" << boost::this_thread::get_id() << endl;
-                    }
-                    catch(exception& exp){
-                        BOOST_LOG_TRIVIAL(error)<<"Verification Error:"<<exp.what()
-                        <<" Info:"<<j.dump()<<endl;
-                    }
-                    
-                }
-                
-            });
-            threads.push_back(thread);
-        }
-        BOOST_LOG_TRIVIAL(info) << "Collecting Cached Infos" << endl;
-        {
-            int i=0;
-            lock_guard<mutex> guard(dbLock);
-            Database DB(DBPath,SQLite::OPEN_READONLY);
-            Statement Q(DB, "SELECT Info FROM WorkInfo "+condition);
-            for(auto i=1;i<=args.size();i++){
-                Q.bind(i,args[i-1]);
-            }
-            while (Q.executeStep()) {
-                string InfoStr = Q.getColumn(0).getString();
-                Infos.push_back(json::parse(InfoStr));
-                i++;
-                if (i % 1000 == 0) {
-                    BOOST_LOG_TRIVIAL(info) << i << " Cache Loaded" << endl;
-                }
-                
-            }
-        }
-        while (Infos.size()!=0){
-            BOOST_LOG_TRIVIAL(info)<<"Remaining Info To Verify:"<<Infos.size()<<endl;
-            sleep(5);
-        }
-        quit=true;
-        BOOST_LOG_TRIVIAL(info)<<"Wait For Threads to Exit"<<endl;
-        for(auto t:threads){
-            t->join();
-            delete t;
-        }
-        BOOST_LOG_TRIVIAL(info)<<"Verification Done"<<endl;
-    }
+    void DownloadUtils::verify(string condition,vector<string> args) {
+           BOOST_LOG_TRIVIAL(info) << "Verifying..." << endl;
+           vector<json> Infos;
+           BOOST_LOG_TRIVIAL(info) << "Collecting Cached Infos" << endl;
+           {
+               lock_guard<mutex> guard(dbLock);
+               Database DB(DBPath,SQLite::OPEN_READONLY);
+               Statement Q(DB, "SELECT Info FROM WorkInfo "+condition);
+               for(auto i=1;i<=args.size();i++){
+                 Q.bind(i,args[i-1]);
+               }
+               while (Q.executeStep()) {
+                   string InfoStr = Q.getColumn(0).getString();
+                   try {
+                       json j = json::parse(InfoStr);
+                       Infos.push_back(j);
+                       if (Infos.size() % 1000 == 0) {
+                           BOOST_LOG_TRIVIAL(info) << Infos.size() << " Cache Loaded" << endl;
+                       }
+                   } catch (exception &exp) {
+                       BOOST_LOG_TRIVIAL(info) << exp.what() << __FILE__ << ":" << __LINE__ << endl;
+                   }
+               }
+           }
+           BOOST_LOG_TRIVIAL(info) << "Found " << Infos.size() << " Cached Info" << endl;
+           for (int i = 0; i < Infos.size(); i++) {
+               json &j = Infos[i];
+               if (i % 1000 == 0) {
+                   BOOST_LOG_TRIVIAL(info) << "Remaining Caches to Process:" << Infos.size() - i << endl;
+               }
+               boost::asio::post(*queryThread, [=]() {
+                   if (stop) {
+                       return;
+                   }
+                   try {
+                       downloadFromInfo(j,false);
+                   } catch (boost::thread_interrupted) {
+                       BOOST_LOG_TRIVIAL(debug) << "Cancelling Thread:" << boost::this_thread::get_id() << endl;
+                       return;
+                   }
+               });
+           }
+       }
     void DownloadUtils::cleanup() {
         BOOST_LOG_TRIVIAL(info) << "Cleaning up..." << endl;
         for (string UID : filter->UIDList) {
@@ -593,7 +569,7 @@ namespace BCY {
                 fs::remove_all(UserPath, ec);
                 BOOST_LOG_TRIVIAL(info) << "Removed " << UserPath.string() << endl;
             }
-            
+
             lock_guard<mutex> guard(dbLock);
             Database DB(DBPath,SQLite::OPEN_READWRITE);
             Statement Q(DB, "DELETE FROM WorkInfo WHERE UID=" + UID);
@@ -667,7 +643,7 @@ namespace BCY {
     void DownloadUtils::downloadSearchKeyword(string KW) {
         BOOST_LOG_TRIVIAL(info) << "Iterating Searched Works For Keyword:" << KW << endl;
         auto l = core.search(KW, SearchType::Content, downloadCallback);
-        
+
         BOOST_LOG_TRIVIAL(info) << "Found " << l.size() << " Searched Works For Keyword:" << KW << endl;
     }
     void DownloadUtils::downloadUser(string uid) {
@@ -847,5 +823,5 @@ namespace BCY {
             filter = nullptr;
         }
     }
-    
+
 } // namespace BCY

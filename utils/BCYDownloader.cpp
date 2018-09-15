@@ -31,21 +31,6 @@ static po::positional_options_description pos;
 static json config;
 static string Prefix = "BCYDownloader"; // After Login we replace this with UserName
 
-static string expand_user(string path) {
-    if (not path.empty() and path[0] == '~') {
-        assert(path.size() == 1 or path[1] == '/'); // or other error handling
-        char const *home = getenv("HOME");
-        if (home or ((home = getenv("USERPROFILE")))) {
-            path.replace(0, 1, home);
-        } else {
-            char const *hdrive = getenv("HOMEDRIVE"), *hpath = getenv("HOMEPATH");
-            assert(hdrive); // or other error handling
-            assert(hpath);
-            path.replace(0, 1, std::string(hdrive) + hpath);
-        }
-    }
-    return path;
-}
 void cleanup(int sig) {
     if(DU!=nullptr){
         delete DU;
@@ -434,7 +419,7 @@ int main(int argc, char **argv) {
     po::options_description desc("BCYDownloader Options");
     desc.add_options()
     ("help", "Print Usage")
-    ("config", po::value<string>()->default_value(""),"Initialize Downloader using JSON at provided path")
+    ("config", po::value<string>()->default_value(BCY::expand_user("~/BCY.json")),"Initialize Downloader using JSON at provided path")
     ("i", "Interactive Console")
     ("log-level",po::value<logging::trivial::severity_level>()->default_value(logging::trivial::info),"Log Level")
     ;
