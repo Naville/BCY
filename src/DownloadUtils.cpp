@@ -418,7 +418,7 @@ namespace BCY {
                            fs::exists(a2confPath, ec2));
             
             if (shouldDL) {
-                if (RPCServer == "" || item.find("FileName") != item.end()) {
+                if (RPCServer == "") {
                     if (stop) {
                         return;
                     }
@@ -465,6 +465,13 @@ namespace BCY {
                     string gid = md5(origURL).substr(0, 16);
                     options["gid"] = gid;
                     params.push_back(options);
+                    if(item.find("FileName") != item.end()){
+                        /*
+                         Video URLs have a (very short!) valid time window
+                         so we insert those to the start of download queue
+                        */
+                        params.push_back(1);
+                    }
                     rpcparams["params"] = params;
                     rpcparams["jsonrpc"] = "2.0";
                     rpcparams["id"] = json();
