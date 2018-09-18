@@ -6,7 +6,7 @@ using namespace std;
 using namespace SQLite;
 using namespace nlohmann;
 namespace BCY {
-    BCYDownloadFilter::BCYDownloadFilter(string Path) {
+    DownloadFilter::DownloadFilter(string Path) {
         DBPath=Path;
         Database DB(DBPath,SQLite::OPEN_CREATE||OPEN_READWRITE);
         Statement Q(DB, "SELECT Value FROM PyBCY WHERE Key=\"BCYDownloadFilter\"");
@@ -16,7 +16,7 @@ namespace BCY {
             loadRulesFromJSON(j);
         }
     }
-    BCYDownloadFilter::~BCYDownloadFilter() {
+    DownloadFilter::~DownloadFilter() {
         json j;
         j["UID"] = UIDList;
         j["Work"] = WorkList;
@@ -29,7 +29,7 @@ namespace BCY {
         Q.bind(2, j.dump());
         Q.executeStep();
     }
-    bool BCYDownloadFilter::shouldBlock(json abstract) {
+    bool DownloadFilter::shouldBlock(json abstract) {
         if (find(UIDList.begin(), UIDList.end(), abstract["uid"]) != UIDList.end()) {
             return true;
         }
@@ -63,7 +63,7 @@ namespace BCY {
         }
         return false;
     }
-    void BCYDownloadFilter::loadRulesFromJSON(json rules) {
+    void DownloadFilter::loadRulesFromJSON(json rules) {
         if (rules.find("UID") != rules.end()) {
             vector<string> foo = rules["UID"];
             UIDList.insert(UIDList.end(), foo.begin(), foo.end());

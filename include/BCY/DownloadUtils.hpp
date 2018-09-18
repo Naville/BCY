@@ -14,7 +14,7 @@ namespace BCY {
     class DownloadUtils {
     public:
         Core core;
-        BCYDownloadFilter *filter = nullptr;
+        DownloadFilter *filter = nullptr;
         bool useCachedInfo = true;    // Would be really slow for large databases
         bool allowCompressed = false; // if enabled, downloader will try to use the
         // official API to download compressed

@@ -4,11 +4,11 @@
 #include <SQLiteCpp/SQLiteCpp.h>
 typedef std::function<int(nlohmann::json &)> BCYFilterHandler;
 namespace BCY {
-    class BCYDownloadFilter {
+    class DownloadFilter {
     public:
-        BCYDownloadFilter() = delete;
-        ~BCYDownloadFilter();
-        BCYDownloadFilter(std::string DBPath);
+        DownloadFilter() = delete;
+        ~DownloadFilter();
+        DownloadFilter(std::string DBPath);
         SQLite::Database *DB = nullptr;
         bool shouldBlock(nlohmann::json abstract);
         void loadRulesFromJSON(nlohmann::json rules);
@@ -18,7 +18,7 @@ namespace BCY {
         std::vector<std::string> TagList;
         std::vector<std::string> UserNameList;
         std::vector<std::string> TypeList;
-        
+
     private:
         std::vector<BCYFilterHandler> FilterHandlers;
         std::string DBPath;

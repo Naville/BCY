@@ -66,7 +66,7 @@ namespace BCY {
         DB.exec("CREATE TABLE IF NOT EXISTS Compressed (item_id STRING NOT NULL "
                 "DEFAULT '',UNIQUE(item_id) ON CONFLICT IGNORE)");
         DB.exec("PRAGMA journal_mode=WAL;");
-        filter = new BCYDownloadFilter(DBPath);
+        filter = new DownloadFilter(DBPath);
         // Create Download Temp First
         boost::system::error_code ec;
         fs::path TempPath = fs::path(PathBase) / fs::path("DownloadTemp");
