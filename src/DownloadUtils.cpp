@@ -381,7 +381,7 @@ namespace BCY {
         for (json item : Inf["multi"]) {
             boost::this_thread::interruption_point();
             string URL = item["path"];
-            if(URL.find("http:")!=0){
+            if(URL.find("http")!=0){
                 // Some old API bug that results in rubbish URL in response
                 // Because ByteDance sucks dick
                 continue;
