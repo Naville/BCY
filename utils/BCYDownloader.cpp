@@ -444,7 +444,7 @@ int main(int argc, char **argv) {
         string JSONPath = vm["config"].as<string>();
         ifstream JSONStream(JSONPath);
         if (JSONStream.bad()) {
-            cout << "Failed to Open File!" << endl;
+            cout << "Failed to Open File at:"<<JSONPath<<"!" << endl;
             exit(-1);
         }
         string JSONStr;
