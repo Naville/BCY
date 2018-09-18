@@ -1,6 +1,6 @@
-#include "Core.hpp"
-#include "Base64.h"
-#include "Utils.hpp"
+#include "BCY/Core.hpp"
+#include "BCY/Base64.h"
+#include "BCY/Utils.hpp"
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/regex.hpp>
 #include <boost/regex.hpp>
@@ -113,7 +113,7 @@ namespace BCY {
             payloads.push_back(Pair(K, V));
         }
         for (auto i = 0; i < retry; i++) {
-            
+
             std::lock_guard<std::mutex> guard(sessionLock);
             Sess.SetUrl(URL);
             Sess.SetTimeout(Timeout(timeout));
@@ -412,7 +412,7 @@ namespace BCY {
                 ret.push_back(ele);
             }
         }
-        
+
         return ret;
     }
     json Core::group_detail(string GID) {
@@ -596,7 +596,7 @@ namespace BCY {
         }
         return ret;
     }
-    
+
     vector<json> Core::space_getUserLikeTimeLine(string UID,
                                                  BCYListIteratorCallback callback) {
         vector<json> ret;
@@ -683,7 +683,7 @@ namespace BCY {
         }
         return ret;
     }
-    
+
     vector<json> Core::group_listPosts(string GID,
                                        BCYListIteratorCallback callback) {
         vector<json> ret;

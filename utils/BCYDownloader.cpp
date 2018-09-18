@@ -1,7 +1,7 @@
-#include "Base64.h"
-#include "Core.hpp"
-#include "DownloadUtils.hpp"
-#include "Utils.hpp"
+#include "BCY/Base64.h"
+#include "BCY/Core.hpp"
+#include "BCY/DownloadUtils.hpp"
+#include "BCY/Utils.hpp"
 #include <algorithm>
 #include <boost/log/support/date_time.hpp>
 #include <boost/algorithm/string/trim.hpp>
@@ -12,7 +12,7 @@
 #include <boost/log/utility/setup.hpp>
 #include <fstream>
 #include <random>
-#include "json.hpp"
+#include "BCY/json.hpp"
 using namespace BCY;
 using namespace std::placeholders;
 using namespace std;

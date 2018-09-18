@@ -1,7 +1,7 @@
 #ifndef BCY_DOWNLOADUTILS_HPP
 #define BCY_DOWNLOADUTILS_HPP
-#include "Core.hpp"
-#include "DownloadFilter.hpp"
+#include "BCY/Core.hpp"
+#include "BCY/DownloadFilter.hpp"
 #include <SQLiteCpp/SQLiteCpp.h>
 #define CRYPTOPP_ENABLE_NAMESPACE_WEAK 1
 #include <boost/asio.hpp>
