@@ -290,6 +290,13 @@ namespace BCY {
         if(Title==""){
             Title=ensure_string(Inf["item_id"]);
         }
+        /*
+        Title usually contains UTF8 characters which causes trouble on certain platforms.
+        (I'm looking at you Windowshit)
+        Migrate to item_id based ones
+        */
+
+
         boost::this_thread::interruption_point();
         BOOST_LOG_TRIVIAL(debug) << "Loading Title For:"<<Title<< endl;
         Title = loadTitle(Title, Inf);
@@ -314,9 +321,10 @@ namespace BCY {
         string tmpTitleString = Title;
         replace(tmpTitleString.begin(), tmpTitleString.end(), '/',
                 '-'); // replace all 'x' to 'y'
-        fs::path SavePath = UserPath / fs::path(tmpTitleString);
+        fs::path oldSavePath = UserPath / fs::path(tmpTitleString);
+        fs::path newSavePath = UserPath / fs::path(ensure_string(Inf["item_id"]));
         boost::system::error_code ec;
-        fs::create_directories(SavePath, ec);
+        fs::create_directories(newSavePath, ec);
         if(ec){
             BOOST_LOG_TRIVIAL(error)<<"FileSystem Error: "<<ec.message()<<"@"<<__FILE__<<":"<<__LINE__<<endl;
         }
@@ -408,22 +416,36 @@ namespace BCY {
                 FileName = item["FileName"];
                 origURL = item["path"];
             }
-            fs::path FilePath = SavePath / fs::path(FileName);
-            if (!FilePath.has_extension()) {
-                FilePath.replace_extension(".jpg");
+            fs::path oldFilePath = oldSavePath / fs::path(FileName);
+            fs::path newFilePath = newSavePath / fs::path(FileName);
+            if (!oldFilePath.has_extension()) {
+                oldFilePath.replace_extension(".jpg");
+            }
+            if (!newFilePath.has_extension()) {
+                newFilePath.replace_extension(".jpg");
             }
             boost::system::error_code ec2;
-            auto a2confPath=fs::path(FilePath.string()+".aria2");
-            bool shouldDL=(!fs::exists(FilePath, ec2) ||
-                           fs::exists(a2confPath, ec2));
+            auto olda2confPath=fs::path(oldFilePath.string()+".aria2");
+            auto newa2confPath=fs::path(newFilePath.string()+".aria2");
+
+            if(fs::exists(oldFilePath, ec2)&&!fs::exists(olda2confPath, ec2)){
+              fs::rename(oldFilePath,newFilePath);
+            }
+            else{
+              fs::remove(olda2confPath, ec2);
+              fs::remove(oldFilePath, ec2);
+            }
+
+            bool shouldDL=(!fs::exists(newFilePath, ec2) ||
+                           fs::exists(newa2confPath, ec2));
 
             if (shouldDL) {
                 if (RPCServer == "") {
                     if (stop) {
                         return;
                     }
-                    fs::remove(a2confPath, ec2);
-                    fs::remove(FilePath, ec2);
+                    fs::remove(newa2confPath, ec2);
+                    fs::remove(newFilePath, ec2);
                     boost::asio::post(*downloadThread, [=]() {
                         if (stop) {
                             return;
@@ -440,7 +462,7 @@ namespace BCY {
 #endif
                         } else {
                             boost::this_thread::interruption_point();
-                            ofstream ofs(FilePath.string(), ios::binary);
+                            ofstream ofs(newFilePath.string(), ios::binary);
                             ofs.write(R.text.c_str(), R.text.length());
                             ofs.close();
                             boost::this_thread::interruption_point();
@@ -457,8 +479,8 @@ namespace BCY {
                     }
                     params.push_back(URLs);
                     json options;
-                    options["dir"] = SavePath.string();
-                    options["out"] = FilePath.filename().string();
+                    options["dir"] = newSavePath.string();
+                    options["out"] = newFilePath.filename().string();
                     options["auto-file-renaming"] = "false";
                     options["allow-overwrite"] = "false";
                     options["user-agent"] = "bcy 4.3.2 rv:4.3.2.6146 (iPad; iPhone OS 9.3.3; en_US) Cronet";
