@@ -38,7 +38,7 @@ add_library(BCYDownloadUtils STATIC ${BCYDOWNLOADUTILS_SRC})
 add_executable(BCYDownloader utils/BCYDownloader.cpp)
 
 set_target_properties(BCYCore PROPERTIES PUBLIC_HEADER "${CMAKE_CURRENT_LIST_DIR}/include/BCY/Core.hpp;${CMAKE_CURRENT_LIST_DIR}/include/BCY/Utils.hpp;${CMAKE_CURRENT_LIST_DIR}/include/BCY/Base64.h;${CMAKE_CURRENT_LIST_DIR}/include/BCY/json.hpp")
-target_include_directories(BCYCore PUBLIC ${BOOST_INCLUDE_DIRS} "/usr/local/include/" "/usr/include/" ${CMAKE_CURRENT_LIST_DIR}/include/ ${CPR_INCLUDE_DIRS})
+target_include_directories(BCYCore PUBLIC ${BOOST_INCLUDE_DIRS} ${CMAKE_CURRENT_LIST_DIR}/include/ ${CPR_INCLUDE_DIRS} "/usr/local/include/" "/usr/include/")
 target_link_libraries(BCYCore ${CRYPTOPP_LIB} ${CPR_LIBRARIES} ${Boost_LIBRARIES})
 
 set_target_properties(BCYDownloadUtils PROPERTIES PUBLIC_HEADER "${CMAKE_CURRENT_LIST_DIR}/include/BCY/DownloadFilter.hpp;${CMAKE_CURRENT_LIST_DIR}/include/BCY/DownloadUtils.hpp")

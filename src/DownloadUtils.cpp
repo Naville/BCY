@@ -92,7 +92,7 @@ namespace BCY {
                         core.item_detail(AbstractInfo["item_detail"]["item_id"])["data"];
                         boost::this_thread::interruption_point();
                         try {
-                            downloadFromInfo(detail, true);
+                            downloadFromInfo(detail, true,ensure_string(AbstractInfo["item_detail"]["item_id"]));
                         } catch (boost::thread_interrupted) {
                             BOOST_LOG_TRIVIAL(debug) << "Cancelling Thread:" << boost::this_thread::get_id()
                             << endl;
@@ -100,7 +100,7 @@ namespace BCY {
                         }
                     } else {
                         try {
-                            downloadFromInfo(detail, false);
+                            downloadFromInfo(detail, false,ensure_string(AbstractInfo["item_detail"]["item_id"]));
                         } catch (boost::thread_interrupted) {
                             BOOST_LOG_TRIVIAL(debug) << "Cancelling Thread:" << boost::this_thread::get_id()
                             << endl;
@@ -240,14 +240,22 @@ namespace BCY {
             return json();
         }
     }
-    void DownloadUtils::downloadFromInfo(json Inf, bool save) {
+    void DownloadUtils::downloadFromInfo(json Inf, bool save,string item_id_arg) {
         if (!Inf.is_structured()) {
             BOOST_LOG_TRIVIAL(error)<<Inf.dump()<<" is not valid Detail Info For Downloading"<<endl;
             return;
         }
         string UID = ensure_string(Inf["uid"]);
         // tyvm cunts at ByteDance
-
+        string item_id=ensure_string(Inf["item_id"]);
+        if(item_id==""){
+          if(item_id_arg!=""){
+            item_id=item_id_arg;
+          }
+          else{
+            BOOST_LOG_TRIVIAL(error)<<Inf.dump()<<" doesnt have valid item_id"<<endl;
+          }
+        }
         string Title = "";
         if (Inf.find("title") != Inf.end() && Inf["title"]!="") {
             Title = Inf["title"];
@@ -288,7 +296,7 @@ namespace BCY {
             }
         }
         if(Title==""){
-            Title=ensure_string(Inf["item_id"]);
+            Title=item_id;
         }
         /*
         Title usually contains UTF8 characters which causes trouble on certain platforms.
@@ -302,7 +310,7 @@ namespace BCY {
         Title = loadTitle(Title, Inf);
         boost::this_thread::interruption_point();
         if (Title == "") {
-            Title = ensure_string(Inf["item_id"]);
+            Title = item_id;
         }
         if (save) {
             boost::this_thread::interruption_point();
@@ -550,40 +558,48 @@ namespace BCY {
     }
     void DownloadUtils::verify(string condition,vector<string> args) {
            BOOST_LOG_TRIVIAL(info) << "Verifying..." << endl;
-           vector<json> Infos;
+           map<string,json> Info;
+           vector<string> Keys;
            BOOST_LOG_TRIVIAL(info) << "Collecting Cached Infos" << endl;
            {
                lock_guard<mutex> guard(dbLock);
                Database DB(DBPath,SQLite::OPEN_READONLY);
-               Statement Q(DB, "SELECT Info FROM WorkInfo "+condition);
+               Statement Q(DB, "SELECT item_id,Info FROM WorkInfo "+condition);
                for(auto i=1;i<=args.size();i++){
                  Q.bind(i,args[i-1]);
                }
                while (Q.executeStep()) {
-                   string InfoStr = Q.getColumn(0).getString();
+                  string item_id = Q.getColumn(0).getString();
+                   string InfoStr = Q.getColumn(1).getString();
                    try {
                        json j = json::parse(InfoStr);
-                       Infos.push_back(j);
-                       if (Infos.size() % 1000 == 0) {
-                           BOOST_LOG_TRIVIAL(info) << Infos.size() << " Cache Loaded" << endl;
+                       if(item_id=="0" || item_id==""){
+                         BOOST_LOG_TRIVIAL(error) << InfoStr << " Doesn't Have Valid item_id" << endl;
+                         continue;
+                       }
+                       Info[item_id]=j;
+                       Keys.push_back(item_id);
+                       if (Info.size() % 1000 == 0) {
+                           BOOST_LOG_TRIVIAL(info) << Info.size() << " Cache Loaded" << endl;
                        }
                    } catch (exception &exp) {
                        BOOST_LOG_TRIVIAL(info) << exp.what() << __FILE__ << ":" << __LINE__ << endl;
                    }
                }
            }
-           BOOST_LOG_TRIVIAL(info) << "Found " << Infos.size() << " Cached Info" << endl;
-           for (int i = 0; i < Infos.size(); i++) {
-               json &j = Infos[i];
+           BOOST_LOG_TRIVIAL(info) << "Found " << Info.size() << " Cached Info" << endl;
+           for (int i = 0; i < Keys.size(); i++) {
+                string K=Keys[i];
+               json &j = Info[K];
                if (i % 1000 == 0) {
-                   BOOST_LOG_TRIVIAL(info) << "Remaining Caches to Process:" << Infos.size() - i << endl;
+                   BOOST_LOG_TRIVIAL(info) << "Remaining Caches to Process:" << Info.size() - i << endl;
                }
                boost::asio::post(*queryThread, [=]() {
                    if (stop) {
                        return;
                    }
                    try {
-                       downloadFromInfo(j,false);
+                       downloadFromInfo(j,false,K);
                    } catch (boost::thread_interrupted) {
                        BOOST_LOG_TRIVIAL(debug) << "Cancelling Thread:" << boost::this_thread::get_id() << endl;
                        return;
@@ -623,12 +639,16 @@ namespace BCY {
             BOOST_LOG_TRIVIAL(info) << "Cleaning up Tag:" << Tag << endl;
             lock_guard<mutex> guard(dbLock);
             Database DB(DBPath,SQLite::OPEN_READWRITE);
-            Statement Q(DB, "SELECT UID,Title,Info FROM WorkInfo WHERE Tags Like ?");
+            Statement Q(DB, "SELECT UID,Title,Info,item_id FROM WorkInfo WHERE Tags Like ?");
             Q.bind(1, "%%\"" + Tag + "\"%%");
             while (Q.executeStep()) {
                 string UID = Q.getColumn(0).getString();
                 string Title = Q.getColumn(1).getString();
                 string Info = Q.getColumn(2).getString();
+                string item_id=Q.getColumn(3).getString();
+                if(item_id=="" || item_id=="0"){
+                  continue;
+                }
                 Infos.push_back(Info);
                 string tmp = UID;
                 while (tmp.length() < 3) {
@@ -638,7 +658,7 @@ namespace BCY {
                 string L2Path = string(1, tmp[1]);
                 boost::system::error_code ec;
                 fs::path UserPath = fs::path(saveRoot) / fs::path(L1Path) /
-                fs::path(L2Path) / fs::path(UID) / fs::path(Title);
+                fs::path(L2Path) / fs::path(UID) / fs::path(item_id);
                 bool isDirec=is_directory(UserPath, ec);
                 if(ec){
                     BOOST_LOG_TRIVIAL(error)<<"FileSystem Error: "<<ec.message()<<"@"<<__FILE__<<":"<<__LINE__<<endl;
@@ -772,14 +792,14 @@ namespace BCY {
                     detail = detail["data"];
                 }
                 try {
-                    downloadFromInfo(detail, true);
+                    downloadFromInfo(detail, true,item_id);
                 } catch (boost::thread_interrupted) {
                     BOOST_LOG_TRIVIAL(debug) << "Cancelling Thread:" << boost::this_thread::get_id() << endl;
                     return ;
                 }
             } else {
                 try {
-                    downloadFromInfo(detail, false);
+                    downloadFromInfo(detail, false,item_id);
                 } catch (boost::thread_interrupted) {
                     BOOST_LOG_TRIVIAL(debug) << "Cancelling Thread:" << boost::this_thread::get_id() << endl;
                     return;

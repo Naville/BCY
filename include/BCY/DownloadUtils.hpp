@@ -28,7 +28,8 @@ namespace BCY {
         DownloadUtils(std::string PathBase, int queryThreadCount = -1,
                       int downloadThreadCount = -1,std::string DBPath=""); //-1 to use hardware thread count
         void downloadFromAbstractInfo(nlohmann::json Inf);
-        void downloadFromInfo(nlohmann::json Inf, bool save = true);
+        void downloadFromInfo(nlohmann::json Inf, bool save = true,std::string item_id_arg="");
+        //Will try to extract item_id from info first, if not it loads from the argument,if still invalid an error is displayed and download cancelled
         std::string loadTitle(std::string title, nlohmann::json Inf);
         void saveInfo(std::string title, nlohmann::json Inf);
         nlohmann::json loadInfo(std::string item_id);
