@@ -298,6 +298,7 @@ namespace BCY {
         if(Title==""){
             Title=item_id;
         }
+        Title=loadTitle(Title, Inf);
         /*
         Title usually contains UTF8 characters which causes trouble on certain platforms.
         (I'm looking at you Windowshit)
@@ -307,11 +308,7 @@ namespace BCY {
 
         boost::this_thread::interruption_point();
         BOOST_LOG_TRIVIAL(debug) << "Loading Title For:"<<Title<< endl;
-        Title = loadTitle(Title, Inf);
         boost::this_thread::interruption_point();
-        if (Title == "") {
-            Title = item_id;
-        }
         if (save) {
             boost::this_thread::interruption_point();
             BOOST_LOG_TRIVIAL(debug) << "Saving Info For: "<<Title<< endl;
@@ -330,7 +327,7 @@ namespace BCY {
         replace(tmpTitleString.begin(), tmpTitleString.end(), '/',
                 '-'); // replace all 'x' to 'y'
         fs::path oldSavePath = UserPath / fs::path(tmpTitleString);
-        fs::path newSavePath = UserPath / fs::path(ensure_string(Inf["item_id"]));
+        fs::path newSavePath = UserPath / fs::path(item_id);
         boost::system::error_code ec;
         fs::create_directories(newSavePath, ec);
         if(ec){
