@@ -526,11 +526,11 @@ namespace BCY {
         }
 
     }
-    void DownloadUtils::verifyUID(string UID){
-        verify("WHERE uid=?",{UID});
+    void DownloadUtils::verifyUID(string UID,bool reverse){
+        verify("WHERE uid=?",{UID},reverse);
     }
-    void DownloadUtils::verifyTag(string Tag){
-        verify("WHERE Tags LIKE ?",{"%"+Tag+"%"});
+    void DownloadUtils::verifyTag(string Tag,bool reverse){
+        verify("WHERE Tags LIKE ?",{"%"+Tag+"%"},reverse);
     }
     void DownloadUtils::unlikeCached(){
       vector<json> Liked = core.space_getUserLikeTimeLine(core.UID);
@@ -553,7 +553,7 @@ namespace BCY {
       BOOST_LOG_TRIVIAL(info) << "Joining Unlike Threads\n";
       t->join();
     }
-    void DownloadUtils::verify(string condition,vector<string> args) {
+    void DownloadUtils::verify(string condition,vector<string> args,bool reverse) {
            BOOST_LOG_TRIVIAL(info) << "Verifying..." << endl;
            map<string,json> Info;
            vector<string> Keys;
@@ -585,24 +585,48 @@ namespace BCY {
                }
            }
            BOOST_LOG_TRIVIAL(info) << "Found " << Info.size() << " Cached Info" << endl;
-           for (int i = 0; i < Keys.size(); i++) {
-                string K=Keys[i];
-               json &j = Info[K];
-               if (i % 1000 == 0) {
-                   BOOST_LOG_TRIVIAL(info) << "Remaining Caches to Process:" << Info.size() - i << endl;
-               }
-               boost::asio::post(*queryThread, [=]() {
-                   if (stop) {
-                       return;
-                   }
-                   try {
-                       downloadFromInfo(j,false,K);
-                   } catch (boost::thread_interrupted) {
-                       BOOST_LOG_TRIVIAL(debug) << "Cancelling Thread:" << boost::this_thread::get_id() << endl;
-                       return;
-                   }
-               });
+           if(reverse==false){
+             for (int i = 0; i < Keys.size(); i++) {
+                  string K=Keys[i];
+                 json &j = Info[K];
+                 if (i % 1000 == 0) {
+                     BOOST_LOG_TRIVIAL(info) << "Remaining Caches to Process:" << Info.size() - i << endl;
+                 }
+                 boost::asio::post(*queryThread, [=]() {
+                     if (stop) {
+                         return;
+                     }
+                     try {
+                         downloadFromInfo(j,false,K);
+                     } catch (boost::thread_interrupted) {
+                         BOOST_LOG_TRIVIAL(debug) << "Cancelling Thread:" << boost::this_thread::get_id() << endl;
+                         return;
+                     }
+                 });
+             }
            }
+           else{
+             for (int i = Keys.size()-1; i >= 0; i--) {
+                  string K=Keys[i];
+                 json &j = Info[K];
+                 if (i % 1000 == 0) {
+                     BOOST_LOG_TRIVIAL(info) << "Remaining Caches to Process:" << i << endl;
+                 }
+                 boost::asio::post(*queryThread, [=]() {
+                     if (stop) {
+                         return;
+                     }
+                     try {
+                         downloadFromInfo(j,false,K);
+                     } catch (boost::thread_interrupted) {
+                         BOOST_LOG_TRIVIAL(debug) << "Cancelling Thread:" << boost::this_thread::get_id() << endl;
+                         return;
+                     }
+                 });
+             }
+           }
+
+
        }
     void DownloadUtils::cleanup() {
         BOOST_LOG_TRIVIAL(info) << "Cleaning up..." << endl;
