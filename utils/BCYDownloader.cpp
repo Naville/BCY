@@ -300,12 +300,12 @@ void Init() {
   handlerMsgs["join"] = "Usage:Join\nDescription: Join all working threads";
   handlers["verifyuid"] = verifyUIDHandle;
   handlerMsgs["verifyuid"] =
-      "Usage:verifyUID UID\nDescription: Verify Work By UID";
+      "Usage:verifyUID UID [ReverseVerify(true/false)]\nDescription: Verify Work By UID";
   handlers["verifytag"] = verifyTagHandle;
   handlerMsgs["verifytag"] =
-      "Usage:verifyTag TagName\nDescription: Verify Work By TagName";
+      "Usage:verifyTag TagName [ReverseVerify(true/false)]\nDescription: Verify Work By TagName";
   handlers["verify"] = verifyHandle;
-  handlerMsgs["verify"] = "Usage: verify \nDescription: Verify All Cached Info";
+  handlerMsgs["verify"] = "Usage: verify [ReverseVerify(true/false)]\nDescription: Verify All Cached Info";
   handlers["work"] = workHandle;
   handlerMsgs["work"] =
       "Usage:Work WorkID\nDescription: Download WorkCircle By WorkID";

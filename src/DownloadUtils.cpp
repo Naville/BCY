@@ -552,6 +552,7 @@ namespace BCY {
       }
       BOOST_LOG_TRIVIAL(info) << "Joining Unlike Threads\n";
       t->join();
+      delete t;
     }
     void DownloadUtils::verify(string condition,vector<string> args,bool reverse) {
            BOOST_LOG_TRIVIAL(info) << "Verifying..." << endl;
