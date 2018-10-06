@@ -412,8 +412,8 @@ void Interactive() {
     }
     try {
       vector<string> commands = ParseCommand(command);
-      if (commands[0] == "init") {
-        handlers["init"](commands);
+      if (commands[0] == "init"||commands[0] == "help") {
+        handlers[commands[0]](commands);
       } else if (handlers.find(commands[0]) != handlers.end()) {
         if (DU == nullptr) {
           cout << "You need to initialze the downloader first" << endl;
@@ -422,7 +422,7 @@ void Interactive() {
           fn(commands);
         }
       } else {
-        handlers["help"](vector<string>());
+        cout<<"Unrecognized Command. Type help for a command list."<<endl;
       }
     } catch (const std::exception &exc) {
       cout << "Exception:" << exc.what() << endl;
@@ -528,7 +528,6 @@ int main(int argc, char **argv) {
         DU->addTypeFilter(F);
       }
     }
-
     if (config.find("aria2") != config.end()) {
       if (config["aria2"].find("secret") != config["aria2"].end()) {
         DU->secret = config["aria2"]["secret"];
@@ -555,7 +554,6 @@ int main(int argc, char **argv) {
   }
   if (vm.count("i") || DU == nullptr) {
     Interactive();
-    return 0;
   } else {
     JSONMode();
   }
