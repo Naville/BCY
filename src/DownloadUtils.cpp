@@ -369,14 +369,19 @@ namespace BCY {
                     videoID = K;
                 }
             }
-            //
-            string URL = "";
-            Base64::Decode(videoList[videoID]["main_url"], &URL);
-            string FileName = vid + ".mp4";
-            json j;
-            j["path"] = URL;
-            j["FileName"] = FileName;
-            Inf["multi"].push_back(j);
+            if(videoList.size()>0){
+            // Videos needs to be manually reviewed before playable
+                string URL = "";
+                Base64::Decode(videoList[videoID]["main_url"], &URL);
+                string FileName = vid + ".mp4";
+                json j;
+                j["path"] = URL;
+                j["FileName"] = FileName;
+                Inf["multi"].push_back(j);
+            }
+            else{
+                BOOST_LOG_TRIVIAL(info) <<item_id<< " hasn't been reviewed yet and thus not downloadable"<<endl;
+            }
         }
 
         bool isCompressedInfo = false;
