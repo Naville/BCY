@@ -5,12 +5,6 @@
 #include "BCY/DownloadUtils.hpp"
 #include "BCY/Utils.hpp"
 #include "BCY/json.hpp"
-extern "C" {
-#endif
-
-
-
-
-#ifdef __cplusplus
-}
+#else
+#error "BCY++ is a C++ Library!"
 #endif

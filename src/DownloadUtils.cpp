@@ -152,7 +152,7 @@ namespace BCY {
         lock_guard<mutex> guard(dbLock);
         Database DB(DBPath,OPEN_READONLY);
         Statement Q(DB, query.str());
-        for (int i = 0; i < keys.size(); i++) {
+        for (auto i = 0; i < keys.size(); i++) {
             Q.bind(i + 1, vals[i]);
         }
         boost::this_thread::interruption_point();
@@ -205,7 +205,7 @@ namespace BCY {
         lock_guard<mutex> guard(dbLock);
         Database DB(DBPath,SQLite::OPEN_READWRITE);
         Statement Q(DB, query.str());
-        for (int i = 0; i < tmps.size(); i++) {
+        for (auto i = 0; i < tmps.size(); i++) {
             Q.bind(i + 1, vals[i]);
         }
         boost::this_thread::interruption_point();
@@ -592,7 +592,7 @@ namespace BCY {
            }
            BOOST_LOG_TRIVIAL(info) << "Found " << Info.size() << " Cached Info" << endl;
            if(reverse==false){
-             for (int i = 0; i < Keys.size(); i++) {
+             for (auto i = 0; i < Keys.size(); i++) {
                   string K=Keys[i];
                  json &j = Info[K];
                  if (i % 1000 == 0) {
