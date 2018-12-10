@@ -101,8 +101,15 @@ void Init() {
         while (commands.size() < 4) {
           commands.push_back("16");
         }
-        DU = new DownloadUtils(commands[1], stoi(commands[2]),
-                               stoi(commands[3]));
+        try{
+          DU = new DownloadUtils(commands[1], stoi(commands[2]),
+                                 stoi(commands[3]));
+        }
+        catch(const SQLite::Exception& ex){
+          cout<<"Database Error:"<<ex.getErrorStr()<<endl<<"Error Code:"<<ex.getErrorCode()<<endl<<"Extended Error Code:"<<ex.getExtendedErrorCode()<<endl;
+          abort();
+        }
+
         signal(SIGINT, cleanup);
       }
     } else {
@@ -511,8 +518,14 @@ int main(int argc, char **argv) {
     if (config.find("DownloadCount") != config.end()) {
       downloadThreadCount = config["DownloadCount"];
     }
-    DU = new DownloadUtils(config["SaveBase"], queryThreadCount,
+    try{
+      DU = new DownloadUtils(config["SaveBase"], queryThreadCount,
                            downloadThreadCount);
+    }
+    catch(const SQLite::Exception& ex){
+      cout<<"Database Error:"<<ex.getErrorStr()<<endl<<"Error Code:"<<ex.getErrorCode()<<endl<<"Extended Error Code:"<<ex.getExtendedErrorCode()<<endl;
+      abort();
+    }
     signal(SIGINT, cleanup);
     atexit(cleanup2);
 

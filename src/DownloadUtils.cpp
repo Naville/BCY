@@ -7,6 +7,12 @@
 #include <boost/thread.hpp>
 #include <boost/log/trivial.hpp>
 #include <boost/lockfree/stack.hpp>
+#ifdef __APPLE__
+#define BOOST_STACKTRACE_GNU_SOURCE_NOT_REQUIRED
+#include <boost/stacktrace.hpp>
+#include <boost/exception/all.hpp>
+typedef boost::error_info<struct tag_stacktrace, boost::stacktrace::stacktrace> traced;
+#endif
 using namespace cpr;
 using namespace CryptoPP;
 namespace fs = boost::filesystem;
@@ -84,12 +90,12 @@ namespace BCY {
             try {
                 if (!filter->shouldBlock(AbstractInfo["item_detail"])) {
                     boost::this_thread::interruption_point();
-                    json detail = loadInfo(AbstractInfo["item_detail"]["item_id"]);
+                    json detail = loadInfo(ensure_string(AbstractInfo["item_detail"]["item_id"]));
                     boost::this_thread::interruption_point();
                     if (detail.is_null()) {
                         boost::this_thread::interruption_point();
                         detail =
-                        core.item_detail(AbstractInfo["item_detail"]["item_id"])["data"];
+                        core.item_detail(ensure_string(AbstractInfo["item_detail"]["item_id"]))["data"];
                         boost::this_thread::interruption_point();
                         try {
                             downloadFromInfo(detail, true,ensure_string(AbstractInfo["item_detail"]["item_id"]));
@@ -111,6 +117,12 @@ namespace BCY {
             } catch (exception &exp) {
                 BOOST_LOG_TRIVIAL(error) << exp.what() << __FILE__ << ":" << __LINE__ << endl
                 << AbstractInfo.dump() << endl;
+#ifdef __APPLE__
+                const boost::stacktrace::stacktrace* st = boost::get_error_info<traced>(exp);
+                if (st) {
+                    std::cerr << *st << '\n';
+                }
+#endif
             }
         });
     }
@@ -587,6 +599,12 @@ namespace BCY {
                        }
                    } catch (exception &exp) {
                        BOOST_LOG_TRIVIAL(info) << exp.what() << __FILE__ << ":" << __LINE__ << endl;
+#ifdef __APPLE__
+                       const boost::stacktrace::stacktrace* st = boost::get_error_info<traced>(exp);
+                       if (st) {
+                           std::cerr << *st << '\n';
+                       }
+#endif
                    }
                }
            }
