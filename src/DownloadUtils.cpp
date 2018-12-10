@@ -399,7 +399,7 @@ namespace BCY {
         bool isCompressedInfo = false;
         if (allowCompressed && Inf.find("item_id") != Inf.end() &&
             Inf.find("type") != Inf.end()) {
-            string item_id = Inf["item_id"];
+            string item_id = ensure_string(Inf["item_id"]);
             json covers = core.image_postCover(item_id, Inf["type"])["data"];
             if (!covers.is_null() && covers.find("multi") != covers.end()) {
                 Inf["multi"] = covers["multi"];
@@ -554,7 +554,7 @@ namespace BCY {
       BOOST_LOG_TRIVIAL(info) << "Found " << Liked.size() << " Liked Works" << endl;
       thread_pool *t = new thread_pool(16);
       for (json j : Liked) {
-        string item_id = j["item_detail"]["item_id"];
+        string item_id = ensure_string(j["item_detail"]["item_id"]);
         boost::asio::post(*t, [=] {
           if (!loadInfo(item_id).is_null()) {
             if (core.item_cancelPostLike(item_id)) {
