@@ -243,6 +243,14 @@ namespace BCY {
             BOOST_LOG_TRIVIAL(error)<<Inf.dump()<<" is not valid Detail Info For Downloading"<<endl;
             return;
         }
+
+        if(item_id_arg!=""){
+          // Not Called by the AbstractInfo Worker
+          // Need to run our own filter process
+          if(filter->shouldBlock(Inf)){
+            return;
+          }
+        }
         string UID = ensure_string(Inf["uid"]);
         // tyvm cunts at ByteDance
         string item_id=ensure_string(Inf["item_id"]);
