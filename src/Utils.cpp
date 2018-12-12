@@ -7,6 +7,7 @@
 #include <sstream>
 #include "BCY/json.hpp"
 using namespace std;
+using namespace nlohmann;
 string BCY::string_to_hex(const string &input) {
     static const char *const lut = "0123456789abcdef";
     size_t len = input.length();
@@ -19,6 +20,20 @@ string BCY::string_to_hex(const string &input) {
         output.push_back(lut[c & 15]);
     }
     return output;
+}
+string BCY::ensure_string(json foo) {
+    if (foo.is_string()) {
+        return foo;
+    } else if (foo.is_number()) {
+        long long num = foo;
+        return to_string(num);
+    }
+    else if (foo.is_null()) {
+        return "";
+    }
+    else {
+        throw std::invalid_argument(foo.dump()+" Can't Be Converted to String");
+    }
 }
 string BCY::generateRandomString(string alphabet, size_t length) {
     stringstream ss;

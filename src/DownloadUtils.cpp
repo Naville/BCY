@@ -24,20 +24,6 @@ namespace keywords = boost::log::keywords;
 namespace expr = boost::log::expressions;
 static const vector<string> InfoKeys = {"item_id", "uid"};
 namespace BCY {
-    static string ensure_string(json foo) {
-        if (foo.is_string()) {
-            return foo;
-        } else if (foo.is_number()) {
-            long long num = foo;
-            return to_string(num);
-        }
-        else if (foo.is_null()) {
-            return "";
-        }
-        else {
-            throw std::invalid_argument(foo.dump()+" Can't Be Converted to String");
-        }
-    }
     DownloadUtils::DownloadUtils(string PathBase, int queryThreadCount,
                                  int downloadThreadCount,string Path) {
 

@@ -7,6 +7,7 @@ namespace BCY {
 std::string string_to_hex(const std::string &input);
 std::string generateRandomString(std::string alphabet, size_t length);
 std::string expand_user(std::string path);
+std::string ensure_string(nlohmann::json foo);
 template <typename InputIt>
 std::string join(InputIt begin, InputIt end,
                  const std::string &separator = ", ", // see 1.

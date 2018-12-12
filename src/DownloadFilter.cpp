@@ -1,7 +1,10 @@
 #include "BCY/DownloadFilter.hpp"
+#include "BCY/Utils.hpp"
 #include <algorithm>
 #include <fstream>
 #include <regex>
+#include <iostream>
+#include <boost/log/trivial.hpp>
 using namespace std;
 using namespace SQLite;
 using namespace nlohmann;
@@ -30,13 +33,20 @@ namespace BCY {
         Q.executeStep();
     }
     bool DownloadFilter::shouldBlock(json abstract) {
+        string item_id="null";
+        if(abstract.find("item_id")!=abstract.end()){
+            item_id=ensure_string(abstract["item_id"]);
+        }
+        
         if (find(UIDList.begin(), UIDList.end(), abstract["uid"]) != UIDList.end()) {
+            BOOST_LOG_TRIVIAL(debug)<<item_id<<" Blocked By UID Rule:"<<abstract["uid"]<<endl;
             return true;
         }
         if (abstract.find("post_tags") != abstract.end()) {
             for (json &j : abstract["post_tags"]) {
                 string tagName = j["tag_name"];
                 if (find(TagList.begin(), TagList.end(), tagName) != TagList.end()) {
+                    BOOST_LOG_TRIVIAL(debug)<<item_id<<" Blocked By Tag Rule:"<<tagName<<endl;
                     return true;
                 }
             }
@@ -46,6 +56,7 @@ namespace BCY {
                 smatch match;
                 string foo = abstract["work"];
                 if (regex_search(foo, match, regex(name)) && match.size() >= 1) {
+                    BOOST_LOG_TRIVIAL(debug)<<item_id<<" Blocked By Regex Work Rule:"<<name<<endl;
                     return true;
                 }
             }
@@ -54,11 +65,13 @@ namespace BCY {
             smatch match;
             string foo = abstract["profile"]["uname"];
             if (regex_search(foo, match, regex(name)) && match.size() >= 1) {
+                BOOST_LOG_TRIVIAL(debug)<<item_id<<" Blocked By Regex UserName Rule:"<<name<<endl;
                 return true;
             }
         }
         if (find(TypeList.begin(), TypeList.end(), abstract["type"]) !=
             TypeList.end()) {
+            BOOST_LOG_TRIVIAL(debug)<<item_id<<" Blocked Due to its type:"<<ensure_string(abstract["type"])<<endl;
             return true;
         }
         return false;
