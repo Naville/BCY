@@ -660,9 +660,6 @@ namespace BCY {
             fs::path UserPath = fs::path(saveRoot) / fs::path(L1Path) /
             fs::path(L2Path) / fs::path(UID);
             bool isDirec=is_directory(UserPath, ec);
-            if(ec){
-                BOOST_LOG_TRIVIAL(error)<<"FileSystem Error: "<<ec.message()<<endl;
-            }
             if (isDirec) {
                 fs::remove_all(UserPath, ec);
                 BOOST_LOG_TRIVIAL(info) << "Removed " << UserPath.string() << endl;
@@ -699,9 +696,6 @@ namespace BCY {
                 fs::path UserPath = fs::path(saveRoot) / fs::path(L1Path) /
                 fs::path(L2Path) / fs::path(UID) / fs::path(item_id);
                 bool isDirec=is_directory(UserPath, ec);
-                if(ec){
-                    BOOST_LOG_TRIVIAL(error)<<"FileSystem Error: "<<ec.message()<<"@"<<__FILE__<<":"<<__LINE__<<endl;
-                }
                 if (isDirec) {
                     fs::remove_all(UserPath, ec);
                     if(ec){
@@ -715,7 +709,7 @@ namespace BCY {
         }
         BOOST_LOG_TRIVIAL(info) << "Cleaning up Remaining " << Infos.size() << " Info from Database"
         << endl;
-        int i = 0;
+        /*int i = 0;
         for (string Info : Infos) {
             if ((i++) % 100 == 0) {
                 BOOST_LOG_TRIVIAL(info) << "Remaining " << Infos.size() - i
@@ -726,7 +720,7 @@ namespace BCY {
             Statement Q(DB, "DELETE FROM WorkInfo WHERE Info=?");
             Q.bind(1, Info);
             Q.executeStep();
-        }
+        }*/
     }
     string DownloadUtils::md5(string &str) {
         string digest;
