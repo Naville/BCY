@@ -21,23 +21,25 @@ static const vector<string> VideoCDNURLs = {
 namespace BCY {
     Core::Core() {
         string alp = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-        Params = Parameters{{"version_code", "4.3.2"},
+        string width=generateRandomString("1234567890", 4);
+        string height=generateRandomString("1234567890", 4);
+        Params = Parameters{{"version_code", "4.4.1"},
             {"mix_mode", "1"},
             {"account_sdk_source", "app"},
             {"language", "en-US"},
             {"channel", "App Store"},
-            {"resolution", "2880*1800"},
+            {"resolution", width+"*"+height},
             {"aid", "1250"},
-            {"screen_width", "2880"},
+            {"screen_width", width},
             {"os_api", "18"},
             {"ac", "WIFI"},
-            {"os_version", "16.0.0"},
+            {"os_version", "19.0.0"},
             {"device_platform", "iphone"},
             {"device_type", "iPhone14,5"},
             {"vid", ""},
             {"device_id", generateRandomString("1234567890", 11)},
             {"openudid", generateRandomString(alp, 40)},
-            {"idfa", ""}};
+            {"idfa", generateRandomString(alp, 40)}};
         Sess.SetHeader(Header{
             {"User-Agent",
                 "bcy 4.3.2 rv:4.3.2.6146 (iPad; iPhone OS 9.3.3; en_US) Cronet"}});

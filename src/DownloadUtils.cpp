@@ -499,7 +499,7 @@ namespace BCY {
                     options["out"] = newFilePath.filename().string();
                     options["auto-file-renaming"] = "false";
                     options["allow-overwrite"] = "false";
-                    options["user-agent"] = "bcy 4.3.2 rv:4.3.2.6146 (iPad; iPhone OS 9.3.3; en_US) Cronet";
+                    //options["user-agent"] = "bcy 4.3.2 rv:4.3.2.6146 (iPad; iPhone OS 9.3.3; en_US) Cronet";
                     string gid = md5(origURL).substr(0, 16);
                     options["gid"] = gid;
                     params.push_back(options);
