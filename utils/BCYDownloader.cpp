@@ -4,7 +4,7 @@
 #include "BCY/Utils.hpp"
 #include "BCY/json.hpp"
 #include <algorithm>
-#include <boost/algorithm/string/trim.hpp>
+#include <boost/algorithm/string.hpp>
 #include <boost/log/core.hpp>
 #include <boost/log/expressions.hpp>
 #include <boost/log/support/date_time.hpp>
@@ -34,6 +34,7 @@ static string Prefix =
 typedef std::function<void(vector<string>)> commHandle;
 static map<string, commHandle> handlers;
 static map<string, string> handlerMsgs;
+
 void JSONMode();
 void cleanup(int sig) {
   if (DU != nullptr) {
@@ -101,12 +102,13 @@ void Init() {
         while (commands.size() < 4) {
           commands.push_back("16");
         }
-        try{
+        try {
           DU = new DownloadUtils(commands[1], stoi(commands[2]),
                                  stoi(commands[3]));
-        }
-        catch(const SQLite::Exception& ex){
-          cout<<"Database Error:"<<ex.getErrorStr()<<endl<<"Error Code:"<<ex.getErrorCode()<<endl<<"Extended Error Code:"<<ex.getExtendedErrorCode()<<endl;
+        } catch (const SQLite::Exception &ex) {
+          cout << "Database Error:" << ex.getErrorStr() << endl
+               << "Error Code:" << ex.getErrorCode() << endl
+               << "Extended Error Code:" << ex.getExtendedErrorCode() << endl;
           abort();
         }
 
@@ -216,7 +218,7 @@ void Init() {
       if (tmp == "false") {
         DU->verify();
       } else if (tmp == "true") {
-        DU->verify("",{},true);
+        DU->verify("", {}, true);
       } else {
         cout << "Invalid Argument" << endl;
       }
@@ -270,6 +272,25 @@ void Init() {
     }
     cout << DU->core.user_follow(commands[1], false) << endl;
   };
+  commHandle blockHandle = [=](vector<string> commands) {
+    if (commands.size() != 3) {
+      cout << "Invalid Argument" << endl;
+      return;
+    }
+    string type = commands[1];
+    string arg = commands[2];
+    transform(type.begin(), type.end(), type.begin(), ::tolower);
+    if (type == "uid") {
+      if (arg.find_first_not_of("0123456789") == std::string::npos) {
+        DU->filter->UIDList.push_back(arg);
+        DU->cleanUID(arg);
+      } else {
+        cout << "UID contains non alphanumerical character" << endl;
+      }
+    } else {
+      cout << "Unimplemented Op Type:" << type << endl;
+    }
+  };
   handlers["quit"] = quitHandle;
   handlerMsgs["quit"] = "Cancel Pending Queries And Quit";
   handlers["process"] = processHandle;
@@ -307,12 +328,16 @@ void Init() {
   handlerMsgs["join"] = "Usage:Join\nDescription: Join all working threads";
   handlers["verifyuid"] = verifyUIDHandle;
   handlerMsgs["verifyuid"] =
-      "Usage:verifyUID UID [ReverseVerify(true/false)]\nDescription: Verify Work By UID";
+      "Usage:verifyUID UID [ReverseVerify(true/false)]\nDescription: Verify "
+      "Work By UID";
   handlers["verifytag"] = verifyTagHandle;
   handlerMsgs["verifytag"] =
-      "Usage:verifyTag TagName [ReverseVerify(true/false)]\nDescription: Verify Work By TagName";
+      "Usage:verifyTag TagName [ReverseVerify(true/false)]\nDescription: "
+      "Verify Work By TagName";
   handlers["verify"] = verifyHandle;
-  handlerMsgs["verify"] = "Usage: verify [ReverseVerify(true/false)]\nDescription: Verify All Cached Info";
+  handlerMsgs["verify"] =
+      "Usage: verify [ReverseVerify(true/false)]\nDescription: Verify All "
+      "Cached Info";
   handlers["work"] = workHandle;
   handlerMsgs["work"] =
       "Usage:Work WorkID\nDescription: Download WorkCircle By WorkID";
@@ -334,6 +359,10 @@ void Init() {
   handlerMsgs["follow"] = "Usage:follow UID\nDescription: Follow UID";
   handlers["unfollow"] = unfollowHandle;
   handlerMsgs["unfollow"] = "Usage:unfollow UID\nDescription: Unfollow UID";
+  handlers["block"] = blockHandle;
+  handlerMsgs["block"] =
+      "Usage:block OPType Arg\nDescription: Add specified argument to Filters "
+      "and cleanup local data. Currently only UID is supported";
 }
 
 vector<string> ParseCommand(string Input) {
@@ -419,7 +448,7 @@ void Interactive() {
     }
     try {
       vector<string> commands = ParseCommand(command);
-      if (commands[0] == "init"||commands[0] == "help") {
+      if (commands[0] == "init" || commands[0] == "help") {
         handlers[commands[0]](commands);
       } else if (handlers.find(commands[0]) != handlers.end()) {
         if (DU == nullptr) {
@@ -429,7 +458,7 @@ void Interactive() {
           fn(commands);
         }
       } else {
-        cout<<"Unrecognized Command. Type help for a command list."<<endl;
+        cout << "Unrecognized Command. Type help for a command list." << endl;
       }
     } catch (const std::exception &exc) {
       cout << "Exception:" << exc.what() << endl;
@@ -460,6 +489,7 @@ std::istream &operator>>(std::istream &in,
 }
 int main(int argc, char **argv) {
   Init();
+#warning BCYDownloader currently doesnt handle funny characters like ,.@ or escaping quotes well, please avoid using them in strange places
   logging::add_common_attributes();
   po::options_description desc("BCYDownloader Options");
   desc.add_options()("help", "Print Usage")(
@@ -470,7 +500,32 @@ int main(int argc, char **argv) {
       "log-level",
       po::value<logging::trivial::severity_level>()->default_value(
           logging::trivial::info),
-      "Log Level");
+      "Log Level")("HTTPProxy", po::value<string>(),
+                   "HTTP Proxy")("Circles", po::value<string>(),
+                                 "CircleIDs to Download, Seperated by comma")(
+      "Compress", "Enable Downloading Compressed Images")(
+      "DownloadCount", po::value<int>()->default_value(16),
+      "Download Thread Count")(
+      "QueryCount", po::value<int>()->default_value(16), "Query Thread Count")(
+      "Filters", po::value<string>(), "Type Filters Seperated by comma")(
+      "Follows", po::value<string>(),
+      "Download Liked Works of these UIDs, Seperated by comma")(
+      "Groups", po::value<string>(),
+      "Download Groups By GID, Seperated by comma")(
+      "SaveBase", po::value<string>(),
+      "SaveBase Directory Path")("Searches", po::value<string>(),
+                                 "Keywords to Search, Seperated by comma")(
+      "Tags", po::value<string>(), "Keywords to Download, Seperated by comma")(
+      "UseCache", "Enable usage of cached WorkInfo")(
+      "Users", po::value<string>(),
+      "Download Works From these UIDs, Seperated by comma")(
+      "Verify", "Verify everything in the database is downloaded")(
+      "Works", po::value<string>(),
+      "Download Liked Works of these WorkIDs, Seperated by comma")(
+      "aria2", po::value<string>(),
+      "Aria2 RPC Server. Format: RPCURL[@RPCTOKEN]")(
+      "email", po::value<string>(), "BCY Account email")(
+      "password", po::value<string>(), "BCY Account password");
   try {
     po::store(
         po::command_line_parser(argc, argv).options(desc).positional(pos).run(),
@@ -509,21 +564,103 @@ int main(int argc, char **argv) {
     JSONStream.seekg(0, ios::beg);
     JSONStr.assign((istreambuf_iterator<char>(JSONStream)),
                    istreambuf_iterator<char>());
-    config = json::parse(JSONStr);
-    int queryThreadCount = 32;
-    int downloadThreadCount = 64;
-    if (config.find("QueryCount") != config.end()) {
-      queryThreadCount = config["QueryCount"];
+    json conf = json::parse(JSONStr);
+    // Implement Options Handling.
+    // Note Options inside the JSON have higher priority
+    if (conf.find("DownloadCount") == conf.end()) {
+      config["DownloadCount"] = vm["DownloadCount"].as<int>();
+    } else {
+      config["DownloadCount"] = conf["DownloadCount"].get<int>();
     }
-    if (config.find("DownloadCount") != config.end()) {
-      downloadThreadCount = config["DownloadCount"];
+
+    if (conf.find("QueryCount") == conf.end()) {
+      config["QueryCount"] = vm["QueryCount"].as<int>();
+    } else {
+      config["QueryCount"] = conf["QueryCount"].get<int>();
     }
-    try{
+    if (conf.find("HTTPProxy") != conf.end()) {
+      config["HTTPProxy"] = conf["HTTPProxy"];
+    } else if (vm.count("HTTPProxy") && vm["HTTPProxy"].as<string>() != "") {
+      config["HTTPProxy"] = vm["HTTPProxy"].as<string>();
+    }
+    for (string K : {"Circles", "Filters", "Follows", "Groups", "Searches",
+                     "Tags", "Users", "Works"}) {
+      set<string> items;
+      if (conf.find(K) != conf.end()) {
+        for (string item : conf[K]) {
+          items.insert(item);
+        }
+      }
+      if (vm.count(K)) {
+        string arg = vm[K].as<string>();
+        vector<string> results;
+        boost::split(results, arg, [](char c) { return c == ','; });
+        for (string foo : results) {
+          items.insert(foo);
+        }
+      }
+      config[K] = json::array();
+      for (string item : items) {
+        config[K].push_back(item);
+      }
+    }
+    for (string K : {"Verify", "UseCache", "Compress"}) {
+      if (conf.find(K) == conf.end()) {
+        if (vm.count(K)) {
+          config[K] = true;
+        } else {
+          config[K] = false;
+        }
+      } else {
+        config[K] = conf[K];
+      }
+    }
+    for (string K : {"email", "password", "SaveBase"}) {
+      if (conf.find(K) == conf.end()) {
+        if (vm.count(K)) {
+          config[K] = vm[K].as<string>();
+        }
+      } else {
+        config[K] = conf[K];
+      }
+    }
+
+    if (conf.find("aria2") == conf.end()) {
+      if (vm.count("aria2")) {
+        string arg = vm["aria2"].as<string>();
+        config["aria2"] = json();
+        if (arg.find_first_of("@") == string::npos) {
+          config["aria2"]["RPCServer"] = arg;
+        } else {
+          size_t pos = arg.find_first_of("@");
+          config["aria2"]["RPCServer"] = arg.substr(0, pos);
+          config["aria2"]["secret"] = arg.substr(pos);
+        }
+      }
+    } else {
+      config["aria2"] = conf["aria2"];
+    }
+    int queryThreadCount = config["QueryCount"];
+    int downloadThreadCount = config["DownloadCount"];
+    if (conf.find("SaveBase") != conf.end()) {
+      config["SaveBase"] = conf["SaveBase"];
+    } else {
+      if (vm.count("SaveBase")) {
+        config["SaveBase"] = vm["SaveBase"].as<string>();
+      } else {
+        cout << "SaveBase Not Specified. Default to ~/BCY/" << endl;
+        config["SaveBase"] = BCY::expand_user("~/BCY/");
+      }
+    }
+    try {
       DU = new DownloadUtils(config["SaveBase"], queryThreadCount,
-                           downloadThreadCount);
-    }
-    catch(const SQLite::Exception& ex){
-      cout<<"Database Error:"<<ex.getErrorStr()<<endl<<"Error Code:"<<ex.getErrorCode()<<endl<<"Extended Error Code:"<<ex.getExtendedErrorCode()<<endl;
+                             downloadThreadCount);
+      cout << "Initialized Downloader at: " << config["SaveBase"].get<string>()
+           << endl;
+    } catch (const SQLite::Exception &ex) {
+      cout << "Database Error:" << ex.getErrorStr() << endl
+           << "Error Code:" << ex.getErrorCode() << endl
+           << "Extended Error Code:" << ex.getExtendedErrorCode() << endl;
       abort();
     }
     signal(SIGINT, cleanup);
