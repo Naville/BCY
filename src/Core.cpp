@@ -40,9 +40,9 @@ Core::Core() {
                       {"device_id", generateRandomString("1234567890", 11)},
                       {"openudid", generateRandomString(alp, 40)},
                       {"idfa", generateRandomString(alp, 40)}};
-  Sess.SetHeader(Header{
+  Headers=Header{
       {"User-Agent",
-       "bcy 4.3.2 rv:4.3.2.6146 (iPad; iPhone OS 9.3.3; en_US) Cronet"}});
+       "bcy 4.3.2 rv:4.3.2.6146 (iPad; iPhone OS 9.3.3; en_US) Cronet"}};
   errorHandler = [](Error err, string msg) {
     BOOST_LOG_TRIVIAL(error) << msg << ":" << err.message << endl;
   };
@@ -59,6 +59,9 @@ string Core::EncryptData(string Input) {
 }
 Response Core::GET(string URL, json Para, Parameters Par) {
   vector<Pair> payloads;
+  Session Sess;
+  Sess.SetHeader(Headers);
+  Sess.SetCookies(Cookies);
   for (json::iterator it = Para.begin(); it != Para.end(); ++it) {
     string K = it.key();
     string V = it.value();
@@ -66,7 +69,6 @@ Response Core::GET(string URL, json Para, Parameters Par) {
   }
   Payload p(payloads.begin(), payloads.end());
   for (auto i = 0; i < retry; i++) {
-    std::lock_guard<std::mutex> guard(sessionLock);
     Sess.SetTimeout(Timeout(timeout));
     Sess.SetUrl(URL);
     Sess.SetPayload(p);
@@ -81,7 +83,6 @@ Response Core::GET(string URL, json Para, Parameters Par) {
       return tmp;
     }
   }
-  std::lock_guard<std::mutex> guard(sessionLock);
   Sess.SetUrl(URL);
   if (Par.content != "") {
     Sess.SetParameters(Par);
@@ -95,6 +96,9 @@ Response Core::GET(string URL, json Para, Parameters Par) {
 }
 Response Core::POST(string URL, json Para, bool Auth, bool Encrypt,
                     Parameters Par) {
+  Session Sess;
+  Sess.SetHeader(Headers);
+  Sess.SetCookies(Cookies);
   if (URL.find(APIBase) == string::npos) {
     URL = APIBase + URL;
   }
@@ -115,8 +119,6 @@ Response Core::POST(string URL, json Para, bool Auth, bool Encrypt,
     payloads.push_back(Pair(K, V));
   }
   for (auto i = 0; i < retry; i++) {
-
-    std::lock_guard<std::mutex> guard(sessionLock);
     Sess.SetUrl(URL);
     Sess.SetTimeout(Timeout(timeout));
     Payload p(payloads.begin(), payloads.end());
@@ -132,7 +134,6 @@ Response Core::POST(string URL, json Para, bool Auth, bool Encrypt,
       return tmp;
     }
   }
-  std::lock_guard<std::mutex> guard(sessionLock);
   Sess.SetUrl(URL);
   Payload p(payloads.begin(), payloads.end());
   Sess.SetPayload(p);
@@ -251,6 +252,7 @@ json Core::loginWithEmailAndPassword(string email, string password) {
     errorHandler(R.error, __func__);
     return json();
   }
+  Cookies=R.cookies;
   LoginResponse = json::parse(R.text);
   UID = LoginResponse["data"]["uid"];
   return LoginResponse;
@@ -414,7 +416,6 @@ vector<json> Core::search_item_bytag(list<string> TagNames, PType ptype,
       ret.push_back(ele);
     }
   }
-
   return ret;
 }
 json Core::group_detail(string GID) {
@@ -598,7 +599,6 @@ Core::timeline_getUserPostTimeLine(string UID,
   }
   return ret;
 }
-
 vector<json> Core::space_getUserLikeTimeLine(string UID,
                                              BCYListIteratorCallback callback) {
   vector<json> ret;
@@ -685,7 +685,6 @@ vector<json> Core::search(string keyword, SearchType type,
   }
   return ret;
 }
-
 vector<json> Core::group_listPosts(string GID,
                                    BCYListIteratorCallback callback) {
   vector<json> ret;
@@ -778,7 +777,6 @@ vector<json> Core::item_favor_itemlist(BCYListIteratorCallback callback) {
   return ret;
 }
 } // namespace BCY
-
 __attribute__((constructor)) static void initialize_BCYCore() {
   // Reference: https://curl.haxx.se/libcurl/c/threadsafe.html
   curl_global_init(CURL_GLOBAL_ALL);

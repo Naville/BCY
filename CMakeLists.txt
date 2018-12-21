@@ -44,10 +44,10 @@ target_include_directories(BCYCore PUBLIC ${BOOST_INCLUDE_DIRS} ${CMAKE_CURRENT_
 target_link_libraries(BCYCore ${CRYPTOPP_LIB} ${CPR_LIBRARIES} ${Boost_LIBRARIES})
 
 set_target_properties(BCYDownloadUtils PROPERTIES PUBLIC_HEADER "${CMAKE_CURRENT_LIST_DIR}/include/BCY/DownloadFilter.hpp;${CMAKE_CURRENT_LIST_DIR}/include/BCY/DownloadUtils.hpp")
-target_include_directories(BCYDownloadUtils PUBLIC ${BOOST_INCLUDE_DIRS} "/usr/local/include/" "/usr/include/" ${CMAKE_CURRENT_LIST_DIR}/include/ ${CPR_INCLUDE_DIRS} ${CMAKE_CURRENT_LIST_DIR}/SQLiteCpp/include)
+target_include_directories(BCYDownloadUtils PUBLIC ${BOOST_INCLUDE_DIRS} ${CMAKE_CURRENT_LIST_DIR}/include/ ${CPR_INCLUDE_DIRS} ${CMAKE_CURRENT_LIST_DIR}/SQLiteCpp/include "/usr/local/include/" "/usr/include/")
 target_link_libraries(BCYDownloadUtils BCYCore SQLiteCpp sqlite3 pthread z)
 
-target_include_directories(BCYDownloader PUBLIC ${BOOST_INCLUDE_DIRS} "/usr/local/include/" "/usr/include/" ${CMAKE_CURRENT_LIST_DIR}/include/ ${CPR_INCLUDE_DIRS} ${CMAKE_CURRENT_LIST_DIR}/SQLiteCpp/include)
+target_include_directories(BCYDownloader PUBLIC ${BOOST_INCLUDE_DIRS} ${CMAKE_CURRENT_LIST_DIR}/include/ ${CPR_INCLUDE_DIRS} ${CMAKE_CURRENT_LIST_DIR}/SQLiteCpp/include "/usr/local/include/" "/usr/include/")
 target_link_libraries(BCYDownloader BCYCore BCYDownloadUtils)
 
 install(TARGETS BCYDownloader DESTINATION bin COMPONENT BCYDownloader)

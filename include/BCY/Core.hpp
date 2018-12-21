@@ -96,10 +96,10 @@ public:
   std::vector<nlohmann::json> item_favor_itemlist(
       BCYListIteratorCallback callback = BCYListIteratorCallback());
 private:
-  std::mutex sessionLock;
   std::string bda_hexMixedString(std::string input);
-  cpr::Session Sess;
   cpr::Parameters Params;
+  cpr::Header Headers;
+  cpr::Cookies Cookies;
   std::string sessionKey = "";
 };
 } // namespace BCY

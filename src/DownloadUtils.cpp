@@ -47,7 +47,7 @@ DownloadUtils::DownloadUtils(string PathBase, int queryThreadCount,
 
   queryThread = new thread_pool(queryThreadCount);
   downloadThread = new thread_pool(downloadThreadCount);
-  lock_guard<mutex> guard(dbLock);
+  std::lock_guard<mutex> guard(dbLock);
   DB.exec("CREATE TABLE IF NOT EXISTS UserInfo (uid INTEGER,UserName "
           "STRING,UNIQUE(uid) ON CONFLICT IGNORE)");
   DB.exec("CREATE TABLE IF NOT EXISTS GroupInfo (gid INTEGER,GroupName "
@@ -123,7 +123,7 @@ void DownloadUtils::downloadFromAbstractInfo(json AbstractInfo) {
   });
 }
 string DownloadUtils::loadOrSaveGroupName(string name, string GID) {
-  lock_guard<mutex> guard(dbLock);
+  std::lock_guard<mutex> guard(dbLock);
   Database DB(DBPath, SQLite::OPEN_READWRITE);
   Statement Q(DB, "SELECT GroupName FROM GroupInfo WHERE gid=(?)");
   Q.bind(1, GID);
@@ -157,7 +157,7 @@ string DownloadUtils::loadTitle(string title, json Inf) {
     }
   }
   query << ::BCY::join(tmps.begin(), tmps.end(), " AND ");
-  lock_guard<mutex> guard(dbLock);
+  std::lock_guard<mutex> guard(dbLock);
   Database DB(DBPath, OPEN_READONLY);
   Statement Q(DB, query.str());
   for (auto i = 0; i < keys.size(); i++) {
@@ -210,7 +210,7 @@ void DownloadUtils::saveInfo(string title, json Inf) {
   vals.push_back(title);
   query << ::BCY::join(keys.begin(), keys.end(), ",") << ") VALUES ("
         << ::BCY::join(tmps.begin(), tmps.end(), ",") << ")";
-  lock_guard<mutex> guard(dbLock);
+  std::lock_guard<mutex> guard(dbLock);
   Database DB(DBPath, SQLite::OPEN_READWRITE);
   Statement Q(DB, query.str());
   for (auto i = 0; i < tmps.size(); i++) {
@@ -221,7 +221,7 @@ void DownloadUtils::saveInfo(string title, json Inf) {
   boost::this_thread::interruption_point();
 }
 void DownloadUtils::insertRecordForCompressedImage(string item_id) {
-  lock_guard<mutex> guard(dbLock);
+  std::lock_guard<mutex> guard(dbLock);
   Database DB(DBPath, SQLite::OPEN_READWRITE);
   Statement insertQuery(DB, "INSERT INTO Compressed (item_id) VALUES (?)");
   boost::this_thread::interruption_point();
@@ -234,7 +234,7 @@ json DownloadUtils::loadInfo(string item_id) {
   if (!useCachedInfo) {
     return json();
   }
-  lock_guard<mutex> guard(dbLock);
+  std::lock_guard<mutex> guard(dbLock);
   Database DB(DBPath, SQLite::OPEN_READONLY);
   Statement Q(DB, "SELECT Info FROM WorkInfo WHERE item_id=?");
   boost::this_thread::interruption_point();
@@ -528,7 +528,7 @@ void DownloadUtils::downloadFromInfo(json Inf, bool save, string item_id_arg) {
         rpcparams["id"] = json();
         rpcparams["method"] = "aria2.addUri";
         boost::this_thread::interruption_point();
-        lock_guard<mutex> L(sessLock);
+        std::lock_guard<mutex> L(sessLock);
         Sess.SetUrl(Url{RPCServer});
         Sess.SetBody(Body{rpcparams.dump()});
         Response X = Sess.Post();
@@ -591,7 +591,7 @@ void DownloadUtils::verify(string condition, vector<string> args,
   vector<string> Keys;
   BOOST_LOG_TRIVIAL(info) << "Collecting Cached Infos" << endl;
   {
-    lock_guard<mutex> guard(dbLock);
+    std::lock_guard<mutex> guard(dbLock);
     Database DB(DBPath, SQLite::OPEN_READONLY);
     Statement Q(DB, "SELECT item_id,Info FROM WorkInfo " + condition);
     for (auto i = 1; i <= args.size(); i++) {
@@ -687,14 +687,14 @@ void DownloadUtils::cleanUID(string UID) {
     BOOST_LOG_TRIVIAL(info) << "Removed " << UserPath.string() << endl;
   }
 
-  lock_guard<mutex> guard(dbLock);
+  std::lock_guard<mutex> guard(dbLock);
   Database DB(DBPath, SQLite::OPEN_READWRITE);
   Statement Q(DB, "DELETE FROM WorkInfo WHERE UID=" + UID);
   Q.executeStep();
 }
 void DownloadUtils::cleanTag(string Tag) {
   BOOST_LOG_TRIVIAL(info) << "Cleaning up Tag:" << Tag << endl;
-  lock_guard<mutex> guard(dbLock);
+  std::lock_guard<mutex> guard(dbLock);
   Database DB(DBPath, SQLite::OPEN_READWRITE);
   Statement Q(DB,
               "SELECT UID,Title,Info,item_id FROM WorkInfo WHERE Tags Like ?");
@@ -747,7 +747,7 @@ void DownloadUtils::cleanup() {
           BOOST_LOG_TRIVIAL(info) << "Remaining " << Infos.size() - i
           << " Info to be removed from Database" << endl;
       }
-      lock_guard<mutex> guard(dbLock);
+      std::lock_guard<mutex> guard(dbLock);
       Database DB(DBPath,SQLite::OPEN_READWRITE);
       Statement Q(DB, "DELETE FROM WorkInfo WHERE Info=?");
       Q.bind(1, Info);
@@ -966,7 +966,7 @@ DownloadUtils::~DownloadUtils() {
   downloadThread = nullptr;
   {
     BOOST_LOG_TRIVIAL(info) << "Waiting Database Lock" << endl;
-    lock_guard<mutex> guard(dbLock);
+    std::lock_guard<mutex> guard(dbLock);
     BOOST_LOG_TRIVIAL(info) << "Saving Filters..." << endl;
     delete filter;
     filter = nullptr;
