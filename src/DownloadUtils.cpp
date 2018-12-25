@@ -32,7 +32,7 @@ DownloadUtils::DownloadUtils(string PathBase, int queryThreadCount,
   fs::path dir(PathBase);
   fs::path file("BCYInfo.db");
   fs::path full_path = dir / file;
-  if (DBPath != "") {
+  if (Path != "") {
     DBPath = Path;
   } else {
     DBPath = full_path.string();
@@ -528,7 +528,7 @@ void DownloadUtils::downloadFromInfo(json Inf, bool save, string item_id_arg) {
         rpcparams["id"] = json();
         rpcparams["method"] = "aria2.addUri";
         boost::this_thread::interruption_point();
-        std::lock_guard<mutex> L(sessLock);
+        Session Sess;
         Sess.SetUrl(Url{RPCServer});
         Sess.SetBody(Body{rpcparams.dump()});
         Response X = Sess.Post();

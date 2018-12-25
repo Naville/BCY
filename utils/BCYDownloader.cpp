@@ -525,7 +525,8 @@ int main(int argc, char **argv) {
       "aria2", po::value<string>(),
       "Aria2 RPC Server. Format: RPCURL[@RPCTOKEN]")(
       "email", po::value<string>(), "BCY Account email")(
-      "password", po::value<string>(), "BCY Account password");
+      "password", po::value<string>(), "BCY Account password")
+      ("DBPath",po::value<string>()->default_value(""),"BCY Database Path");
   try {
     po::store(
         po::command_line_parser(argc, argv).options(desc).positional(pos).run(),
@@ -572,7 +573,9 @@ int main(int argc, char **argv) {
     } else {
       config["DownloadCount"] = conf["DownloadCount"].get<int>();
     }
-
+    if(conf.find("DBPath")==conf.end()){
+      config["DBPath"]=vm["DBPath"].as<string>();
+    }
     if (conf.find("QueryCount") == conf.end()) {
       config["QueryCount"] = vm["QueryCount"].as<int>();
     } else {
@@ -654,7 +657,7 @@ int main(int argc, char **argv) {
     }
     try {
       DU = new DownloadUtils(config["SaveBase"], queryThreadCount,
-                             downloadThreadCount);
+                             downloadThreadCount,config["DBPath"].get<string>());
       cout << "Initialized Downloader at: " << config["SaveBase"].get<string>()
            << endl;
     } catch (const SQLite::Exception &ex) {

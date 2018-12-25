@@ -60,8 +60,6 @@ namespace BCY {
         boost::asio::thread_pool *downloadThread = nullptr;
         std::mutex dbLock;
         std::string saveRoot;
-        cpr::Session Sess;
-        std::mutex sessLock;
         std::string DBPath;
         std::set<std::string> typeFilters;
         std::function<bool(nlohmann::json)> downloadCallback = [&](nlohmann::json j) {
