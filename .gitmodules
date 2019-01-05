@@ -4,3 +4,6 @@
 [submodule "SQLiteCpp"]
 	path = SQLiteCpp
 	url = https://github.com/SRombauts/SQLiteCpp.git
+[submodule "ChaiScript"]
+	path = ChaiScript
+	url = https://github.com/ChaiScript/ChaiScript.git

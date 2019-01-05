@@ -7,7 +7,7 @@
 #include <regex>
 using namespace std;
 using namespace SQLite;
-using namespace nlohmann;
+using json = web::json::value;
 namespace BCY {
 DownloadFilter::DownloadFilter(string Path) {
   DBPath = Path;
@@ -21,20 +21,20 @@ DownloadFilter::DownloadFilter(string Path) {
 }
 DownloadFilter::~DownloadFilter() {
   json j;
-  j["UID"] = UIDList;
-  j["Work"] = WorkList;
-  j["Tag"] = TagList;
-  j["UserName"] = UserNameList;
-  j["Type"] = TypeList;
+  j["UID"] = web::json::value::array(UIDList);
+  j["Work"] = web::json::value::array(WorkList);
+  j["Tag"] = web::json::value::array(TagList);
+  j["UserName"] = web::json::value::array(UserNameList);
+  j["Type"] = web::json::value::array(TypeList);
   Database DB(DBPath, OPEN_READWRITE);
   Statement Q(DB, "INSERT OR REPLACE INTO PyBCY (Key,Value) VALUES(?,?)");
   Q.bind(1, "BCYDownloadFilter");
-  Q.bind(2, j.dump());
+  Q.bind(2, j.serialize());
   Q.executeStep();
 }
 bool DownloadFilter::shouldBlock(json abstract) {
   string item_id = "null";
-  if (abstract.find("item_id") != abstract.end()) {
+  if (abstract.has_field("item_id")) {
     item_id = ensure_string(abstract["item_id"]);
   }
 
@@ -43,20 +43,24 @@ bool DownloadFilter::shouldBlock(json abstract) {
         << item_id << " Blocked By UID Rule:" << abstract["uid"] << endl;
     return true;
   }
-  if (abstract.find("post_tags") != abstract.end()) {
-    for (json &j : abstract["post_tags"]) {
-      string tagName = j["tag_name"];
-      if (find(TagList.begin(), TagList.end(), tagName) != TagList.end()) {
-        BOOST_LOG_TRIVIAL(debug)
-            << item_id << " Blocked By Tag Rule:" << tagName << endl;
-        return true;
+  if (abstract.has_field("post_tags")) {
+    for (json &j : abstract["post_tags"].as_array()) {
+      string tagName = j["tag_name"].as_string();
+      for (json j : TagList) {
+        if (j.as_string() == tagName) {
+
+          BOOST_LOG_TRIVIAL(debug)
+              << item_id << " Blocked By Tag Rule:" << tagName << endl;
+          return true;
+        }
       }
     }
   }
-  if (abstract.find("work") != abstract.end()) {
-    for (string name : WorkList) {
+  if (abstract.has_field("work")) {
+    for (auto bar : WorkList) {
+      string name = bar.as_string();
       smatch match;
-      string foo = abstract["work"];
+      string foo = abstract["work"].as_string();
       if (regex_search(foo, match, regex(name)) && match.size() >= 1) {
         BOOST_LOG_TRIVIAL(debug)
             << item_id << " Blocked By Regex Work Rule:" << name << endl;
@@ -64,9 +68,10 @@ bool DownloadFilter::shouldBlock(json abstract) {
       }
     }
   }
-  for (string name : UserNameList) {
+  for (auto bar : UserNameList) {
+    string name = bar.as_string();
     smatch match;
-    string foo = abstract["profile"]["uname"];
+    string foo = abstract["profile"]["uname"].as_string();
     if (regex_search(foo, match, regex(name)) && match.size() >= 1) {
       BOOST_LOG_TRIVIAL(debug)
           << item_id << " Blocked By Regex UserName Rule:" << name << endl;
@@ -82,25 +87,35 @@ bool DownloadFilter::shouldBlock(json abstract) {
   return false;
 }
 void DownloadFilter::loadRulesFromJSON(json rules) {
-  if (rules.find("UID") != rules.end()) {
-    vector<string> foo = rules["UID"];
-    UIDList.insert(UIDList.end(), foo.begin(), foo.end());
+  if (rules.has_field("UID")) {
+    auto bar = rules["UID"].as_array();
+    for (auto item : bar) {
+      UIDList.push_back(item);
+    }
   }
-  if (rules.find("Work") != rules.end()) {
-    vector<string> foo = rules["Work"];
-    WorkList.insert(WorkList.end(), foo.begin(), foo.end());
+  if (rules.has_field("Work")) {
+    auto foo = rules["Work"].as_array();
+    for (auto item : foo) {
+      WorkList.push_back(item);
+    }
   }
-  if (rules.find("Tag") != rules.end()) {
-    vector<string> foo = rules["Tag"];
-    TagList.insert(TagList.end(), foo.begin(), foo.end());
+  if (rules.has_field("Tag")) {
+    auto foo = rules["Tag"].as_array();
+    for (auto item : foo) {
+      TagList.push_back(item);
+    }
   }
-  if (rules.find("UserName") != rules.end()) {
-    vector<string> foo = rules["UserName"];
-    UserNameList.insert(UserNameList.end(), foo.begin(), foo.end());
+  if (rules.has_field("UserName")) {
+    auto foo = rules["UserName"].as_array();
+    for (auto item : foo) {
+      UserNameList.push_back(item);
+    }
   }
-  if (rules.find("Type") != rules.end()) {
-    vector<string> foo = rules["Type"];
-    TypeList.insert(TypeList.end(), foo.begin(), foo.end());
+  if (rules.has_field("Type")) {
+    auto foo = rules["Type"].as_array();
+    for (auto item : foo) {
+      TypeList.push_back(item);
+    }
   }
 }
 } // namespace BCY

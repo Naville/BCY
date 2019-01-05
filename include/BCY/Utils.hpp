@@ -1,13 +1,13 @@
 #ifndef BCY_UTILS_HPP
 #define BCY_UTILS_HPP
+#include <cpprest/json.h>
 #include <sstream>
 #include <string>
-#include "json.hpp"
 namespace BCY {
 std::string string_to_hex(const std::string &input);
 std::string generateRandomString(std::string alphabet, size_t length);
 std::string expand_user(std::string path);
-std::string ensure_string(nlohmann::json foo);
+std::string ensure_string(web::json::value foo);
 template <typename InputIt>
 std::string join(InputIt begin, InputIt end,
                  const std::string &separator = ", ", // see 1.

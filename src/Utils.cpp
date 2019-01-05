@@ -1,13 +1,12 @@
 #include "BCY/Utils.hpp"
-#include "BCY/json.hpp"
 #include <algorithm>
 #include <chrono>
 #include <iomanip>
 #include <iostream>
 #include <random>
 #include <sstream>
+using json = web::json::value;
 using namespace std;
-using namespace nlohmann;
 string BCY::string_to_hex(const string &input) {
   static const char *const lut = "0123456789abcdef";
   size_t len = input.length();
@@ -23,14 +22,15 @@ string BCY::string_to_hex(const string &input) {
 }
 string BCY::ensure_string(json foo) {
   if (foo.is_string()) {
-    return foo;
+    return foo.as_string();
   } else if (foo.is_number()) {
-    long long num = foo;
+    int num = foo.as_integer();
     return to_string(num);
   } else if (foo.is_null()) {
     return "";
   } else {
-    throw std::invalid_argument(foo.dump() + " Can't Be Converted to String");
+    throw std::invalid_argument(foo.serialize() +
+                                " Can't Be Converted to String");
   }
 }
 string BCY::generateRandomString(string alphabet, size_t length) {

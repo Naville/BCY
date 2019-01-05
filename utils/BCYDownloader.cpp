@@ -2,7 +2,6 @@
 #include "BCY/Core.hpp"
 #include "BCY/DownloadUtils.hpp"
 #include "BCY/Utils.hpp"
-#include "BCY/json.hpp"
 #include <algorithm>
 #include <boost/algorithm/string.hpp>
 #include <boost/log/core.hpp>
@@ -11,13 +10,14 @@
 #include <boost/log/trivial.hpp>
 #include <boost/log/utility/setup.hpp>
 #include <boost/program_options.hpp>
+#include <cpprest/json.h>
 #include <fstream>
 #include <random>
+using json = web::json::value;
 using namespace BCY;
 using namespace std::placeholders;
 using namespace std;
 using namespace boost;
-using namespace nlohmann;
 namespace po = boost::program_options;
 namespace logging = boost::log;
 namespace src = boost::log::sources;
@@ -82,10 +82,13 @@ void Init() {
     }
   };
   commHandle loginHandle = [=](vector<string> commands) {
+    if (commands.size() != 3) {
+      cout << "Invalid Argument" << endl;
+    }
     if (DU->core.UID == "") {
       json Res = DU->core.loginWithEmailAndPassword(commands[1], commands[2]);
       if (!Res.is_null()) {
-        Prefix = Res["data"]["uname"];
+        Prefix = Res["data"]["uname"].as_string();
       } else {
         cout << "Login Failed" << endl;
       }
@@ -256,7 +259,7 @@ void Init() {
       cout << "Invalid Argument" << endl;
       return;
     }
-    cout << DU->core.item_detail(commands[1], false).dump() << endl;
+    cout << DU->core.item_detail(commands[1], false).serialize() << endl;
   };
   commHandle followHandle = [=](vector<string> commands) {
     if (commands.size() != 2) {
@@ -282,7 +285,7 @@ void Init() {
     transform(type.begin(), type.end(), type.begin(), ::tolower);
     if (type == "uid") {
       if (arg.find_first_not_of("0123456789") == std::string::npos) {
-        DU->filter->UIDList.push_back(arg);
+        DU->filter->UIDList.push_back(web::json::value(arg));
         DU->cleanUID(arg);
       } else {
         cout << "UID contains non alphanumerical character" << endl;
@@ -391,44 +394,62 @@ void JSONMode() {
   }
   DU->downloadLiked();
   mt19937 mt_rand(time(0));
-  vector<string> Tags = config["Tags"];
+  vector<string> Tags;
+  for (json j : config["Tags"].as_array()) {
+    Tags.push_back(j.as_string());
+  }
   shuffle(Tags.begin(), Tags.end(), mt_rand);
   for (string item : Tags) {
     DU->downloadTag(item);
   }
 
-  vector<string> Searches = config["Searches"];
+  vector<string> Searches;
+  for (json j : config["Searches"].as_array()) {
+    Searches.push_back(j.as_string());
+  }
   shuffle(Searches.begin(), Searches.end(), mt_rand);
   for (string item : Searches) {
     DU->downloadSearchKeyword(item);
   }
 
-  vector<string> Works = config["Works"];
+  vector<string> Works;
+  for (json j : config["Works"].as_array()) {
+    Works.push_back(j.as_string());
+  }
   shuffle(Works.begin(), Works.end(), mt_rand);
   for (string item : Works) {
     DU->downloadWorkID(item);
   }
 
-  vector<string> Groups = config["Groups"];
+  vector<string> Groups;
+  for (json j : config["Groups"].as_array()) {
+    Groups.push_back(j.as_string());
+  }
   shuffle(Groups.begin(), Groups.end(), mt_rand);
   for (string item : Groups) {
     DU->downloadGroupID(item);
   }
 
-  vector<string> Follows = config["Follows"];
+  vector<string> Follows;
+  for (json j : config["Follows"].as_array()) {
+    Follows.push_back(j.as_string());
+  }
   shuffle(Follows.begin(), Follows.end(), mt_rand);
   for (string item : Follows) {
     DU->downloadUserLiked(item);
   }
-  vector<string> Users = config["Users"];
+  vector<string> Users;
+  for (json j : config["Users"].as_array()) {
+    Users.push_back(j.as_string());
+  }
   shuffle(Users.begin(), Users.end(), mt_rand);
   for (string item : Users) {
     DU->downloadUser(item);
   }
 
   DU->downloadTimeline();
-  if (config.find("Verify") != config.end()) {
-    bool ver = config["Verify"];
+  if (config.has_field("Verify")) {
+    bool ver = config["Verify"].as_bool();
     if (ver) {
       DU->verify();
     }
@@ -525,8 +546,8 @@ int main(int argc, char **argv) {
       "aria2", po::value<string>(),
       "Aria2 RPC Server. Format: RPCURL[@RPCTOKEN]")(
       "email", po::value<string>(), "BCY Account email")(
-      "password", po::value<string>(), "BCY Account password")
-      ("DBPath",po::value<string>()->default_value(""),"BCY Database Path");
+      "password", po::value<string>(), "BCY Account password")(
+      "DBPath", po::value<string>()->default_value(""), "BCY Database Path");
   try {
     po::store(
         po::command_line_parser(argc, argv).options(desc).positional(pos).run(),
@@ -568,30 +589,30 @@ int main(int argc, char **argv) {
     json conf = json::parse(JSONStr);
     // Implement Options Handling.
     // Note Options inside the JSON have higher priority
-    if (conf.find("DownloadCount") == conf.end()) {
+    if (!conf.has_field("DownloadCount")) {
       config["DownloadCount"] = vm["DownloadCount"].as<int>();
     } else {
-      config["DownloadCount"] = conf["DownloadCount"].get<int>();
+      config["DownloadCount"] = conf["DownloadCount"].as_integer();
     }
-    if(conf.find("DBPath")==conf.end()){
-      config["DBPath"]=vm["DBPath"].as<string>();
+    if (!conf.has_field("DBPath")) {
+      config["DBPath"] = web::json::value(vm["DBPath"].as<string>());
     }
-    if (conf.find("QueryCount") == conf.end()) {
+    if (!conf.has_field("QueryCount")) {
       config["QueryCount"] = vm["QueryCount"].as<int>();
     } else {
-      config["QueryCount"] = conf["QueryCount"].get<int>();
+      config["QueryCount"] = conf["QueryCount"].as_integer();
     }
-    if (conf.find("HTTPProxy") != conf.end()) {
+    if (conf.has_field("HTTPProxy")) {
       config["HTTPProxy"] = conf["HTTPProxy"];
     } else if (vm.count("HTTPProxy") && vm["HTTPProxy"].as<string>() != "") {
-      config["HTTPProxy"] = vm["HTTPProxy"].as<string>();
+      config["HTTPProxy"] = web::json::value(vm["HTTPProxy"].as<string>());
     }
     for (string K : {"Circles", "Filters", "Follows", "Groups", "Searches",
                      "Tags", "Users", "Works"}) {
       set<string> items;
-      if (conf.find(K) != conf.end()) {
-        for (string item : conf[K]) {
-          items.insert(item);
+      if (conf.has_field(K)) {
+        for (auto item : conf[K].as_array()) {
+          items.insert(item.as_string());
         }
       }
       if (vm.count(K)) {
@@ -602,63 +623,62 @@ int main(int argc, char **argv) {
           items.insert(foo);
         }
       }
-      config[K] = json::array();
+      vector<json> j;
       for (string item : items) {
-        config[K].push_back(item);
+        j.push_back(web::json::value(item));
       }
+      config[K] = web::json::value::array(j);
     }
     for (string K : {"Verify", "UseCache", "Compress"}) {
-      if (conf.find(K) == conf.end()) {
+      if (conf.has_field(K)) {
         if (vm.count(K)) {
-          config[K] = true;
+          config[K] = web::json::value::boolean(true);
         } else {
-          config[K] = false;
+          config[K] = web::json::value::boolean(false);
         }
       } else {
         config[K] = conf[K];
       }
     }
     for (string K : {"email", "password", "SaveBase"}) {
-      if (conf.find(K) == conf.end()) {
-        if (vm.count(K)) {
-          config[K] = vm[K].as<string>();
-        }
-      } else {
+      if (vm.count(K)) {
+        config[K] = web::json::value(vm[K].as<string>());
+      } else if (conf.has_field(K)) {
         config[K] = conf[K];
       }
     }
 
-    if (conf.find("aria2") == conf.end()) {
+    if (conf.has_field("aria2")) {
       if (vm.count("aria2")) {
         string arg = vm["aria2"].as<string>();
         config["aria2"] = json();
         if (arg.find_first_of("@") == string::npos) {
-          config["aria2"]["RPCServer"] = arg;
+          config["aria2"]["RPCServer"] = web::json::value(arg);
         } else {
           size_t pos = arg.find_first_of("@");
-          config["aria2"]["RPCServer"] = arg.substr(0, pos);
-          config["aria2"]["secret"] = arg.substr(pos);
+          config["aria2"]["RPCServer"] = web::json::value(arg.substr(0, pos));
+          config["aria2"]["secret"] = web::json::value(arg.substr(pos));
         }
       }
     } else {
       config["aria2"] = conf["aria2"];
     }
-    int queryThreadCount = config["QueryCount"];
-    int downloadThreadCount = config["DownloadCount"];
-    if (conf.find("SaveBase") != conf.end()) {
+    int queryThreadCount = config["QueryCount"].as_integer();
+    int downloadThreadCount = config["DownloadCount"].as_integer();
+    if (conf.has_field("SaveBase") && conf.at("SaveBase").is_null() == false) {
       config["SaveBase"] = conf["SaveBase"];
     } else {
       if (vm.count("SaveBase")) {
-        config["SaveBase"] = vm["SaveBase"].as<string>();
+        config["SaveBase"] = web::json::value(vm["SaveBase"].as<string>());
       } else {
         cout << "SaveBase Not Specified. Default to ~/BCY/" << endl;
-        config["SaveBase"] = BCY::expand_user("~/BCY/");
+        config["SaveBase"] = web::json::value(BCY::expand_user("~/BCY/"));
       }
     }
     try {
-      DU = new DownloadUtils(config["SaveBase"], queryThreadCount,
-                             downloadThreadCount,config["DBPath"].get<string>());
-      cout << "Initialized Downloader at: " << config["SaveBase"].get<string>()
+      DU = new DownloadUtils(config["SaveBase"].as_string(), queryThreadCount,
+                             downloadThreadCount, config["DBPath"].as_string());
+      cout << "Initialized Downloader at: " << config["SaveBase"].as_string()
            << endl;
     } catch (const SQLite::Exception &ex) {
       cout << "Database Error:" << ex.getErrorStr() << endl
@@ -669,36 +689,40 @@ int main(int argc, char **argv) {
     signal(SIGINT, cleanup);
     atexit(cleanup2);
 
-    if (config.find("UseCache") != config.end()) {
-      DU->useCachedInfo = config["UseCache"];
+    if (config.has_field("UseCache") &&
+        config.at("UseCache").is_null() == false) {
+      DU->useCachedInfo = config["UseCache"].as_bool();
     }
-    if (config.find("HTTPProxy") != config.end()) {
-      DU->core.proxy = {{"http", config["HTTPProxy"]},
-                        {"https", config["HTTPProxy"]}};
+    if (config.has_field("HTTPProxy") &&
+        config.at("HTTPProxy").is_null() == false) {
+      DU->core.proxy = {{"http", config["HTTPProxy"].as_string()},
+                        {"https", config["HTTPProxy"].as_string()}};
     }
-    if (config.find("Types") != config.end()) {
-      for (string F : config["Types"]) {
-        DU->addTypeFilter(F);
+    if (config.has_field("Types") && config.at("Types").is_null() == false) {
+      for (auto F : config["Types"].as_array()) {
+        DU->addTypeFilter(F.as_string());
       }
     }
-    if (config.find("aria2") != config.end()) {
-      if (config["aria2"].find("secret") != config["aria2"].end()) {
-        DU->secret = config["aria2"]["secret"];
+    if (config.has_field("aria2") && config.at("aria2").is_null() == false) {
+      if (config.at("aria2").has_field("secret")) {
+        DU->secret = config["aria2"]["secret"].as_string();
       }
-      DU->RPCServer = config["aria2"]["RPCServer"];
+      DU->RPCServer = config["aria2"]["RPCServer"].as_string();
     }
 
-    if (config.find("Compress") != config.end()) {
-      bool flag = config["Compress"];
+    if (config.has_field("Compress") &&
+        config.at("Compress").is_null() == false) {
+      bool flag = config["Compress"].as_bool();
       DU->allowCompressed = flag;
     }
-    if (config.find("email") != config.end() &&
-        config.find("password") != config.end()) {
+    if (config.has_field("email") && config.has_field("password") &&
+        config.at("email").is_null() == false &&
+        config.at("password").is_null() == false) {
       cout << "Logging in..." << endl;
-      json Res = DU->core.loginWithEmailAndPassword(config["email"],
-                                                    config["password"]);
+      json Res = DU->core.loginWithEmailAndPassword(
+          config["email"].as_string(), config["password"].as_string());
       if (!Res.is_null()) {
-        Prefix = Res["data"]["uname"];
+        Prefix = Res["data"]["uname"].as_string();
         cout << "Logged in as : " << Prefix << endl;
       } else {
         cout << "Login Failed" << endl;

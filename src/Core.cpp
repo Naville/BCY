@@ -12,7 +12,7 @@ using namespace std;
 using namespace CryptoPP;
 using namespace cpr;
 using namespace boost;
-using namespace nlohmann;
+using json = web::json::value;
 #define BCY_KEY "com_banciyuan_AI"
 static const string APIBase = "https://api.bcy.net/";
 #warning Add Remaining Video CDN URLs and update CDN choosing Algorithm
@@ -40,9 +40,9 @@ Core::Core() {
                       {"device_id", generateRandomString("1234567890", 11)},
                       {"openudid", generateRandomString(alp, 40)},
                       {"idfa", generateRandomString(alp, 40)}};
-  Headers=Header{
-      {"User-Agent",
-       "bcy 4.3.2 rv:4.3.2.6146 (iPad; iPhone OS 9.3.3; en_US) Cronet"}};
+  Headers =
+      Header{{"User-Agent",
+              "bcy 4.3.2 rv:4.3.2.6146 (iPad; iPhone OS 9.3.3; en_US) Cronet"}};
   errorHandler = [](Error err, string msg) {
     BOOST_LOG_TRIVIAL(error) << msg << ":" << err.message << endl;
   };
@@ -62,9 +62,10 @@ Response Core::GET(string URL, json Para, Parameters Par) {
   Session Sess;
   Sess.SetHeader(Headers);
   Sess.SetCookies(Cookies);
-  for (json::iterator it = Para.begin(); it != Para.end(); ++it) {
-    string K = it.key();
-    string V = it.value();
+  for (auto iterInner = Para.as_object().cbegin();
+       iterInner != Para.as_object().cend(); ++iterInner) {
+    string K = iterInner->first;
+    string V = iterInner->second.as_string();
     payloads.push_back(Pair(K, V));
   }
   Payload p(payloads.begin(), payloads.end());
@@ -103,8 +104,8 @@ Response Core::POST(string URL, json Para, bool Auth, bool Encrypt,
     URL = APIBase + URL;
   }
   if (Auth == true) {
-    if (Para.find("session_key") == Para.end() && sessionKey != "") {
-      Para["session_key"] = sessionKey;
+    if (Para.has_field("session_key") == false && sessionKey != "") {
+      Para["session_key"] = web::json::value(sessionKey);
     }
   }
   if (Encrypt == true) {
@@ -113,9 +114,10 @@ Response Core::POST(string URL, json Para, bool Auth, bool Encrypt,
     Para = mixHEXParam(Para);
   }
   vector<Pair> payloads;
-  for (json::iterator it = Para.begin(); it != Para.end(); ++it) {
-    string K = it.key();
-    string V = it.value();
+  for (auto iterInner = Para.as_object().cbegin();
+       iterInner != Para.as_object().cend(); ++iterInner) {
+    string K = iterInner->first;
+    string V = iterInner->second.as_string();
     payloads.push_back(Pair(K, V));
   }
   for (auto i = 0; i < retry; i++) {
@@ -148,8 +150,11 @@ Response Core::POST(string URL, json Para, bool Auth, bool Encrypt,
 }
 json Core::mixHEXParam(json Params) {
   json j;
-  for (json::iterator it = Params.begin(); it != Params.end(); ++it) {
-    j[it.key()] = bda_hexMixedString(it.value());
+  for (auto iterInner = Params.as_object().cbegin();
+       iterInner != Params.as_object().cend(); ++iterInner) {
+    string K = iterInner->first;
+    string V = iterInner->second.as_string();
+    j[K] = web::json::value(bda_hexMixedString(V));
   }
   return j;
 }
@@ -180,8 +185,8 @@ json Core::ParamByCRC32URL(string FullURL) {
                                     (byte *)CRC32Candidate.c_str(),
                                     CRC32Candidate.size());
   json j;
-  j["r"] = nonce;
-  j["s"] = to_string(crc32_hash);
+  j["r"] = web::json::value(nonce);
+  j["s"] = web::json::value(to_string(crc32_hash));
   return j;
 }
 json Core::videoInfo(string video_id) {
@@ -190,8 +195,8 @@ json Core::videoInfo(string video_id) {
   // algo to choose the correct CDN URL?
   string BaseURL = VideoCDNURLs[0];
   json CRC = ParamByCRC32URL(BaseURL + "/" + video_id);
-  string nonce = CRC["r"];
-  string crc = CRC["s"];
+  string nonce = CRC["r"].as_string();
+  string crc = CRC["s"].as_string();
   Parameters P{{"r", nonce}, {"s", crc}};
   Response R = GET(BaseURL + "/" + video_id, json(), P);
   if (R.error) {
@@ -201,11 +206,11 @@ json Core::videoInfo(string video_id) {
   return json::parse(R.text);
 }
 json Core::EncryptParam(json Params) {
-  string serialized = Params.dump();
+  string serialized = Params.serialize();
   json j;
   string foo;
   Base64::Encode(EncryptData(serialized), &foo);
-  j["data"] = foo;
+  j["data"] = web::json::value(foo);
   return j;
 }
 string Core::bda_hexMixedString(string input) {
@@ -232,34 +237,34 @@ json Core::space_me() {
 }
 json Core::loginWithEmailAndPassword(string email, string password) {
   json j;
-  j["email"] = email;
-  j["password"] = password;
+  j["email"] = web::json::value(email);
+  j["password"] = web::json::value(password);
   auto R = POST("passport/email/login/", j, false, false);
   if (R.error) {
     errorHandler(R.error, __func__);
     return json();
   }
   json LoginResponse = json::parse(R.text);
-  if (LoginResponse["message"] == "error") {
-    string msg = LoginResponse["data"]["description"];
+  if (LoginResponse["message"].as_string() == "error") {
+    string msg = LoginResponse["data"]["description"].as_string();
     errorHandler(Error(67 /*CURLE_LOGIN_DENIED*/, msg), msg);
     return json();
   }
-  sessionKey = LoginResponse["data"]["session_key"];
+  sessionKey = LoginResponse["data"]["session_key"].as_string();
   j = json();
   R = POST("api/token/doLogin", j, true, true);
   if (R.error) {
     errorHandler(R.error, __func__);
     return json();
   }
-  Cookies=R.cookies;
+  Cookies = R.cookies;
   LoginResponse = json::parse(R.text);
-  UID = LoginResponse["data"]["uid"];
+  UID = LoginResponse["data"]["uid"].as_string();
   return LoginResponse;
 }
 json Core::user_detail(string UID) {
   json j;
-  j["uid"] = UID;
+  j["uid"] = web::json::value(UID);
   auto R = POST("api/token/doLogin", j, true, true);
   if (R.error) {
     errorHandler(R.error, __func__);
@@ -269,8 +274,8 @@ json Core::user_detail(string UID) {
 }
 json Core::image_postCover(string item_id, string type) {
   json j;
-  j["id"] = item_id;
-  j["type"] = type;
+  j["id"] = web::json::value(item_id);
+  j["type"] = web::json::value(type);
   auto R = POST("api/image/postCover/", j, true, true);
   if (R.error) {
     errorHandler(R.error, __func__);
@@ -280,11 +285,11 @@ json Core::image_postCover(string item_id, string type) {
 }
 bool Core::user_follow(string uid, bool isFollow) {
   json j;
-  j["uid"] = uid;
+  j["uid"] = web::json::value(uid);
   if (isFollow) {
-    j["type"] = "dofollow";
+    j["type"] = web::json::value("dofollow");
   } else {
-    j["type"] = "unfollow";
+    j["type"] = web::json::value("unfollow");
   }
   auto R = POST("api/user/follow", j, true, true);
   if (R.error) {
@@ -296,7 +301,7 @@ bool Core::user_follow(string uid, bool isFollow) {
 }
 json Core::item_detail(string item_id, bool autoFollow) {
   json j;
-  j["item_id"] = item_id;
+  j["item_id"] = web::json::value(item_id);
   auto R = POST("api/item/detail/", j, true, true);
   if (R.error) {
     errorHandler(R.error, __func__);
@@ -305,7 +310,7 @@ json Core::item_detail(string item_id, bool autoFollow) {
   json r = json::parse(R.text);
   if (r["status"] == 4010 && autoFollow) {
     // Need to Follow
-    string UID = r["data"]["profile"]["uid"];
+    string UID = r["data"]["profile"]["uid"].as_string();
     user_follow(UID, true);
     R = POST("api/item/detail/", j, true, true);
     if (R.error) {
@@ -319,7 +324,7 @@ json Core::item_detail(string item_id, bool autoFollow) {
 }
 bool Core::item_doPostLike(string item_id) {
   json j;
-  j["item_id"] = item_id;
+  j["item_id"] = web::json::value(item_id);
   auto R = POST("api/item/doPostLike", j, true, true);
   if (R.error) {
     errorHandler(R.error, __func__);
@@ -330,7 +335,7 @@ bool Core::item_doPostLike(string item_id) {
 }
 bool Core::item_cancelPostLike(string item_id) {
   json j;
-  j["item_id"] = item_id;
+  j["item_id"] = web::json::value(item_id);
   auto R = POST("api/item/cancelPostLike", j, true, true);
   if (R.error) {
     errorHandler(R.error, __func__);
@@ -341,7 +346,7 @@ bool Core::item_cancelPostLike(string item_id) {
 }
 json Core::tag_status(string TagName) {
   json j;
-  j["name"] = TagName;
+  j["name"] = web::json::value(TagName);
   auto R = POST("api/tag/status", j, true, true);
   if (R.error) {
     errorHandler(R.error, __func__);
@@ -352,7 +357,7 @@ json Core::tag_status(string TagName) {
 }
 json Core::core_status(string WorkID) {
   json j;
-  j["wid"] = WorkID;
+  j["wid"] = web::json::value(WorkID);
   auto R = POST("api/core/status", j, true, true);
   if (R.error) {
     errorHandler(R.error, __func__);
@@ -364,19 +369,19 @@ json Core::core_status(string WorkID) {
 json Core::circle_filterlist(string circle_id, CircleType circle_type,
                              string circle_name) {
   json j;
-  j["circle_id"] = circle_id;
+  j["circle_id"] = web::json::value(circle_id);
   switch (circle_type) {
   case CircleType::Tag: {
-    j["circle_type"] = "tag";
+    j["circle_type"] = web::json::value("tag");
     break;
   }
   case CircleType::Work: {
-    j["circle_type"] = "work";
+    j["circle_type"] = web::json::value("work");
     break;
   }
   default: { throw invalid_argument("Invalid Circle Type!"); }
   }
-  j["circle_name"] = circle_name;
+  j["circle_name"] = web::json::value(circle_name);
   auto R = POST("apiv2/circle/filterlist/", j, true, true);
   if (R.error) {
     errorHandler(R.error, __func__);
@@ -391,9 +396,13 @@ vector<json> Core::search_item_bytag(list<string> TagNames, PType ptype,
   int p = 0;
   json j;
   if (ptype != PType::Undef) {
-    j["ptype"] = ptype;
+    j["ptype"] = web::json::value(static_cast<uint32_t>(ptype));
   }
-  j["tag_list"] = TagNames;
+  vector<json> tmp;
+  for (string str : TagNames) {
+    tmp.push_back(web::json::value(str));
+  }
+  j["tag_list"] = web::json::value::array(tmp);
   while (true) {
     j["p"] = p;
     p++;
@@ -407,7 +416,7 @@ vector<json> Core::search_item_bytag(list<string> TagNames, PType ptype,
     if (data.size() == 0) {
       return ret;
     }
-    for (json &ele : data) {
+    for (json &ele : data.as_array()) {
       if (callback) {
         if (!callback(ele)) {
           return ret;
@@ -420,7 +429,7 @@ vector<json> Core::search_item_bytag(list<string> TagNames, PType ptype,
 }
 json Core::group_detail(string GID) {
   json j;
-  j["gid"] = GID;
+  j["gid"] = web::json::value(GID);
   auto R = POST("api/group/detail/", j, true, true);
   if (R.error) {
     errorHandler(R.error, __func__);
@@ -434,13 +443,13 @@ vector<json> Core::circle_itemhotworks(string circle_id,
   vector<json> ret;
   int since = 0;
   json j;
-  j["grid_type"] = "timeline";
-  j["id"] = circle_id;
+  j["grid_type"] = web::json::value("timeline");
+  j["id"] = web::json::value(circle_id);
   while (true) {
     if (since == 0) {
-      j["since"] = since;
+      j["since"] = web::json::value(since);
     } else {
-      j["since"] = "rec:" + to_string(since);
+      j["since"] = web::json::value("rec:" + to_string(since));
     }
     since++;
     auto R = POST("apiv2/circle/itemhotworks/", j, true, true);
@@ -453,7 +462,7 @@ vector<json> Core::circle_itemhotworks(string circle_id,
     if (data.size() == 0) {
       return ret;
     }
-    for (json &ele : data) {
+    for (json &ele : data.as_array()) {
       if (callback) {
         if (!callback(ele)) {
           return ret;
@@ -465,7 +474,7 @@ vector<json> Core::circle_itemhotworks(string circle_id,
 }
 json Core::circle_itemhottags(string item_id) {
   json j;
-  j["item_id"] = item_id;
+  j["item_id"] = web::json::value(item_id);
   auto R = POST("apiv2/circle/itemhottags/", j, true, true);
   if (R.error) {
     errorHandler(R.error, __func__);
@@ -479,11 +488,11 @@ vector<json> Core::circle_itemrecenttags(string TagName, string Filter,
   vector<json> ret;
   string since = "0";
   json j;
-  j["grid_type"] = "timeline";
-  j["filter"] = Filter;
-  j["name"] = TagName;
+  j["grid_type"] = web::json::value("timeline");
+  j["filter"] = web::json::value(Filter);
+  j["name"] = web::json::value(TagName);
   while (true) {
-    j["since"] = since;
+    j["since"] = web::json::value(since);
     auto R = POST("api/circle/itemRecentTags/", j, true, true);
     if (R.error) {
       errorHandler(R.error, __func__);
@@ -494,8 +503,8 @@ vector<json> Core::circle_itemrecenttags(string TagName, string Filter,
     if (data.size() == 0) {
       return ret;
     }
-    since = data[data.size() - 1]["since"];
-    for (json &ele : data) {
+    since = data[data.size() - 1]["since"].as_string();
+    for (json &ele : data.as_array()) {
       if (callback) {
         if (!callback(ele)) {
           return ret;
@@ -511,7 +520,7 @@ vector<json> Core::item_getReply(string item_id,
   vector<json> ret;
   int p = 1;
   json j;
-  j["item_id"] = item_id;
+  j["item_id"] = web::json::value(item_id);
   while (true) {
     j["p"] = p;
     p++;
@@ -525,7 +534,7 @@ vector<json> Core::item_getReply(string item_id,
     if (data.size() == 0) {
       return ret;
     }
-    for (json &ele : data) {
+    for (json &ele : data.as_array()) {
       if (callback) {
         if (!callback(ele)) {
           return ret;
@@ -541,10 +550,10 @@ vector<json> Core::circle_itemRecentWorks(string WorkID,
   vector<json> ret;
   string since = "";
   json j;
-  j["grid_type"] = "timeline";
-  j["id"] = WorkID;
+  j["grid_type"] = web::json::value("timeline");
+  j["id"] = web::json::value(WorkID);
   while (true) {
-    j["since"] = since;
+    j["since"] = web::json::value(since);
     auto R = POST("api/circle/itemRecentWorks", j, true, true);
     if (R.error) {
       errorHandler(R.error, __func__);
@@ -555,8 +564,8 @@ vector<json> Core::circle_itemRecentWorks(string WorkID,
     if (data.size() == 0) {
       return ret;
     }
-    since = data[data.size() - 1]["since"];
-    for (json &ele : data) {
+    since = data[data.size() - 1]["since"].as_string();
+    for (json &ele : data.as_array()) {
       if (callback) {
         if (!callback(ele)) {
           return ret;
@@ -573,10 +582,10 @@ Core::timeline_getUserPostTimeLine(string UID,
   vector<json> ret;
   string since = "0";
   json j;
-  j["grid_type"] = "timeline";
-  j["uid"] = UID;
+  j["grid_type"] = web::json::value("timeline");
+  j["uid"] = web::json::value(UID);
   while (true) {
-    j["since"] = since;
+    j["since"] = web::json::value(since);
     auto R = POST("api/timeline/getUserPostTimeLine/", j, true, true);
     if (R.error) {
       errorHandler(R.error, __func__);
@@ -587,8 +596,8 @@ Core::timeline_getUserPostTimeLine(string UID,
     if (data.size() == 0) {
       return ret;
     }
-    since = data[data.size() - 1]["since"];
-    for (json &ele : data) {
+    since = data[data.size() - 1]["since"].as_string();
+    for (json &ele : data.as_array()) {
       if (callback) {
         if (!callback(ele)) {
           return ret;
@@ -604,10 +613,10 @@ vector<json> Core::space_getUserLikeTimeLine(string UID,
   vector<json> ret;
   string since = "0";
   json j;
-  j["grid_type"] = "grid";
-  j["uid"] = UID;
+  j["grid_type"] = web::json::value("grid");
+  j["uid"] = web::json::value(UID);
   while (true) {
-    j["since"] = since;
+    j["since"] = web::json::value(since);
     auto R = POST("api/space/getUserLikeTimeLine/", j, true, true);
     if (R.error) {
       errorHandler(R.error, __func__);
@@ -618,8 +627,8 @@ vector<json> Core::space_getUserLikeTimeLine(string UID,
     if (data.size() == 0) {
       return ret;
     }
-    since = data[data.size() - 1]["since"];
-    for (json &ele : data) {
+    since = data[data.size() - 1]["since"].as_string();
+    for (json &ele : data.as_array()) {
       if (callback) {
         if (!callback(ele)) {
           return ret;
@@ -655,9 +664,9 @@ vector<json> Core::search(string keyword, SearchType type,
   default: { throw invalid_argument("Invalid Search Type!"); }
   }
   json j;
-  j["query"] = keyword;
+  j["query"] = web::json::value(keyword);
   while (true) {
-    j["p"] = p;
+    j["p"] = web::json::value(p);
     p++;
     auto R = POST(URL, j, true, true);
     if (R.error) {
@@ -669,7 +678,7 @@ vector<json> Core::search(string keyword, SearchType type,
     if (data.size() == 0) {
       return ret;
     }
-    for (json &ele : data) {
+    for (json &ele : data.as_array()) {
       if (callback) {
         if (!callback(ele)) {
           return ret;
@@ -690,9 +699,9 @@ vector<json> Core::group_listPosts(string GID,
   vector<json> ret;
   int p = 1;
   json j;
-  j["gid"] = GID;
-  j["type"] = "ding";
-  j["limit"] = 50;
+  j["gid"] = web::json::value(GID);
+  j["type"] = web::json::value("ding");
+  j["limit"] = web::json::value(50);
   while (true) {
     j["p"] = p;
     p++;
@@ -706,7 +715,7 @@ vector<json> Core::group_listPosts(string GID,
     if (data.size() == 0) {
       return ret;
     }
-    for (json &ele : data) {
+    for (json &ele : data.as_array()) {
       if (callback) {
         if (!callback(ele)) {
           return ret;
@@ -721,10 +730,10 @@ vector<json> Core::timeline_friendfeed(BCYListIteratorCallback callback) {
   vector<json> ret;
   string since = "0";
   json j;
-  j["grid_type"] = "grid";
-  j["uid"] = UID;
+  j["grid_type"] = web::json::value("grid");
+  j["uid"] = web::json::value(UID);
   while (true) {
-    j["since"] = since;
+    j["since"] = web::json::value(since);
     auto R = POST("apiv2/timeline/friendfeed/", j, true, true);
     if (R.error) {
       errorHandler(R.error, __func__);
@@ -735,8 +744,8 @@ vector<json> Core::timeline_friendfeed(BCYListIteratorCallback callback) {
     if (data.size() == 0) {
       return ret;
     }
-    since = data[data.size() - 1]["since"];
-    for (json &ele : data) {
+    since = data[data.size() - 1]["since"].as_string();
+    for (json &ele : data.as_array()) {
       if (callback) {
         if (!callback(ele)) {
           return ret;
@@ -751,9 +760,9 @@ vector<json> Core::item_favor_itemlist(BCYListIteratorCallback callback) {
   vector<json> ret;
   string since = "0";
   json j;
-  j["grid_type"] = "grid";
+  j["grid_type"] = web::json::value("grid");
   while (true) {
-    j["since"] = since;
+    j["since"] = web::json::value(since);
     auto R = POST("apiv2/item/favor/itemlist", j, true, true);
     if (R.error) {
       errorHandler(R.error, __func__);
@@ -764,8 +773,8 @@ vector<json> Core::item_favor_itemlist(BCYListIteratorCallback callback) {
     if (data.size() == 0) {
       return ret;
     }
-    since = data[data.size() - 1]["since"];
-    for (json &ele : data) {
+    since = data[data.size() - 1]["since"].as_string();
+    for (json &ele : data.as_array()) {
       if (callback) {
         if (!callback(ele)) {
           return ret;

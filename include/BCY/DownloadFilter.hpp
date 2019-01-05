@@ -1,28 +1,28 @@
 #ifndef BCY_DOWNLOADFILTER_HPP
 #define BCY_DOWNLOADFILTER_HPP
-#include "json.hpp"
 #include <SQLiteCpp/SQLiteCpp.h>
-typedef std::function<int(nlohmann::json &)> BCYFilterHandler;
+#include <cpprest/json.h>
+typedef std::function<int(web::json::value &)> BCYFilterHandler;
 namespace BCY {
-    class DownloadFilter {
-    public:
-        DownloadFilter() = delete;
-        DownloadFilter(DownloadFilter &) = delete;
-        ~DownloadFilter();
-        DownloadFilter(std::string DBPath);
-        bool shouldBlock(nlohmann::json abstract);
-        void loadRulesFromJSON(nlohmann::json rules);
-        void addFilterHandler(BCYFilterHandler handle);
-        std::vector<std::string> UIDList;
-        std::vector<std::string> WorkList;
-        std::vector<std::string> TagList;
-        std::vector<std::string> UserNameList;
-        std::vector<std::string> TypeList;
+class DownloadFilter {
+public:
+  DownloadFilter() = delete;
+  DownloadFilter(DownloadFilter &) = delete;
+  ~DownloadFilter();
+  DownloadFilter(std::string DBPath);
+  bool shouldBlock(web::json::value abstract);
+  void loadRulesFromJSON(web::json::value rules);
+  void addFilterHandler(BCYFilterHandler handle);
+  std::vector<web::json::value> UIDList;
+  std::vector<web::json::value> WorkList;
+  std::vector<web::json::value> TagList;
+  std::vector<web::json::value> UserNameList;
+  std::vector<web::json::value> TypeList;
 
-    private:
-        std::vector<BCYFilterHandler> FilterHandlers;
-        SQLite::Database *DB = nullptr;
-        std::string DBPath;
-    };
+private:
+  std::vector<BCYFilterHandler> FilterHandlers;
+  SQLite::Database *DB = nullptr;
+  std::string DBPath;
+};
 } // namespace BCY
 #endif
