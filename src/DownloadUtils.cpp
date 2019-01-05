@@ -344,12 +344,6 @@ void DownloadUtils::downloadFromInfo(json Inf, bool save, string item_id_arg) {
           '-'); // replace all 'x' to 'y'
   fs::path oldSavePath = UserPath / fs::path(tmpTitleString);
   fs::path newSavePath = UserPath / fs::path(item_id);
-  boost::system::error_code ec;
-  fs::create_directories(newSavePath, ec);
-  if (ec) {
-    BOOST_LOG_TRIVIAL(error) << "FileSystem Error: " << ec.message() << "@"
-                             << __FILE__ << ":" << __LINE__ << endl;
-  }
   if (Inf.find("multi") == Inf.end()) {
     Inf["multi"] = {};
   }
@@ -414,6 +408,15 @@ void DownloadUtils::downloadFromInfo(json Inf, bool save, string item_id_arg) {
           << endl;
       insertRecordForCompressedImage(item_id);
       isCompressedInfo = true;
+    }
+  }
+
+  if(Inf["multi"].size()>0){
+    boost::system::error_code ec;
+    fs::create_directories(newSavePath, ec);
+    if (ec) {
+      BOOST_LOG_TRIVIAL(error) << "FileSystem Error: " << ec.message() << "@"
+                               << __FILE__ << ":" << __LINE__ << endl;
     }
   }
   for (json item : Inf["multi"]) {
@@ -671,7 +674,7 @@ void DownloadUtils::verify(string condition, vector<string> args,
 }
 
 void DownloadUtils::cleanUID(string UID) {
-  BOOST_LOG_TRIVIAL(info) << "Cleaning up UID:" << UID << endl;
+  BOOST_LOG_TRIVIAL(debug) << "Cleaning up UID:" << UID << endl;
   string tmp = UID;
   while (tmp.length() < 3) {
     tmp = "0" + tmp;
@@ -684,7 +687,7 @@ void DownloadUtils::cleanUID(string UID) {
   bool isDirec = is_directory(UserPath, ec);
   if (isDirec) {
     fs::remove_all(UserPath, ec);
-    BOOST_LOG_TRIVIAL(info) << "Removed " << UserPath.string() << endl;
+    BOOST_LOG_TRIVIAL(debug) << "Removed " << UserPath.string() << endl;
   }
 
   std::lock_guard<mutex> guard(dbLock);
@@ -692,7 +695,7 @@ void DownloadUtils::cleanUID(string UID) {
   Statement Q(DB, "DELETE FROM WorkInfo WHERE UID=" + UID);
   Q.executeStep();
 }
-void DownloadUtils::cleanTag(string Tag) {
+void DownloadUtils::cleanTag(string Tag,vector<string>& items) {
   BOOST_LOG_TRIVIAL(info) << "Cleaning up Tag:" << Tag << endl;
   std::lock_guard<mutex> guard(dbLock);
   Database DB(DBPath, SQLite::OPEN_READWRITE);
@@ -707,6 +710,7 @@ void DownloadUtils::cleanTag(string Tag) {
     if (item_id == "" || item_id == "0") {
       continue;
     }
+    items.push_back(item_id);
     string tmp = UID;
     while (tmp.length() < 3) {
       tmp = "0" + tmp;
@@ -723,36 +727,41 @@ void DownloadUtils::cleanTag(string Tag) {
         BOOST_LOG_TRIVIAL(error) << "FileSystem Error: " << ec.message() << "@"
                                  << __FILE__ << ":" << __LINE__ << endl;
       } else {
-        BOOST_LOG_TRIVIAL(info) << "Removed " << UserPath.string() << endl;
+        BOOST_LOG_TRIVIAL(debug) << "Removed " << UserPath.string() << endl;
       }
     }
   }
 }
 void DownloadUtils::cleanup() {
   BOOST_LOG_TRIVIAL(info) << "Cleaning up..." << endl;
-  for (string UID : filter->UIDList) {
+  for (auto i=0;i<filter->UIDList.size();i++) {
+    string UID=filter->UIDList[i];
+    if(i%100==0){
+      BOOST_LOG_TRIVIAL(info) << "Removed "<<i<<"/"<<filter->UIDList.size()<<" UIDs"<<endl;
+    }
     cleanUID(UID);
   }
   vector<string> Infos;
-  for (string Tag : filter->TagList) {
-    cleanTag(Tag);
+  for (auto i=0;i<filter->TagList.size();i++) {
+    string Tag=filter->TagList[i];
+    if(i%100==0){
+      BOOST_LOG_TRIVIAL(info) << "Removed "<<i<<"/"<<filter->UIDList.size()<<" Tags"<<endl;
+    }
+    cleanTag(Tag,Infos);
   }
-  /*
-  BOOST_LOG_TRIVIAL(info) << "Cleaning up Remaining " << Infos.size() << " Info
-  from Database"
-  << endl;
+  BOOST_LOG_TRIVIAL(info) << "Cleaning up Remaining " << Infos.size() << " Info from Database"<< endl;
   int i = 0;
-  for (string Info : Infos) {
+  for (string item_id : Infos) {
       if ((i++) % 100 == 0) {
           BOOST_LOG_TRIVIAL(info) << "Remaining " << Infos.size() - i
           << " Info to be removed from Database" << endl;
       }
       std::lock_guard<mutex> guard(dbLock);
       Database DB(DBPath,SQLite::OPEN_READWRITE);
-      Statement Q(DB, "DELETE FROM WorkInfo WHERE Info=?");
-      Q.bind(1, Info);
+      Statement Q(DB, "DELETE FROM WorkInfo WHERE item_id=?");
+      Q.bind(1, item_id);
       Q.executeStep();
-  }*/
+  }
 }
 string DownloadUtils::md5(string &str) {
   string digest;
