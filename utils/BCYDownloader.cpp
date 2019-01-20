@@ -207,7 +207,7 @@ void Init() {
     if (commands.size() != 2) {
       cout << "Invalid Argument" << endl;
     } else {
-      DU->core.proxy = {{"http", commands[1]}, {"https", commands[1]}};
+      DU->core.proxy = commands[1];
     }
   };
   commHandle cleanupHandle = [=](vector<string> commands) { DU->cleanup(); };
@@ -509,6 +509,22 @@ std::istream &operator>>(std::istream &in,
   return in;
 }
 int main(int argc, char **argv) {
+    
+    /*string JSONPath = "/Users/naville/Desktop/MSSUXDK.json";
+    ifstream JSONStream(JSONPath);
+    if (JSONStream.bad()) {
+        cout << "Failed to Open File at:" << JSONPath << "!" << endl;
+        exit(-1);
+    }
+    string JSONStr;
+    JSONStream.seekg(0, ios::end);
+    JSONStr.reserve(JSONStream.tellg());
+    JSONStream.seekg(0, ios::beg);
+    JSONStr.assign((istreambuf_iterator<char>(JSONStream)),
+                   istreambuf_iterator<char>());
+    json conf = json::parse(JSONStr);
+    cout<<conf.serialize()<<endl;
+    abort();*/
   Init();
 #warning BCYDownloader currently doesnt handle funny characters like ,.@ or escaping quotes well, please avoid using them in strange places
   logging::add_common_attributes();
@@ -695,8 +711,7 @@ int main(int argc, char **argv) {
     }
     if (config.has_field("HTTPProxy") &&
         config.at("HTTPProxy").is_null() == false) {
-      DU->core.proxy = {{"http", config["HTTPProxy"].as_string()},
-                        {"https", config["HTTPProxy"].as_string()}};
+      DU->core.proxy = config["HTTPProxy"].as_string();
     }
     if (config.has_field("Types") && config.at("Types").is_null() == false) {
       for (auto F : config["Types"].as_array()) {
@@ -734,6 +749,5 @@ int main(int argc, char **argv) {
   } else {
     JSONMode();
   }
-
   return 0;
 }

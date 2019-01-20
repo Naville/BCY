@@ -7,13 +7,10 @@ set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_DEBUG} -Wall -g -O2 -D DEB
 set(CMAKE_CXX_FLAGS_MINSIZEREL "${CMAKE_CXX_FLAGS_RELEASE} -O3 -D NDEBUG -Wall")
 
 option(SQLITECPP_INTERNAL_SQLITE "" OFF)
-option(BUILD_CPR_TESTS "" OFF)
-option(USE_SYSTEM_CURL "" ON)
 option(ENABLE_PYTHON_BINDING "Enable PyBCY" OFF)
 set(PYTHON_VERSION "3.7" CACHE STRING "Python Version Used For Python Binding" )
 add_compile_definitions("SQLITE_OMIT_LOAD_EXTENSION")
 ADD_DEFINITIONS(-DBOOST_LOG_DYN_LINK)
-add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/cpr EXCLUDE_FROM_ALL)
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/SQLiteCpp EXCLUDE_FROM_ALL)
 find_package(PkgConfig REQUIRED)
 find_package(Boost 1.67.0 REQUIRED system filesystem thread regex program_options log)
@@ -27,7 +24,6 @@ file(GLOB BCYCORE_SRC
     "src/Utils.cpp"
     "include/Base64.h"
     "include/Utils.hpp"
-    "include/json.hpp"
     "src/Core.cpp"
 )
 file(GLOB BCYDOWNLOADUTILS_SRC
@@ -42,15 +38,14 @@ add_executable(BCYDownloader utils/BCYDownloader.cpp)
 
 include_directories(AFTER SYSTEM ${CMAKE_CURRENT_LIST_DIR}/ChaiScript/include/ ${BOOST_INCLUDE_DIRS} ${CMAKE_CURRENT_LIST_DIR}/include/ "/usr/local/include/" "/usr/include/")
 
-set_target_properties(BCYCore PROPERTIES PUBLIC_HEADER "${CMAKE_CURRENT_LIST_DIR}/include/BCY/Core.hpp;${CMAKE_CURRENT_LIST_DIR}/include/BCY/Utils.hpp;${CMAKE_CURRENT_LIST_DIR}/include/BCY/Base64.h;${CMAKE_CURRENT_LIST_DIR}/include/BCY/json.hpp")
-target_include_directories(BCYCore PUBLIC ${CPR_INCLUDE_DIRS})
-target_link_libraries(BCYCore ${CRYPTOPP_LIB} ${CPR_LIBRARIES} ${Boost_LIBRARIES} cpprestsdk::cpprest)
+set_target_properties(BCYCore PROPERTIES PUBLIC_HEADER "${CMAKE_CURRENT_LIST_DIR}/include/BCY/Core.hpp;${CMAKE_CURRENT_LIST_DIR}/include/BCY/Utils.hpp;${CMAKE_CURRENT_LIST_DIR}/include/BCY/Base64.h")
+target_link_libraries(BCYCore ${CRYPTOPP_LIB} ${Boost_LIBRARIES} cpprestsdk::cpprest)
 
 set_target_properties(BCYDownloadUtils PROPERTIES PUBLIC_HEADER "${CMAKE_CURRENT_LIST_DIR}/include/BCY/DownloadFilter.hpp;${CMAKE_CURRENT_LIST_DIR}/include/BCY/DownloadUtils.hpp")
-target_include_directories(BCYDownloadUtils PUBLIC ${CPR_INCLUDE_DIRS} ${CMAKE_CURRENT_LIST_DIR}/SQLiteCpp/include)
+target_include_directories(BCYDownloadUtils PUBLIC ${CMAKE_CURRENT_LIST_DIR}/SQLiteCpp/include)
 target_link_libraries(BCYDownloadUtils BCYCore SQLiteCpp sqlite3 pthread z)
 
-target_include_directories(BCYDownloader PUBLIC ${CPR_INCLUDE_DIRS} ${CMAKE_CURRENT_LIST_DIR}/SQLiteCpp/include)
+target_include_directories(BCYDownloader PUBLIC ${CMAKE_CURRENT_LIST_DIR}/SQLiteCpp/include)
 target_link_libraries(BCYDownloader BCYDownloadUtils)
 
 install(TARGETS BCYDownloader DESTINATION bin COMPONENT BCYDownloader)
@@ -74,8 +69,8 @@ ELSE()
   set_target_properties(PyBCY PROPERTIES SUFFIX ".so")
 ENDIF()
 find_package(Python ${PYTHON_VERSION} REQUIRED COMPONENTS Interpreter Development)
-target_include_directories(PyBCY PUBLIC ${BOOST_INCLUDE_DIRS} ${CMAKE_CURRENT_LIST_DIR}/include/ ${CPR_INCLUDE_DIRS} "/usr/local/include/" "/usr/include/" ${PYTHON_INCLUDE_DIRS} ${CMAKE_CURRENT_LIST_DIR}/SQLiteCpp/include ${Python_INCLUDE_DIRS})
-target_link_libraries(PyBCY ${CRYPTOPP_LIB} ${CPR_LIBRARIES} ${Boost_LIBRARIES} ${PYTHON_LIBRARIES} BCYCore BCYDownloadUtils)
+target_include_directories(PyBCY PUBLIC ${BOOST_INCLUDE_DIRS} ${CMAKE_CURRENT_LIST_DIR}/include/ "/usr/local/include/" "/usr/include/" ${PYTHON_INCLUDE_DIRS} ${CMAKE_CURRENT_LIST_DIR}/SQLiteCpp/include ${Python_INCLUDE_DIRS})
+target_link_libraries(PyBCY ${CRYPTOPP_LIB} ${Boost_LIBRARIES} ${PYTHON_LIBRARIES} BCYCore BCYDownloadUtils)
 message(STATUS "Installing PyBCY to:"${Python_SITEARCH})
 install(TARGETS PyBCY DESTINATION "${Python_SITEARCH}/")
 ENDIF()

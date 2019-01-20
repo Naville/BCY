@@ -15,7 +15,6 @@ typedef boost::error_info<struct tag_stacktrace, boost::stacktrace::stacktrace>
     traced;
 #endif
 using json = web::json::value;
-using namespace cpr;
 using namespace CryptoPP;
 namespace fs = boost::filesystem;
 using namespace boost::asio;
@@ -84,13 +83,14 @@ void DownloadUtils::downloadFromAbstractInfo(json AbstractInfo) {
         boost::this_thread::interruption_point();
         if (detail.is_null()) {
           boost::this_thread::interruption_point();
-          detail = core.item_detail(ensure_string(
-              AbstractInfo.at("item_detail").at("item_id")))["data"];
+            string item_id = ensure_string(
+                                           AbstractInfo.at("item_detail").at("item_id"));
+          detail = core.item_detail(item_id)["data"];
           boost::this_thread::interruption_point();
           try {
             downloadFromInfo(
                 detail, true,
-                ensure_string(AbstractInfo.at("item_detail").at("item_id")));
+                item_id);
           } catch (boost::thread_interrupted) {
             BOOST_LOG_TRIVIAL(debug)
                 << "Cancelling Thread:" << boost::this_thread::get_id() << endl;
@@ -491,20 +491,11 @@ void DownloadUtils::downloadFromInfo(json Inf, bool save, string item_id_arg) {
           boost::this_thread::interruption_point();
           auto R = core.GET(origURL);
           boost::this_thread::interruption_point();
-          if (R.error) {
-#ifdef DEBUG
-            core.errorHandler(R.error,
-                              string(__FILE__) + ":" + to_string(__LINE__));
-#else
-                            core.errorHandler(R.error, "imageDownload");
-#endif
-          } else {
-            boost::this_thread::interruption_point();
-            ofstream ofs(newFilePath.string(), ios::binary);
-            ofs.write(R.text.c_str(), R.text.length());
-            ofs.close();
-            boost::this_thread::interruption_point();
-          }
+          ofstream ofs(newFilePath.string(), ios::binary);
+          auto vec = R.extract_vector().get();
+          ofs.write(reinterpret_cast<const char *>(vec.data()), vec.size());
+          ofs.close();
+          boost::this_thread::interruption_point();
         });
       } else {
         boost::this_thread::interruption_point();
@@ -538,26 +529,23 @@ void DownloadUtils::downloadFromInfo(json Inf, bool save, string item_id_arg) {
         rpcparams["id"] = json();
         rpcparams["method"] = web::json::value("aria2.addUri");
         boost::this_thread::interruption_point();
-        Session Sess;
+        /*Session Sess;
         Sess.SetUrl(Url{RPCServer});
         Sess.SetBody(Body{rpcparams.serialize()});
-        Response X = Sess.Post();
+        Response X = Sess.Post();*/
+        auto R = this->core.POST(RPCServer, rpcparams, false, false);
         boost::this_thread::interruption_point();
-        if (X.error) {
-          core.errorHandler(X.error, "POSTing aria2");
+        auto rep = R.extract_json().get();
+        if (rep.has_field("result")) {
+          BOOST_LOG_TRIVIAL(debug)
+              << origURL
+              << " Registered in Aria2 with GID:" << rep["result"].serialize()
+              << endl;
         } else {
-          json rep = json::parse(X.text);
-          if (rep.has_field("result")) {
-            BOOST_LOG_TRIVIAL(debug)
-                << origURL
-                << " Registered in Aria2 with GID:" << rep["result"].serialize()
-                << endl;
-          } else {
-            BOOST_LOG_TRIVIAL(debug)
-                << origURL
-                << " Failed to Register with Aria2. Response:" << X.text
-                << " OrigURL:" << URL << endl;
-          }
+          BOOST_LOG_TRIVIAL(debug)
+              << origURL
+              << " Failed to Register with Aria2. Response:" << rep.serialize()
+              << " OrigURL:" << URL << endl;
         }
       }
     }

@@ -1,7 +1,7 @@
 #ifndef BCY_CORE_HPP
 #define BCY_CORE_HPP
+#include <cpprest/http_msg.h>
 #include <cpprest/json.h>
-#include <cpr/cpr.h>
 #include <cryptopp/aes.h>
 #include <cryptopp/crc.h>
 #include <cryptopp/filters.h>
@@ -37,21 +37,22 @@ class Core {
 public:
   Core();
   Core(Core &) = delete;
-  cpr::Proxies proxy;
   std::string UID = "";
-  int retry = 3;
-  int timeout = 10000;
-  std::function<void(cpr::Error, std::string)> errorHandler;
+  std::string proxy = "";
+  unsigned int retry = 3;
+  unsigned int timeout = 10;
   std::string EncryptData(std::string Input);
   web::json::value EncryptParam(web::json::value Params);
   web::json::value mixHEXParam(web::json::value Params);
-  cpr::Response POST(std::string URL,
-                     web::json::value Payload = web::json::value(),
-                     bool Auth = true, bool EncryptParam = true,
-                     cpr::Parameters Para = cpr::Parameters());
-  cpr::Response GET(std::string URL,
-                    web::json::value Payload = web::json::value(),
-                    cpr::Parameters Para = cpr::Parameters());
+  web::http::http_response POST(std::string URL,
+                                web::json::value Payload = web::json::value(),
+                                bool Auth = true, bool EncryptParam = true,
+                                std::map<std::string, std::string> Params =
+                                    std::map<std::string, std::string>());
+  web::http::http_response GET(std::string URL,
+                               web::json::value Payload = web::json::value(),
+                               std::map<std::string, std::string> Params =
+                                   std::map<std::string, std::string>());
   web::json::value user_detail(std::string UID);
   web::json::value image_postCover(std::string item_id, std::string type);
   bool user_follow(std::string uid, bool isFollow);
@@ -104,9 +105,8 @@ public:
 
 private:
   std::string bda_hexMixedString(std::string input);
-  cpr::Parameters Params;
-  cpr::Header Headers;
-  cpr::Cookies Cookies;
+  std::map<std::string, std::string> Params;
+  web::http::http_headers Headers;
   std::string sessionKey = "";
 };
 } // namespace BCY

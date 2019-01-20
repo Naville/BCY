@@ -24,7 +24,7 @@ string BCY::ensure_string(json foo) {
   if (foo.is_string()) {
     return foo.as_string();
   } else if (foo.is_number()) {
-    int num = foo.as_integer();
+    int64_t num = foo.as_number().to_int64();
     return to_string(num);
   } else if (foo.is_null()) {
     return "";
