@@ -509,7 +509,7 @@ std::istream &operator>>(std::istream &in,
   return in;
 }
 int main(int argc, char **argv) {
-    
+
     /*string JSONPath = "/Users/naville/Desktop/MSSUXDK.json";
     ifstream JSONStream(JSONPath);
     if (JSONStream.bad()) {
@@ -664,7 +664,7 @@ int main(int argc, char **argv) {
       }
     }
 
-    if (conf.has_field("aria2")) {
+    if (conf.has_field("aria2")==false) {
       if (vm.count("aria2")) {
         string arg = vm["aria2"].as<string>();
         config["aria2"] = json();

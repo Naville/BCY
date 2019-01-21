@@ -32,7 +32,29 @@ DownloadFilter::~DownloadFilter() {
   Q.bind(2, j.serialize());
   Q.executeStep();
 }
-bool DownloadFilter::shouldBlock(json abstract) {
+bool DownloadFilter::shouldBlockDetail(json abstract) {
+  string item_id = "null";
+  if (abstract.has_field("item_id")) {
+    item_id = ensure_string(abstract["item_id"]);
+  }
+  for (auto bar : UserNameList) {
+    string name = bar.as_string();
+    smatch match;
+    string foo = abstract["profile"]["uname"].as_string();
+    try {
+      if (regex_search(foo, match, regex(name)) && match.size() >= 1) {
+        BOOST_LOG_TRIVIAL(debug)
+            << item_id << " Blocked By Regex UserName Rule:" << name << endl;
+        return true;
+      }
+    } catch (const std::regex_error &e) {
+      BOOST_LOG_TRIVIAL(error)
+          << "UserName Regex Filter Error:" << e.what() << endl;
+    }
+  }
+  return false;
+}
+bool DownloadFilter::shouldBlockAbstract(json abstract) {
   string item_id = "null";
   if (abstract.has_field("item_id")) {
     item_id = ensure_string(abstract["item_id"]);
@@ -66,16 +88,6 @@ bool DownloadFilter::shouldBlock(json abstract) {
             << item_id << " Blocked By Regex Work Rule:" << name << endl;
         return true;
       }
-    }
-  }
-  for (auto bar : UserNameList) {
-    string name = bar.as_string();
-    smatch match;
-    string foo = abstract["profile"]["uname"].as_string();
-    if (regex_search(foo, match, regex(name)) && match.size() >= 1) {
-      BOOST_LOG_TRIVIAL(debug)
-          << item_id << " Blocked By Regex UserName Rule:" << name << endl;
-      return true;
     }
   }
   if (find(TypeList.begin(), TypeList.end(), abstract["type"]) !=

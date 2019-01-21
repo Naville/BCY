@@ -10,7 +10,8 @@ public:
   DownloadFilter(DownloadFilter &) = delete;
   ~DownloadFilter();
   DownloadFilter(std::string DBPath);
-  bool shouldBlock(web::json::value abstract);
+  bool shouldBlockDetail(web::json::value detail);
+bool shouldBlockAbstract(web::json::value abstract);
   void loadRulesFromJSON(web::json::value rules);
   void addFilterHandler(BCYFilterHandler handle);
   std::vector<web::json::value> UIDList;

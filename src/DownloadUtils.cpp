@@ -4,6 +4,7 @@
 #include <boost/lockfree/stack.hpp>
 #include <boost/log/trivial.hpp>
 #include <boost/thread.hpp>
+#include <cpprest/http_client.h>
 #include <execinfo.h>
 #include <fstream>
 #include <regex>
@@ -76,21 +77,19 @@ void DownloadUtils::downloadFromAbstractInfo(json AbstractInfo) {
     }
     boost::this_thread::interruption_point();
     try {
-      if (!filter->shouldBlock(AbstractInfo.at("item_detail"))) {
+      if (!filter->shouldBlockAbstract(AbstractInfo.at("item_detail"))) {
         boost::this_thread::interruption_point();
         json detail = loadInfo(
             ensure_string(AbstractInfo.at("item_detail").at("item_id")));
         boost::this_thread::interruption_point();
         if (detail.is_null()) {
           boost::this_thread::interruption_point();
-            string item_id = ensure_string(
-                                           AbstractInfo.at("item_detail").at("item_id"));
+          string item_id =
+              ensure_string(AbstractInfo.at("item_detail").at("item_id"));
           detail = core.item_detail(item_id)["data"];
           boost::this_thread::interruption_point();
           try {
-            downloadFromInfo(
-                detail, true,
-                item_id);
+            downloadFromInfo(detail, true, item_id);
           } catch (boost::thread_interrupted) {
             BOOST_LOG_TRIVIAL(debug)
                 << "Cancelling Thread:" << boost::this_thread::get_id() << endl;
@@ -259,7 +258,7 @@ void DownloadUtils::downloadFromInfo(json Inf, bool save, string item_id_arg) {
   if (item_id_arg != "") {
     // Not Called by the AbstractInfo Worker
     // Need to run our own filter process
-    if (filter->shouldBlock(Inf)) {
+    if (filter->shouldBlockDetail(Inf) || filter->shouldBlockAbstract(Inf)) {
       return;
     }
   }
@@ -272,6 +271,7 @@ void DownloadUtils::downloadFromInfo(json Inf, bool save, string item_id_arg) {
     } else {
       BOOST_LOG_TRIVIAL(error)
           << Inf.serialize() << " doesnt have valid item_id" << endl;
+      return;
     }
   }
   string Title = "";
@@ -345,7 +345,8 @@ void DownloadUtils::downloadFromInfo(json Inf, bool save, string item_id_arg) {
           '-'); // replace all 'x' to 'y'
   fs::path oldSavePath = UserPath / fs::path(tmpTitleString);
   fs::path newSavePath = UserPath / fs::path(item_id);
-  if (Inf.has_field("multi")) {
+
+  if (Inf.has_field("multi") == false) {
     Inf["multi"] = web::json::value::array();
   }
   if (Inf["type"].as_string() == "larticle" && Inf["multi"].size() == 0) {
@@ -476,7 +477,6 @@ void DownloadUtils::downloadFromInfo(json Inf, bool save, string item_id_arg) {
 
     bool shouldDL =
         (!fs::exists(newFilePath, ec2) || fs::exists(newa2confPath, ec2));
-
     if (shouldDL) {
       if (RPCServer == "") {
         if (stop) {
@@ -533,19 +533,26 @@ void DownloadUtils::downloadFromInfo(json Inf, bool save, string item_id_arg) {
         Sess.SetUrl(Url{RPCServer});
         Sess.SetBody(Body{rpcparams.serialize()});
         Response X = Sess.Post();*/
-        auto R = this->core.POST(RPCServer, rpcparams, false, false);
-        boost::this_thread::interruption_point();
-        auto rep = R.extract_json().get();
-        if (rep.has_field("result")) {
-          BOOST_LOG_TRIVIAL(debug)
-              << origURL
-              << " Registered in Aria2 with GID:" << rep["result"].serialize()
-              << endl;
-        } else {
-          BOOST_LOG_TRIVIAL(debug)
-              << origURL
-              << " Failed to Register with Aria2. Response:" << rep.serialize()
-              << " OrigURL:" << URL << endl;
+        try {
+          web::http::client::http_client client(RPCServer);
+          json rep = client.request(web::http::methods::POST, U("/"), rpcparams)
+                         .get()
+                         .extract_json(true)
+                         .get();
+
+          if (rep.has_field("result")) {
+            BOOST_LOG_TRIVIAL(debug)
+                << origURL
+                << " Registered in Aria2 with GID:" << rep["result"].serialize()
+                << endl;
+          } else {
+            BOOST_LOG_TRIVIAL(error)
+                << origURL << " Failed to Register with Aria2. Response:"
+                << rep.serialize() << " OrigURL:" << URL << endl;
+          }
+        } catch (const std::exception &exp) {
+          BOOST_LOG_TRIVIAL(error)
+              << "Posting to Aria2 Error:" << exp.what() << endl;
         }
       }
     }

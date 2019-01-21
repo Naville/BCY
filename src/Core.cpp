@@ -25,7 +25,7 @@ Core::Core() {
   string alp = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
   string width = generateRandomString("1234567890", 4);
   string height = generateRandomString("1234567890", 4);
-    Params = {{"version_code", "4.4.1"},
+  Params = {{"version_code", "4.4.1"},
             {"mix_mode", "1"},
             {"account_sdk_source", "app"},
             {"language", "en-US"},
@@ -44,7 +44,7 @@ Core::Core() {
             {"idfa", generateRandomString(alp, 40)}};
   this->Headers["User-Agent"] =
       "bcy 4.3.2 rv:4.3.2.6146 (iPad; iPhone OS 9.3.3; en_US) Cronet";
-  this->Headers["Cookie"]="";
+  this->Headers["Cookie"] = "";
 }
 string Core::EncryptData(string Input) {
   ECB_Mode<AES>::Encryption crypto;
@@ -58,11 +58,14 @@ string Core::EncryptData(string Input) {
 }
 http_response Core::GET(string URL, web::json::value Para,
                         map<string, string> Par) {
-  if(Par.empty()){
-      Par=this->Params;
+  if (Par.empty()) {
+    Par = this->Params;
+  }
+  if (URL.find("http://") == string::npos) {
+    URL = APIBase + URL;
   }
   http_client_config cfg;
-  if(this->proxy!=""){
+  if (this->proxy != "") {
     web::web_proxy proxy(this->proxy);
     cfg.set_proxy(proxy);
   }
@@ -75,39 +78,39 @@ http_response Core::GET(string URL, web::json::value Para,
     string val = it->second;
     builder.append_query(U(key), U(val));
   }
-    string body="";
-    for(auto iter = Para.as_object().cbegin();iter != Para.as_object().cend(); ++iter){
-        if (!body.empty()) {
-            body += "&";
-        }
-        body += web::uri::encode_uri(iter->first) + "=" + web::uri::encode_uri(iter->second.as_string());
+  string body = "";
+  for (auto iter = Para.as_object().cbegin(); iter != Para.as_object().cend();
+       ++iter) {
+    if (!body.empty()) {
+      body += "&";
     }
+    body += web::uri::encode_uri(iter->first) + "=" +
+            web::uri::encode_uri(iter->second.as_string());
+  }
 
   for (auto i = 0; i < retry + 1; i++) {
-      http_request req(methods::GET);
-      req.set_request_uri(builder.to_uri());
-      req.headers() = this->Headers;
-      req.set_body(body);
-      pplx::task<web::http::http_response> task =
-      client.request(req);
-      return task.get();
-  }
     http_request req(methods::GET);
     req.set_request_uri(builder.to_uri());
     req.headers() = this->Headers;
     req.set_body(body);
-    pplx::task<web::http::http_response> task =
-    client.request(req);
-    task.wait();
+    pplx::task<web::http::http_response> task = client.request(req);
     return task.get();
+  }
+  http_request req(methods::GET);
+  req.set_request_uri(builder.to_uri());
+  req.headers() = this->Headers;
+  req.set_body(body);
+  pplx::task<web::http::http_response> task = client.request(req);
+  task.wait();
+  return task.get();
 }
 http_response Core::POST(string URL, web::json::value Para, bool Auth,
                          bool Encrypt, map<string, string> Par) {
+  if (Par.empty()) {
+    Par = this->Params;
+  }
   if (URL.find("http://") == string::npos) {
     URL = APIBase + URL;
-  }
-  if(Par.empty()){
-        Par=this->Params;
   }
   if (Auth == true) {
     if (Para.has_field("session_key") == false && sessionKey != "") {
@@ -122,7 +125,7 @@ http_response Core::POST(string URL, web::json::value Para, bool Auth,
   http_client_config cfg;
   cfg.set_validate_certificates(false);
   cfg.set_timeout(std::chrono::seconds(this->timeout));
-  if(this->proxy!=""){
+  if (this->proxy != "") {
     web::web_proxy proxy(this->proxy);
     cfg.set_proxy(proxy);
   }
@@ -133,34 +136,35 @@ http_response Core::POST(string URL, web::json::value Para, bool Auth,
     string val = it->second;
     builder.append_query(U(key), U(val));
   }
-  string body="";
-  for(auto iter = Para.as_object().cbegin();iter != Para.as_object().cend(); ++iter){
-     if (!body.empty()) {
-         body += "&";
-     }
-     body += web::uri::encode_uri(iter->first) + "=" + web::uri::encode_data_string(iter->second.as_string());
+  string body = "";
+  for (auto iter = Para.as_object().cbegin(); iter != Para.as_object().cend();
+       ++iter) {
+    if (!body.empty()) {
+      body += "&";
+    }
+    body += web::uri::encode_uri(iter->first) + "=" +
+            web::uri::encode_data_string(iter->second.as_string());
   }
-    
-    
   for (auto i = 0; i < retry; i++) {
-      http_request req(methods::POST);
-      req.set_request_uri(builder.to_uri());
-      req.headers() = this->Headers;
-      req.set_body(body,"application/x-www-form-urlencoded");
-    pplx::task<web::http::http_response> task =
-        client.request(req);
-    return task.get();
-  }
     http_request req(methods::POST);
     req.set_request_uri(builder.to_uri());
     req.headers() = this->Headers;
-    req.set_body(body,"application/x-www-form-urlencoded");
-    pplx::task<web::http::http_response> task =
-    client.request(req);
-    task.wait();
+    req.set_body(body, "application/x-www-form-urlencoded");
+    pplx::task<web::http::http_response> task = client.request(req);
     return task.get();
+  }
+  http_request req(methods::POST);
+  req.set_request_uri(builder.to_uri());
+  req.headers() = this->Headers;
+  req.set_body(body, "application/x-www-form-urlencoded");
+  pplx::task<web::http::http_response> task = client.request(req);
+  task.wait();
+  return task.get();
 }
 web::json::value Core::mixHEXParam(web::json::value Params) {
+  if (Params.is_null()) {
+    return web::json::value::null();
+  }
   web::json::value j;
   for (auto iterInner = Params.as_object().cbegin();
        iterInner != Params.as_object().cend(); ++iterInner) {
