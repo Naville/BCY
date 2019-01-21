@@ -230,9 +230,6 @@ void DownloadUtils::insertRecordForCompressedImage(string item_id) {
   boost::this_thread::interruption_point();
 }
 json DownloadUtils::loadInfo(string item_id) {
-  if (!useCachedInfo) {
-    return json();
-  }
   std::lock_guard<mutex> guard(dbLock);
   Database DB(DBPath, SQLite::OPEN_READONLY);
   Statement Q(DB, "SELECT Info FROM WorkInfo WHERE item_id=?");
@@ -349,6 +346,17 @@ void DownloadUtils::downloadFromInfo(json Inf, bool save, string item_id_arg) {
   if (Inf.has_field("multi") == false) {
     Inf["multi"] = web::json::value::array();
   }
+  if(Inf.has_field("cover")){
+    vector<json> URLs;
+    for (json item : Inf["multi"].as_array()) {
+        URLs.push_back(item);
+    }
+      json j;
+      j["type"]=web::json::value("image");
+      j["path"]=Inf["cover"];
+     URLs.emplace_back(j);
+  Inf["multi"] = web::json::value::array(URLs);
+  }
   if (Inf["type"].as_string() == "larticle" && Inf["multi"].size() == 0) {
     vector<json> URLs;
     regex rgx("<img src=\"(.{80,100})\" alt=");
@@ -375,33 +383,39 @@ void DownloadUtils::downloadFromInfo(json Inf, bool save, string item_id_arg) {
     // Find the most HD one
     int bitrate = 0;
     string videoID = "video_1";
-    for (auto it = videoList.as_object().cbegin();
-         it != videoList.as_object().cend(); ++it) {
-      string K = it->first;
-      json V = it->second;
-      if (V["bitrate"].as_integer() > bitrate) {
-        videoID = K;
-      }
+    if(videoList.is_null()){
+        BOOST_LOG_TRIVIAL(error)<<"Can't query DownloadURL for videoID:"<<videoID<<endl;
     }
-    if (videoList.size() > 0) {
-      // Videos needs to be manually reviewed before playable
-      string URL = "";
-      Base64::Decode(videoList[videoID]["main_url"].as_string(), &URL);
-      string FileName = vid + ".mp4";
-      json j;
-      j["path"] = web::json::value(URL);
-      j["FileName"] = web::json::value(FileName);
-      vector<json> URLs;
-      for (json bar : Inf["multi"].as_array()) {
-        URLs.push_back(bar);
-      }
-      URLs.push_back(j);
-      Inf["multi"] = web::json::value::array(URLs);
-    } else {
-      BOOST_LOG_TRIVIAL(info)
-          << item_id << " hasn't been reviewed yet and thus not downloadable"
-          << endl;
+    else{
+        for (auto it = videoList.as_object().cbegin();
+             it != videoList.as_object().cend(); ++it) {
+            string K = it->first;
+            json V = it->second;
+            if (V["bitrate"].as_integer() > bitrate) {
+                videoID = K;
+            }
+        }
+        if (videoList.size() > 0) {
+            // Videos needs to be manually reviewed before playable
+            string URL = "";
+            Base64::Decode(videoList[videoID]["main_url"].as_string(), &URL);
+            string FileName = vid + ".mp4";
+            json j;
+            j["path"] = web::json::value(URL);
+            j["FileName"] = web::json::value(FileName);
+            vector<json> URLs;
+            for (json bar : Inf["multi"].as_array()) {
+                URLs.push_back(bar);
+            }
+            URLs.push_back(j);
+            Inf["multi"] = web::json::value::array(URLs);
+        } else {
+            BOOST_LOG_TRIVIAL(info)
+            << item_id << " hasn't been reviewed yet and thus not downloadable"
+            << endl;
+        }
     }
+    
   }
 
   bool isCompressedInfo = false;
@@ -544,11 +558,12 @@ void DownloadUtils::downloadFromInfo(json Inf, bool save, string item_id_arg) {
             BOOST_LOG_TRIVIAL(debug)
                 << origURL
                 << " Registered in Aria2 with GID:" << rep["result"].serialize()
-                << endl;
+                << " Query:" << rpcparams.serialize()<< endl;
           } else {
-            BOOST_LOG_TRIVIAL(error)
+            BOOST_LOG_TRIVIAL(debug)
                 << origURL << " Failed to Register with Aria2. Response:"
-                << rep.serialize() << " OrigURL:" << URL << endl;
+                << rep["error"]["message"].as_string()
+                << " Query:" << rpcparams.serialize() << endl;
           }
         } catch (const std::exception &exp) {
           BOOST_LOG_TRIVIAL(error)
@@ -872,7 +887,10 @@ void DownloadUtils::downloadItemID(string item_id) {
       return;
     }
     boost::this_thread::interruption_point();
-    json detail = loadInfo(item_id);
+    json detail = json::null();
+    if (useCachedInfo) {
+      detail = loadInfo(item_id);
+    }
     if (detail.is_null()) {
       boost::this_thread::interruption_point();
       detail = core.item_detail(item_id);

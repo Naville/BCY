@@ -61,7 +61,7 @@ http_response Core::GET(string URL, web::json::value Para,
   if (Par.empty()) {
     Par = this->Params;
   }
-  if (URL.find("http://") == string::npos) {
+  if (URL.find("http") == string::npos) {
     URL = APIBase + URL;
   }
   http_client_config cfg;
@@ -79,13 +79,15 @@ http_response Core::GET(string URL, web::json::value Para,
     builder.append_query(U(key), U(val));
   }
   string body = "";
-  for (auto iter = Para.as_object().cbegin(); iter != Para.as_object().cend();
-       ++iter) {
-    if (!body.empty()) {
-      body += "&";
+  if (Para.is_null() == false) {
+    for (auto iter = Para.as_object().cbegin(); iter != Para.as_object().cend();
+         ++iter) {
+      if (!body.empty()) {
+        body += "&";
+      }
+      body += web::uri::encode_uri(iter->first) + "=" +
+              web::uri::encode_uri(iter->second.as_string());
     }
-    body += web::uri::encode_uri(iter->first) + "=" +
-            web::uri::encode_uri(iter->second.as_string());
   }
 
   for (auto i = 0; i < retry + 1; i++) {
@@ -109,7 +111,7 @@ http_response Core::POST(string URL, web::json::value Para, bool Auth,
   if (Par.empty()) {
     Par = this->Params;
   }
-  if (URL.find("http://") == string::npos) {
+  if (URL.find("http") == string::npos) {
     URL = APIBase + URL;
   }
   if (Auth == true) {
