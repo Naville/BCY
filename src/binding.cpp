@@ -1,5 +1,6 @@
 #include "BCY/BCY.h"
 #include <boost/python.hpp>
+#include <chaiscript/chaiscript.hpp>
 #include <string>
 using namespace BCY;
 using namespace std;

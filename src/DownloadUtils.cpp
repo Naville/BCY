@@ -95,6 +95,9 @@ void DownloadUtils::downloadFromAbstractInfo(json AbstractInfo) {
                 << "Cancelling Thread:" << boost::this_thread::get_id() << endl;
             return;
           }
+          catch(const exception &exc){
+            BOOST_LOG_TRIVIAL(error)<<"Verifying from Info:"<<detail.serialize()<<" Raised Exception:"<<exc.what()<<endl;
+          }
         } else {
           try {
             downloadFromInfo(
@@ -104,6 +107,9 @@ void DownloadUtils::downloadFromAbstractInfo(json AbstractInfo) {
             BOOST_LOG_TRIVIAL(debug)
                 << "Cancelling Thread:" << boost::this_thread::get_id() << endl;
             return;
+          }
+          catch(const exception &exc){
+            BOOST_LOG_TRIVIAL(error)<<"Verifying from Info:"<<detail.serialize()<<" Raised Exception:"<<exc.what()<<endl;
           }
         }
       }
@@ -337,10 +343,6 @@ void DownloadUtils::downloadFromInfo(json Inf, bool save, string item_id_arg) {
   string L2Path = string(1, tmp[1]);
   fs::path UserPath =
       fs::path(saveRoot) / fs::path(L1Path) / fs::path(L2Path) / fs::path(UID);
-  string tmpTitleString = Title;
-  replace(tmpTitleString.begin(), tmpTitleString.end(), '/',
-          '-'); // replace all 'x' to 'y'
-  fs::path oldSavePath = UserPath / fs::path(tmpTitleString);
   fs::path newSavePath = UserPath / fs::path(item_id);
 
   if (Inf.has_field("multi") == false) {
@@ -415,7 +417,7 @@ void DownloadUtils::downloadFromInfo(json Inf, bool save, string item_id_arg) {
             << endl;
         }
     }
-    
+
   }
 
   bool isCompressedInfo = false;
@@ -470,24 +472,12 @@ void DownloadUtils::downloadFromInfo(json Inf, bool save, string item_id_arg) {
       FileName = item["FileName"].as_string();
       origURL = item["path"].as_string();
     }
-    fs::path oldFilePath = oldSavePath / fs::path(FileName);
     fs::path newFilePath = newSavePath / fs::path(FileName);
-    if (!oldFilePath.has_extension()) {
-      oldFilePath.replace_extension(".jpg");
-    }
     if (!newFilePath.has_extension()) {
       newFilePath.replace_extension(".jpg");
     }
     boost::system::error_code ec2;
-    auto olda2confPath = fs::path(oldFilePath.string() + ".aria2");
     auto newa2confPath = fs::path(newFilePath.string() + ".aria2");
-
-    if (fs::exists(oldFilePath, ec2) && !fs::exists(olda2confPath, ec2)) {
-      fs::rename(oldFilePath, newFilePath);
-    } else {
-      fs::remove(olda2confPath, ec2);
-      fs::remove(oldFilePath, ec2);
-    }
 
     bool shouldDL =
         (!fs::exists(newFilePath, ec2) || fs::exists(newa2confPath, ec2));
@@ -665,6 +655,9 @@ void DownloadUtils::verify(string condition, vector<string> args,
               << "Cancelling Thread:" << boost::this_thread::get_id() << endl;
           return;
         }
+        catch(const exception &exc){
+          BOOST_LOG_TRIVIAL(error)<<"Verifying from Info:"<<j.serialize()<<" Raised Exception:"<<exc.what()<<endl;
+        }
       });
     }
   } else {
@@ -684,6 +677,9 @@ void DownloadUtils::verify(string condition, vector<string> args,
           BOOST_LOG_TRIVIAL(debug)
               << "Cancelling Thread:" << boost::this_thread::get_id() << endl;
           return;
+        }
+        catch(const exception &exc){
+          BOOST_LOG_TRIVIAL(error)<<"Verifying from Info:"<<j.serialize()<<" Raised Exception:"<<exc.what()<<endl;
         }
       });
     }
@@ -908,6 +904,9 @@ void DownloadUtils::downloadItemID(string item_id) {
             << "Cancelling Thread:" << boost::this_thread::get_id() << endl;
         return;
       }
+      catch(const exception &exc){
+        BOOST_LOG_TRIVIAL(error)<<"Downloading from Info:"<<detail.serialize()<<" Raised Exception:"<<exc.what()<<endl;
+      }
     } else {
       try {
         downloadFromInfo(detail, false, item_id);
@@ -915,6 +914,9 @@ void DownloadUtils::downloadItemID(string item_id) {
         BOOST_LOG_TRIVIAL(debug)
             << "Cancelling Thread:" << boost::this_thread::get_id() << endl;
         return;
+      }
+      catch(const exception &exc){
+        BOOST_LOG_TRIVIAL(error)<<"Downloading from Info:"<<detail.serialize()<<" Raised Exception:"<<exc.what()<<endl;
       }
     }
   });
