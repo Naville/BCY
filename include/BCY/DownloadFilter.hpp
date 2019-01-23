@@ -1,6 +1,7 @@
 #ifndef BCY_DOWNLOADFILTER_HPP
 #define BCY_DOWNLOADFILTER_HPP
 #include <SQLiteCpp/SQLiteCpp.h>
+#include <chaiscript/chaiscript.hpp>
 #include <cpprest/json.h>
 typedef std::function<int(web::json::value &)> BCYFilterHandler;
 namespace BCY {
@@ -19,6 +20,7 @@ public:
   std::vector<web::json::value> TagList;
   std::vector<web::json::value> UserNameList;
   std::vector<web::json::value> TypeList;
+  std::vector<web::json::value> ScriptList;//Each should return an integer value. > 0 for allow, =0 for defer, <0 for deny. JSON has variable name Info
 private:
   std::vector<BCYFilterHandler> FilterHandlers;
   SQLite::Database *DB = nullptr;

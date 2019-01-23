@@ -11,6 +11,7 @@
 #include <boost/log/utility/setup.hpp>
 #include <boost/program_options.hpp>
 #include <chaiscript/chaiscript.hpp>
+#include <chaiscript/utility/json.hpp>
 #include <chrono>
 #include <cpprest/json.h>
 #include <fstream>
@@ -257,6 +258,12 @@ std::istream &operator>>(std::istream &in,
     in.setstate(std::ios_base::failbit);
   }
   return in;
+}
+static bool containsTag(web::json::value inf,string key){
+  if(inf.has_field(key)){
+    return true;
+  }
+  return false;
 }
 int main(int argc, char **argv) {
   logging::add_common_attributes();
