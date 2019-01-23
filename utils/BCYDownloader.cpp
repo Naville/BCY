@@ -92,9 +92,9 @@ static void tag(string tag) { DU->downloadTag(tag); }
 static void work(string workid) { DU->downloadWorkID(workid); }
 static void item(string item_id) { DU->downloadItemID(item_id); }
 static void proxy(string proxy) { DU->core.proxy = proxy; }
-static void group(string gid) { DU->downloadGroupID(gid); };
-static void cleanup() { DU->cleanup(); };
-static void join() { DU->join(); };
+static void group(string gid) { DU->downloadGroupID(gid); }
+static void cleanup() { DU->cleanup(); }
+static void join() { DU->join(); }
 static void login(string email, string password) {
   if (DU->core.UID == "") {
     web::json::value Res = DU->core.loginWithEmailAndPassword(email, password);

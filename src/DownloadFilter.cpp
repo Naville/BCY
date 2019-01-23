@@ -8,10 +8,10 @@
 using namespace std;
 using namespace SQLite;
 namespace BCY {
-static bool containsTag(web::json::value inf,string tag){
-  if(inf.has_field("post_tags")){
-    for(web::json::value j:inf["post_tags"].as_array()){
-      if(j["tag_name"].as_string()==tag){
+static bool containsTag(web::json::value inf, string tag) {
+  if (inf.has_field("post_tags")) {
+    for (web::json::value j : inf["post_tags"].as_array()) {
+      if (j["tag_name"].as_string() == tag) {
         return true;
       }
     }
@@ -47,24 +47,20 @@ bool DownloadFilter::shouldBlockDetail(web::json::value abstract) {
   if (abstract.has_field("item_id")) {
     item_id = ensure_string(abstract["item_id"]);
   }
-  if(ScriptList.size()>0){
+  if (ScriptList.size() > 0) {
     chaiscript::ChaiScript engine;
     engine.add(chaiscript::var(abstract), "Info");
     engine.add(chaiscript::fun(containsTag), "containsTag");
-    for(web::json::value j:ScriptList){
-      string scpt=j.as_string();
+    for (web::json::value j : ScriptList) {
+      string scpt = j.as_string();
       int result = engine.eval<int>(scpt);
-      if(result>0){
-        BOOST_LOG_TRIVIAL(debug)
-            << item_id << " Allowed by Script"<< endl;
+      if (result > 0) {
+        BOOST_LOG_TRIVIAL(debug) << item_id << " Allowed by Script" << endl;
         return false;
-      }
-      else if(result<0){
-        BOOST_LOG_TRIVIAL(debug)
-            << item_id << " Blocked by Script"<< endl;
+      } else if (result < 0) {
+        BOOST_LOG_TRIVIAL(debug) << item_id << " Blocked by Script" << endl;
         return true;
-      }
-      else{
+      } else {
         continue;
       }
     }
@@ -91,24 +87,20 @@ bool DownloadFilter::shouldBlockAbstract(web::json::value abstract) {
   if (abstract.has_field("item_id")) {
     item_id = ensure_string(abstract["item_id"]);
   }
-  if(ScriptList.size()>0){
+  if (ScriptList.size() > 0) {
     chaiscript::ChaiScript engine;
     engine.add(chaiscript::var(abstract), "Info");
     engine.add(chaiscript::fun(containsTag), "containsTag");
-    for(web::json::value j:ScriptList){
-      string scpt=j.as_string();
+    for (web::json::value j : ScriptList) {
+      string scpt = j.as_string();
       int result = engine.eval<int>(scpt);
-      if(result>0){
-        BOOST_LOG_TRIVIAL(debug)
-            << item_id << " Allowed by Script:"<< endl;
+      if (result > 0) {
+        BOOST_LOG_TRIVIAL(debug) << item_id << " Allowed by Script:" << endl;
         return false;
-      }
-      else if(result<0){
-        BOOST_LOG_TRIVIAL(debug)
-            << item_id << " Blocked by Script:"<< endl;
+      } else if (result < 0) {
+        BOOST_LOG_TRIVIAL(debug) << item_id << " Blocked by Script:" << endl;
         return true;
-      }
-      else{
+      } else {
         continue;
       }
     }

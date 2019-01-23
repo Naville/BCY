@@ -1,10 +1,10 @@
 #include "BCY/DownloadUtils.hpp"
 #include "BCY/Base64.h"
 #include "BCY/Utils.hpp"
+#include <boost/lexical_cast.hpp>
 #include <boost/lockfree/stack.hpp>
 #include <boost/log/trivial.hpp>
 #include <boost/thread.hpp>
-#include <boost/lexical_cast.hpp>
 #include <cpprest/http_client.h>
 #include <execinfo.h>
 #include <fstream>
@@ -94,9 +94,10 @@ void DownloadUtils::downloadFromAbstractInfo(web::json::value AbstractInfo) {
             BOOST_LOG_TRIVIAL(debug)
                 << "Cancelling Thread:" << boost::this_thread::get_id() << endl;
             return;
-          }
-          catch(const exception &exc){
-            BOOST_LOG_TRIVIAL(error)<<"Verifying from Info:"<<detail.serialize()<<" Raised Exception:"<<exc.what()<<endl;
+          } catch (const exception &exc) {
+            BOOST_LOG_TRIVIAL(error)
+                << "Verifying from Info:" << detail.serialize()
+                << " Raised Exception:" << exc.what() << endl;
           }
         } else {
           try {
@@ -107,9 +108,10 @@ void DownloadUtils::downloadFromAbstractInfo(web::json::value AbstractInfo) {
             BOOST_LOG_TRIVIAL(debug)
                 << "Cancelling Thread:" << boost::this_thread::get_id() << endl;
             return;
-          }
-          catch(const exception &exc){
-            BOOST_LOG_TRIVIAL(error)<<"Verifying from Info:"<<detail.serialize()<<" Raised Exception:"<<exc.what()<<endl;
+          } catch (const exception &exc) {
+            BOOST_LOG_TRIVIAL(error)
+                << "Verifying from Info:" << detail.serialize()
+                << " Raised Exception:" << exc.what() << endl;
           }
         }
       }
@@ -250,7 +252,8 @@ web::json::value DownloadUtils::loadInfo(string item_id) {
     return web::json::value();
   }
 }
-void DownloadUtils::downloadFromInfo(web::json::value Inf, bool save, string item_id_arg) {
+void DownloadUtils::downloadFromInfo(web::json::value Inf, bool save,
+                                     string item_id_arg) {
   if (!Inf.is_object()) {
     BOOST_LOG_TRIVIAL(error)
         << Inf.serialize() << " is not valid Detail Info For Downloading"
@@ -348,18 +351,19 @@ void DownloadUtils::downloadFromInfo(web::json::value Inf, bool save, string ite
   if (Inf.has_field("multi") == false) {
     Inf["multi"] = web::json::value::array();
   }
-  if(Inf.has_field("cover")){
+  if (Inf.has_field("cover")) {
     vector<web::json::value> URLs;
     for (web::json::value item : Inf["multi"].as_array()) {
-        URLs.push_back(item);
+      URLs.push_back(item);
     }
-      web::json::value j;
-      j["type"]=web::json::value("image");
-      j["path"]=Inf["cover"];
-     URLs.emplace_back(j);
-  Inf["multi"] = web::json::value::array(URLs);
+    web::json::value j;
+    j["type"] = web::json::value("image");
+    j["path"] = Inf["cover"];
+    URLs.emplace_back(j);
+    Inf["multi"] = web::json::value::array(URLs);
   }
-  if (Inf.has_field("type") &&Inf["type"].as_string() == "larticle" && Inf["multi"].size() == 0) {
+  if (Inf.has_field("type") && Inf["type"].as_string() == "larticle" &&
+      Inf["multi"].size() == 0) {
     vector<web::json::value> URLs;
     regex rgx("<img src=\"(.{80,100})\" alt=");
     string tmpjson = Inf.serialize();
@@ -374,21 +378,22 @@ void DownloadUtils::downloadFromInfo(web::json::value Inf, bool save, string ite
     }
     Inf["multi"] = web::json::value::array(URLs);
   }
-    if(Inf.has_field("group") && Inf["group"].has_field("multi")){
-        vector<web::json::value> URLs;
-        if(Inf.has_field("multi")){
-            for(web::json::value foo:Inf["multi"].as_array()){
-                URLs.push_back(foo);
-            }
-        }
-        for(web::json::value foo:Inf["group"]["multi"].as_array()){
-            URLs.push_back(foo);
-        }
-        Inf["multi"] = web::json::value::array(URLs);
+  if (Inf.has_field("group") && Inf["group"].has_field("multi")) {
+    vector<web::json::value> URLs;
+    if (Inf.has_field("multi")) {
+      for (web::json::value foo : Inf["multi"].as_array()) {
+        URLs.push_back(foo);
+      }
     }
+    for (web::json::value foo : Inf["group"]["multi"].as_array()) {
+      URLs.push_back(foo);
+    }
+    Inf["multi"] = web::json::value::array(URLs);
+  }
 
   // videoInfo
-  if (Inf.has_field("type") &&Inf["type"].as_string() == "video" && Inf.has_field("video_info")) {
+  if (Inf.has_field("type") && Inf["type"].as_string() == "video" &&
+      Inf.has_field("video_info")) {
     string vid = Inf["video_info"]["vid"].as_string();
     boost::this_thread::interruption_point();
     web::json::value F = core.videoInfo(vid);
@@ -397,39 +402,38 @@ void DownloadUtils::downloadFromInfo(web::json::value Inf, bool save, string ite
     // Find the most HD one
     int bitrate = 0;
     string videoID = "video_1";
-    if(videoList.is_null()){
-        BOOST_LOG_TRIVIAL(error)<<"Can't query DownloadURL for videoID:"<<videoID<<endl;
-    }
-    else{
-        for (auto it = videoList.as_object().cbegin();
-             it != videoList.as_object().cend(); ++it) {
-            string K = it->first;
-            web::json::value V = it->second;
-            if (V["bitrate"].as_integer() > bitrate) {
-                videoID = K;
-            }
+    if (videoList.is_null()) {
+      BOOST_LOG_TRIVIAL(error)
+          << "Can't query DownloadURL for videoID:" << videoID << endl;
+    } else {
+      for (auto it = videoList.as_object().cbegin();
+           it != videoList.as_object().cend(); ++it) {
+        string K = it->first;
+        web::json::value V = it->second;
+        if (V["bitrate"].as_integer() > bitrate) {
+          videoID = K;
         }
-        if (videoList.size() > 0) {
-            // Videos needs to be manually reviewed before playable
-            string URL = "";
-            Base64::Decode(videoList[videoID]["main_url"].as_string(), &URL);
-            string FileName = vid + ".mp4";
-            web::json::value j;
-            j["path"] = web::json::value(URL);
-            j["FileName"] = web::json::value(FileName);
-            vector<web::json::value> URLs;
-            for (web::json::value bar : Inf["multi"].as_array()) {
-                URLs.push_back(bar);
-            }
-            URLs.push_back(j);
-            Inf["multi"] = web::json::value::array(URLs);
-        } else {
-            BOOST_LOG_TRIVIAL(info)
+      }
+      if (videoList.size() > 0) {
+        // Videos needs to be manually reviewed before playable
+        string URL = "";
+        Base64::Decode(videoList[videoID]["main_url"].as_string(), &URL);
+        string FileName = vid + ".mp4";
+        web::json::value j;
+        j["path"] = web::json::value(URL);
+        j["FileName"] = web::json::value(FileName);
+        vector<web::json::value> URLs;
+        for (web::json::value bar : Inf["multi"].as_array()) {
+          URLs.push_back(bar);
+        }
+        URLs.push_back(j);
+        Inf["multi"] = web::json::value::array(URLs);
+      } else {
+        BOOST_LOG_TRIVIAL(info)
             << item_id << " hasn't been reviewed yet and thus not downloadable"
             << endl;
-        }
+      }
     }
-
   }
 
   bool isCompressedInfo = false;
@@ -551,16 +555,17 @@ void DownloadUtils::downloadFromInfo(web::json::value Inf, bool save, string ite
         Response X = Sess.Post();*/
         try {
           web::http::client::http_client client(RPCServer);
-          web::json::value rep = client.request(web::http::methods::POST, U("/"), rpcparams)
-                         .get()
-                         .extract_json(true)
-                         .get();
+          web::json::value rep =
+              client.request(web::http::methods::POST, U("/"), rpcparams)
+                  .get()
+                  .extract_json(true)
+                  .get();
 
           if (rep.has_field("result")) {
             BOOST_LOG_TRIVIAL(debug)
                 << origURL
                 << " Registered in Aria2 with GID:" << rep["result"].serialize()
-                << " Query:" << rpcparams.serialize()<< endl;
+                << " Query:" << rpcparams.serialize() << endl;
           } else {
             BOOST_LOG_TRIVIAL(debug)
                 << origURL << " Failed to Register with Aria2. Response:"
@@ -666,9 +671,10 @@ void DownloadUtils::verify(string condition, vector<string> args,
           BOOST_LOG_TRIVIAL(debug)
               << "Cancelling Thread:" << boost::this_thread::get_id() << endl;
           return;
-        }
-        catch(const exception &exc){
-          BOOST_LOG_TRIVIAL(error)<<"Verifying from Info:"<<j.serialize()<<" Raised Exception:"<<exc.what()<<endl;
+        } catch (const exception &exc) {
+          BOOST_LOG_TRIVIAL(error)
+              << "Verifying from Info:" << j.serialize()
+              << " Raised Exception:" << exc.what() << endl;
         }
       });
     }
@@ -689,9 +695,10 @@ void DownloadUtils::verify(string condition, vector<string> args,
           BOOST_LOG_TRIVIAL(debug)
               << "Cancelling Thread:" << boost::this_thread::get_id() << endl;
           return;
-        }
-        catch(const exception &exc){
-          BOOST_LOG_TRIVIAL(error)<<"Verifying from Info:"<<j.serialize()<<" Raised Exception:"<<exc.what()<<endl;
+        } catch (const exception &exc) {
+          BOOST_LOG_TRIVIAL(error)
+              << "Verifying from Info:" << j.serialize()
+              << " Raised Exception:" << exc.what() << endl;
         }
       });
     }
@@ -915,9 +922,10 @@ void DownloadUtils::downloadItemID(string item_id) {
         BOOST_LOG_TRIVIAL(debug)
             << "Cancelling Thread:" << boost::this_thread::get_id() << endl;
         return;
-      }
-      catch(const exception &exc){
-        BOOST_LOG_TRIVIAL(error)<<"Downloading from Info:"<<detail.serialize()<<" Raised Exception:"<<exc.what()<<endl;
+      } catch (const exception &exc) {
+        BOOST_LOG_TRIVIAL(error)
+            << "Downloading from Info:" << detail.serialize()
+            << " Raised Exception:" << exc.what() << endl;
       }
     } else {
       try {
@@ -926,9 +934,10 @@ void DownloadUtils::downloadItemID(string item_id) {
         BOOST_LOG_TRIVIAL(debug)
             << "Cancelling Thread:" << boost::this_thread::get_id() << endl;
         return;
-      }
-      catch(const exception &exc){
-        BOOST_LOG_TRIVIAL(error)<<"Downloading from Info:"<<detail.serialize()<<" Raised Exception:"<<exc.what()<<endl;
+      } catch (const exception &exc) {
+        BOOST_LOG_TRIVIAL(error)
+            << "Downloading from Info:" << detail.serialize()
+            << " Raised Exception:" << exc.what() << endl;
       }
     }
   });
@@ -947,7 +956,8 @@ void DownloadUtils::downloadWorkID(string item) {
       return;
     }
     string WorkName = rep["data"]["real_name"].as_string();
-    web::json::value FilterList = core.circle_filterlist(item, CircleType::Work, WorkName);
+    web::json::value FilterList =
+        core.circle_filterlist(item, CircleType::Work, WorkName);
     if (FilterList.is_null()) {
       BOOST_LOG_TRIVIAL(error)
           << "FilterList For WorkID:" << item << " is null";
