@@ -393,7 +393,7 @@ void DownloadUtils::downloadFromInfo(web::json::value Inf, bool save,
 
   // videoInfo
   if (Inf.has_field("type") && Inf["type"].as_string() == "video" &&
-      Inf.has_field("video_info")) {
+      Inf.has_field("video_info") &&downloadVideo==true) {
     string vid = Inf["video_info"]["vid"].as_string();
     boost::this_thread::interruption_point();
     web::json::value F = core.videoInfo(vid);

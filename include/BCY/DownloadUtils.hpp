@@ -16,6 +16,7 @@ public:
   Core core;
   DownloadFilter *filter = nullptr;
   bool useCachedInfo = true;    // Would be really slow for large databases
+  bool downloadVideo = true;
   bool allowCompressed = false; // if enabled, downloader will try to use the
   // official API to download compressed
   // (~20%quality lost )images instead of

@@ -66,6 +66,7 @@ static void liked(string UID) {
   }
 }
 static void unlike() { DU->unlikeCached(); }
+static void downloadVideo(bool flag) { DU->downloadVideo=flag; }
 static void process() { JSONMode(); }
 static void aria2(string addr, string secret) {
   DU->RPCServer = addr;
@@ -222,7 +223,7 @@ void Interactive() {
   engine.add(chaiscript::fun(&quit), "quit");
   engine.add(chaiscript::fun(&tag), "tag");
   engine.add(chaiscript::fun(&searchKW), "search");
-
+  engine.add(chaiscript::fun(&downloadVideo), "downloadVideo");
   string command;
   while (1) {
     cout << Prefix << ":$";
