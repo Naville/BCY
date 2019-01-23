@@ -776,7 +776,7 @@ void DownloadUtils::cleanup() {
     }
     cleanTag(Tag, Infos);
   }
-  BOOST_LOG_TRIVIAL(info) << "Cleaning up Remaining " << Infos.size()
+  /*BOOST_LOG_TRIVIAL(info) << "Cleaning up Remaining " << Infos.size()
                           << " Info from Database" << endl;
   int i = 0;
   for (string item_id : Infos) {
@@ -789,7 +789,7 @@ void DownloadUtils::cleanup() {
     Statement Q(DB, "DELETE FROM WorkInfo WHERE item_id=?");
     Q.bind(1, item_id);
     Q.executeStep();
-  }
+  }*/
 }
 string DownloadUtils::md5(string &str) {
   string digest;
@@ -994,6 +994,15 @@ void DownloadUtils::join() {
   queryThread->join();
   BOOST_LOG_TRIVIAL(info) << "Joining Download Threads" << endl;
   downloadThread->join();
+}
+void DownloadUtils::watchdog(){
+    if(core.UID==""){
+        BOOST_LOG_TRIVIAL(error) << "Not Logged in" << endl;
+        return;
+    }
+    string since="0";
+    auto j=core.timeline_friendfeed(downloadCallback);
+#warning Unimplemented
 }
 DownloadUtils::~DownloadUtils() {
   stop = true;

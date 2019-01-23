@@ -9,6 +9,7 @@
 #include <cpprest/http_client.h>
 #include <cpprest/uri.h>
 #include <ctime>
+#include <chrono>
 using namespace std;
 using namespace CryptoPP;
 using namespace boost;
@@ -218,6 +219,28 @@ web::json::value Core::videoInfo(string video_id) {
   map<string, string> P{{"r", nonce}, {"s", crc}};
   auto R = GET(BaseURL + "/" + video_id, json::value::null(), P);
   return R.extract_json().get();
+}
+web::json::value Core::timeline_friendfeed_hasmore(string since){
+    web::json::value j;
+    j["since"]=web::json::value(since);
+    auto R = POST("apiv2/timeline/friendfeed_hasmore",j, true,true);
+    return R.extract_json().get();
+        
+}
+web::json::value Core::timeline_stream_refresh(){
+    web::json::value j;
+    j["direction"]=web::json::value("refresh");
+    auto R = POST("apiv2/timeline/stream",j, true,true);
+    return R.extract_json().get();
+}
+web::json::value Core::timeline_stream_loadmore(string feed_type,int first_enter,int refresh_num){
+    web::json::value j;
+    j["direction"] = web::json::value("loadmore");
+    j["feed_type"] = web::json::value(feed_type);
+    j["first_enter"] = web::json::value(first_enter);
+    j["refresh_num"] = web::json::value(refresh_num);
+    auto R = POST("apiv2/timeline/stream",j, true,true);
+    return R.extract_json().get();
 }
 web::json::value Core::EncryptParam(web::json::value Params) {
   string serialized = Params.serialize();
@@ -653,17 +676,24 @@ Core::group_listPosts(string GID, BCYListIteratorCallback callback) {
 vector<web::json::value>
 Core::timeline_friendfeed(BCYListIteratorCallback callback) {
   vector<web::json::value> ret;
-  string since = "0";
+  std::chrono::milliseconds ms = std::chrono::duration_cast< std::chrono::milliseconds >(std::chrono::system_clock::now().time_since_epoch());
+  string since = to_string(ms.count());
   web::json::value j;
-  j["grid_type"] = web::json::value("grid");
-  j["uid"] = web::json::value(UID);
+  j["grid_type"] = web::json::value("timeline");
+  j["direction"] = web::json::value("refresh");
+  bool firstTime=true;
   while (true) {
     j["since"] = web::json::value(since);
-    auto R = POST("apiv2/timeline/friendfeed/", j, true, true);
+    auto R = POST("apiv2/timeline/friendfeed", j, true, true);
+    j["direction"] = web::json::value("loadmore");
     web::json::value foo = R.extract_json().get();
     web::json::value data = foo["data"];
-    if (data.size() == 0) {
+    if (data.size() == 0 &&firstTime==false) {
       return ret;
+    }
+    if(firstTime==true){
+        firstTime=false;
+        continue;
     }
     since = data[data.size() - 1]["since"].as_string();
     for (web::json::value &ele : data.as_array()) {

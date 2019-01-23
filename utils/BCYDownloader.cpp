@@ -744,6 +744,9 @@ int main(int argc, char **argv) {
       }
     }
   }
+    auto foo=DU->core.timeline_friendfeed();
+    cout<<foo[0].serialize()<<endl;
+    exit(0);
   if (vm.count("i") || DU == nullptr) {
     Interactive();
   } else {

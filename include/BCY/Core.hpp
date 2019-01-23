@@ -68,9 +68,12 @@ public:
                                      std::string circle_name);
   web::json::value circle_itemhottags(std::string item_id);
   web::json::value group_detail(std::string GID);
+  web::json::value timeline_stream_refresh();
+  web::json::value timeline_stream_loadmore(std::string feed_type="",int first_enter=1,int refresh_num=25);
   web::json::value core_status(std::string WorkID);
   web::json::value ParamByCRC32URL(std::string FullURL);
   web::json::value videoInfo(std::string video_id);
+    web::json::value timeline_friendfeed_hasmore(std::string since);
   std::vector<web::json::value> circle_itemrecenttags(
       std::string TagName, std::string Filter,
       BCYListIteratorCallback callback = BCYListIteratorCallback());
