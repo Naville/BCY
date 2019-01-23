@@ -225,7 +225,7 @@ web::json::value Core::timeline_friendfeed_hasmore(string since){
     j["since"]=web::json::value(since);
     auto R = POST("apiv2/timeline/friendfeed_hasmore",j, true,true);
     return R.extract_json().get();
-        
+
 }
 web::json::value Core::timeline_stream_refresh(){
     web::json::value j;
@@ -354,6 +354,19 @@ web::json::value Core::core_status(string WorkID) {
   web::json::value j;
   j["wid"] = web::json::value(WorkID);
   auto R = POST("api/core/status", j, true, true);
+  web::json::value r = R.extract_json().get();
+  return r;
+}
+web::json::value Core::user_userTagList(){
+  web::json::value j;
+  auto R = POST("api/user/userTagList", j, true, true);
+  web::json::value r = R.extract_json().get();
+  return r;
+}
+web::json::value Core::user_getUserTag(string uid){
+  web::json::value j;
+  j["uid"]=web::json::value(uid);
+  auto R = POST("api/user/getUserTag", j, true, true);
   web::json::value r = R.extract_json().get();
   return r;
 }

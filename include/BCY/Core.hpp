@@ -63,6 +63,8 @@ public:
   bool item_doPostLike(std::string item_id);
   bool item_cancelPostLike(std::string item_id);
   web::json::value tag_status(std::string TagName);
+  web::json::value user_getUserTag(std::string uid);
+  web::json::value user_userTagList();//A list of all available user tags and their ut_id
   web::json::value circle_filterlist(std::string circle_id,
                                      CircleType circle_type,
                                      std::string circle_name);
