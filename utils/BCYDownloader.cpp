@@ -510,22 +510,6 @@ std::istream &operator>>(std::istream &in,
   return in;
 }
 int main(int argc, char **argv) {
-
-    /*string JSONPath = "/Users/naville/Desktop/MSSUXDK.json";
-    ifstream JSONStream(JSONPath);
-    if (JSONStream.bad()) {
-        cout << "Failed to Open File at:" << JSONPath << "!" << endl;
-        exit(-1);
-    }
-    string JSONStr;
-    JSONStream.seekg(0, ios::end);
-    JSONStr.reserve(JSONStream.tellg());
-    JSONStream.seekg(0, ios::beg);
-    JSONStr.assign((istreambuf_iterator<char>(JSONStream)),
-                   istreambuf_iterator<char>());
-    json conf = json::parse(JSONStr);
-    cout<<conf.serialize()<<endl;
-    abort();*/
   Init();
 #warning BCYDownloader currently doesnt handle funny characters like ,.@ or escaping quotes well, please avoid using them in strange places
   logging::add_common_attributes();
@@ -745,9 +729,6 @@ int main(int argc, char **argv) {
       }
     }
   }
-    auto foo=DU->core.timeline_friendfeed();
-    cout<<foo[0].serialize()<<endl;
-    exit(0);
   if (vm.count("i") || DU == nullptr) {
     Interactive();
   } else {
