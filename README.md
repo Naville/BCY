@@ -4,6 +4,6 @@
 ## Requirements
 - ``OpenSSL``
 - ``Boost 1.67+``
-- ``cpprestsdk`` with 
+- ``cpprestsdk``
 
 Note that on some systems you need the development package of these
