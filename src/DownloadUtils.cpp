@@ -4,6 +4,7 @@
 #include <boost/lockfree/stack.hpp>
 #include <boost/log/trivial.hpp>
 #include <boost/thread.hpp>
+#include <boost/lexical_cast.hpp>
 #include <cpprest/http_client.h>
 #include <execinfo.h>
 #include <fstream>
@@ -994,15 +995,6 @@ void DownloadUtils::join() {
   queryThread->join();
   BOOST_LOG_TRIVIAL(info) << "Joining Download Threads" << endl;
   downloadThread->join();
-}
-void DownloadUtils::watchdog(){
-    if(core.UID==""){
-        BOOST_LOG_TRIVIAL(error) << "Not Logged in" << endl;
-        return;
-    }
-    string since="0";
-    auto j=core.timeline_friendfeed(downloadCallback);
-#warning Unimplemented
 }
 DownloadUtils::~DownloadUtils() {
   stop = true;

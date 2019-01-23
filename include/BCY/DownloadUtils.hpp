@@ -57,8 +57,6 @@ public:
   void downloadTimeline();
   void downloadItemID(std::string item_id);
   void unlikeCached();
-  void watchdog();//Loop in backgroud to watch for new works posted by followed user
-
 private:
   std::string md5(std::string &str);
   boost::asio::thread_pool *queryThread = nullptr;

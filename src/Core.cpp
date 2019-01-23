@@ -676,7 +676,7 @@ Core::group_listPosts(string GID, BCYListIteratorCallback callback) {
 vector<web::json::value>
 Core::timeline_friendfeed(BCYListIteratorCallback callback) {
   vector<web::json::value> ret;
-  std::chrono::milliseconds ms = std::chrono::duration_cast< std::chrono::milliseconds >(std::chrono::system_clock::now().time_since_epoch());
+  std::chrono::duration<float> ms = std::chrono::duration_cast<std::chrono::duration<float>>(std::chrono::system_clock::now().time_since_epoch());
   string since = to_string(ms.count());
   web::json::value j;
   j["grid_type"] = web::json::value("timeline");
