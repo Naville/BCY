@@ -359,7 +359,7 @@ void DownloadUtils::downloadFromInfo(json Inf, bool save, string item_id_arg) {
      URLs.emplace_back(j);
   Inf["multi"] = web::json::value::array(URLs);
   }
-  if (Inf["type"].as_string() == "larticle" && Inf["multi"].size() == 0) {
+  if (Inf.has_field("type") &&Inf["type"].as_string() == "larticle" && Inf["multi"].size() == 0) {
     vector<json> URLs;
     regex rgx("<img src=\"(.{80,100})\" alt=");
     string tmpjson = Inf.serialize();
@@ -374,9 +374,21 @@ void DownloadUtils::downloadFromInfo(json Inf, bool save, string item_id_arg) {
     }
     Inf["multi"] = web::json::value::array(URLs);
   }
+    if(Inf.has_field("group") && Inf["group"].has_field("multi")){
+        vector<json> URLs;
+        if(Inf.has_field("multi")){
+            for(json foo:Inf["multi"].as_array()){
+                URLs.push_back(foo);
+            }
+        }
+        for(json foo:Inf["group"]["multi"].as_array()){
+            URLs.push_back(foo);
+        }
+        Inf["multi"] = web::json::value::array(URLs);
+    }
 
   // videoInfo
-  if (Inf["type"].as_string() == "video" && Inf.has_field("video_info")) {
+  if (Inf.has_field("type") &&Inf["type"].as_string() == "video" && Inf.has_field("video_info")) {
     string vid = Inf["video_info"]["vid"].as_string();
     boost::this_thread::interruption_point();
     json F = core.videoInfo(vid);
