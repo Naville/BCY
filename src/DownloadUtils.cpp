@@ -777,22 +777,20 @@ void DownloadUtils::cleanTag(string Tag, vector<string> &items) {
 }
 void DownloadUtils::cleanup() {
   BOOST_LOG_TRIVIAL(info) << "Cleaning up..." << endl;
+  thread_pool t(16);
   for (auto i = 0; i < filter->UIDList.size(); i++) {
-    string UID = filter->UIDList[i].as_string();
-    if (i % 100 == 0) {
-      BOOST_LOG_TRIVIAL(info) << "Removed " << i << "/"
-                              << filter->UIDList.size() << " UIDs" << endl;
-    }
-    cleanUID(UID);
+    boost::asio::post(t,[=](){
+      string UID = filter->UIDList[i].as_string();
+      cleanUID(UID);
+    });
   }
-  vector<string> Infos;
+  //vector<string> Infos;
   for (auto i = 0; i < filter->TagList.size(); i++) {
-    string Tag = filter->TagList[i].as_string();
-    if (i % 100 == 0) {
-      BOOST_LOG_TRIVIAL(info) << "Removed " << i << "/"
-                              << filter->UIDList.size() << " Tags" << endl;
-    }
-    cleanTag(Tag, Infos);
+    boost::asio::post(t,[=](){
+      vector<string> Infos;
+      string Tag = filter->TagList[i].as_string();
+      cleanTag(Tag, Infos);
+    });
   }
   /*BOOST_LOG_TRIVIAL(info) << "Cleaning up Remaining " << Infos.size()
                           << " Info from Database" << endl;
@@ -808,6 +806,7 @@ void DownloadUtils::cleanup() {
     Q.bind(1, item_id);
     Q.executeStep();
   }*/
+  t.join();
 }
 string DownloadUtils::md5(string &str) {
   string digest;
