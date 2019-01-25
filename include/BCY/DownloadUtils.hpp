@@ -15,7 +15,7 @@ class DownloadUtils {
 public:
   Core core;
   DownloadFilter *filter = nullptr;
-  bool useCachedInfo = true;    // Would be really slow for large databases
+  bool useCachedInfo = true; // Would be really slow for large databases
   bool downloadVideo = true;
   bool allowCompressed = false; // if enabled, downloader will try to use the
   // official API to download compressed
@@ -29,16 +29,18 @@ public:
   DownloadUtils(std::string PathBase, int queryThreadCount = -1,
                 int downloadThreadCount = -1,
                 std::string DBPath = ""); //-1 to use hardware thread count
-  void downloadFromAbstractInfo(web::json::value Inf,bool runFilter=true);
+  void downloadFromAbstractInfo(web::json::value Inf, bool runFilter = true);
   void downloadFromInfo(web::json::value Inf, bool save = true,
-                        std::string item_id_arg = "",bool runFilter=true);
+                        std::string item_id_arg = "", bool runFilter = true);
   // Will try to extract item_id from info first, if not it loads from the
   // argument,if still invalid an error is displayed and download cancelled
   std::string loadTitle(std::string title, web::json::value Inf);
   void saveInfo(std::string title, web::json::value Inf);
   web::json::value loadInfo(std::string item_id);
   std::string loadOrSaveGroupName(std::string name, std::string GID);
+  web::json::value loadEventInfo(std::string event_id);
   void insertRecordForCompressedImage(std::string item_id);
+  void insertEventInfo(web::json::value Inf);
   void cleanup();
   void join();
   void cleanUID(std::string UID);
@@ -53,11 +55,13 @@ public:
   void downloadUserLiked(std::string uid);
   void downloadLiked();
   void downloadTag(std::string TagName);
+  void downloadEvent(std::string event_id);
   void downloadUser(std::string uid);
   void downloadSearchKeyword(std::string KW);
   void downloadTimeline();
   void downloadItemID(std::string item_id);
   void unlikeCached();
+
 private:
   std::string md5(std::string &str);
   boost::asio::thread_pool *queryThread = nullptr;

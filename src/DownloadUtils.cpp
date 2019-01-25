@@ -50,6 +50,8 @@ DownloadUtils::DownloadUtils(string PathBase, int queryThreadCount,
   std::lock_guard<mutex> guard(dbLock);
   DB.exec("CREATE TABLE IF NOT EXISTS UserInfo (uid INTEGER,UserName "
           "STRING,UNIQUE(uid) ON CONFLICT IGNORE)");
+  DB.exec("CREATE TABLE IF NOT EXISTS EventInfo (event_id INTEGER,etime "
+          "INTEGER,stime INTEGER,cover STRING,intro STRING,Info STRING,UNIQUE(event_id) ON CONFLICT IGNORE)");
   DB.exec("CREATE TABLE IF NOT EXISTS GroupInfo (gid INTEGER,GroupName "
           "STRING,UNIQUE(gid) ON CONFLICT IGNORE)");
   DB.exec("CREATE TABLE IF NOT EXISTS WorkInfo (uid INTEGER DEFAULT 0,Title "
@@ -67,7 +69,8 @@ DownloadUtils::DownloadUtils(string PathBase, int queryThreadCount,
   fs::path TempPath = fs::path(PathBase) / fs::path("DownloadTemp");
   fs::create_directories(TempPath, ec);
 }
-void DownloadUtils::downloadFromAbstractInfo(web::json::value AbstractInfo,bool runFilter) {
+void DownloadUtils::downloadFromAbstractInfo(web::json::value AbstractInfo,
+                                             bool runFilter) {
   if (stop) {
     return;
   }
@@ -77,7 +80,8 @@ void DownloadUtils::downloadFromAbstractInfo(web::json::value AbstractInfo,bool 
     }
     boost::this_thread::interruption_point();
     try {
-      if (runFilter==false || filter->shouldBlockAbstract(AbstractInfo.at("item_detail"))==false) {
+      if (runFilter == false || filter->shouldBlockAbstract(
+                                    AbstractInfo.at("item_detail")) == false) {
         boost::this_thread::interruption_point();
         web::json::value detail = loadInfo(
             ensure_string(AbstractInfo.at("item_detail").at("item_id")));
@@ -89,7 +93,7 @@ void DownloadUtils::downloadFromAbstractInfo(web::json::value AbstractInfo,bool 
           detail = core.item_detail(item_id)["data"];
           boost::this_thread::interruption_point();
           try {
-            downloadFromInfo(detail, true, item_id,runFilter);
+            downloadFromInfo(detail, true, item_id, runFilter);
           } catch (boost::thread_interrupted) {
             BOOST_LOG_TRIVIAL(debug)
                 << "Cancelling Thread:" << boost::this_thread::get_id() << endl;
@@ -134,16 +138,14 @@ string DownloadUtils::loadOrSaveGroupName(string name, string GID) {
   Database DB(DBPath, SQLite::OPEN_READWRITE);
   Statement Q(DB, "SELECT GroupName FROM GroupInfo WHERE gid=(?)");
   Q.bind(1, GID);
-  boost::this_thread::interruption_point();
   Q.executeStep();
   if (Q.hasRow()) {
     return Q.getColumn(0).getString();
   } else {
     Statement insertQuery(
         DB, "INSERT INTO GroupInfo (gid, GroupName) VALUES (?,?)");
-    insertQuery.bind(0, GID);
-    insertQuery.bind(1, name);
-    boost::this_thread::interruption_point();
+    insertQuery.bind(1, GID);
+    insertQuery.bind(2, name);
     insertQuery.executeStep();
     return name;
   }
@@ -223,37 +225,63 @@ void DownloadUtils::saveInfo(string title, web::json::value Inf) {
   for (auto i = 0; i < tmps.size(); i++) {
     Q.bind(i + 1, vals[i]);
   }
-  boost::this_thread::interruption_point();
   Q.executeStep();
-  boost::this_thread::interruption_point();
 }
 void DownloadUtils::insertRecordForCompressedImage(string item_id) {
   std::lock_guard<mutex> guard(dbLock);
   Database DB(DBPath, SQLite::OPEN_READWRITE);
   Statement insertQuery(DB, "INSERT INTO Compressed (item_id) VALUES (?)");
-  boost::this_thread::interruption_point();
-  insertQuery.bind(0, item_id);
-  boost::this_thread::interruption_point();
+  insertQuery.bind(1, item_id);
   insertQuery.executeStep();
-  boost::this_thread::interruption_point();
 }
 web::json::value DownloadUtils::loadInfo(string item_id) {
   std::lock_guard<mutex> guard(dbLock);
   Database DB(DBPath, SQLite::OPEN_READONLY);
   Statement Q(DB, "SELECT Info FROM WorkInfo WHERE item_id=?");
-  boost::this_thread::interruption_point();
   Q.bind(1, item_id);
-  boost::this_thread::interruption_point();
   Q.executeStep();
-  boost::this_thread::interruption_point();
   if (Q.hasRow()) {
     return web::json::value::parse(Q.getColumn(0).getString());
   } else {
     return web::json::value();
   }
 }
+void DownloadUtils::downloadEvent(string event_id){
+  //  DB.exec("CREATE TABLE IF NOT EXISTS EventInfo (event_id INTEGER,etime INTEGER,stime INTEGER,cover STRING,intro STRING,UNIQUE(event_id) ON CONFLICT IGNORE)");
+  web::json::value det=loadEventInfo(event_id);
+  if(det.is_null()){
+    det=core.event_detail(event_id)["data"];
+    insertEventInfo(det);
+  }
+  core.event_listPosts(event_id,Order::Index,downloadCallback);
+}
+web::json::value DownloadUtils::loadEventInfo(string event_id){
+  std::lock_guard<mutex> guard(dbLock);
+  Database DB(DBPath, SQLite::OPEN_READWRITE);
+  Statement Q(DB, "SELECT Info FROM EventInfo WHERE event_id=?");
+  Q.bind(1, event_id);
+  Q.executeStep();
+  if (Q.hasRow()) {
+    return web::json::value::parse(Q.getColumn(0).getString());
+  }
+  else{
+    return web::json::value();
+  }
+}
+void DownloadUtils::insertEventInfo(web::json::value Inf){
+  std::lock_guard<mutex> guard(dbLock);
+  Database DB(DBPath, SQLite::OPEN_READWRITE);
+  Statement insertQuery(DB, "INSERT INTO EventInfo (event_id,etime,stime,cover,intro,Info) VALUES (?,?,?,?,?,?)");
+  insertQuery.bind(1, Inf["event_id"].as_integer());
+  insertQuery.bind(2, Inf["etime"].as_integer());
+  insertQuery.bind(3, Inf["stime"].as_integer());
+  insertQuery.bind(4, Inf["cover"].as_string());
+  insertQuery.bind(5, Inf["intro"].as_string());
+  insertQuery.bind(6, Inf.serialize());
+  insertQuery.executeStep();
+}
 void DownloadUtils::downloadFromInfo(web::json::value Inf, bool save,
-                                     string item_id_arg,bool runFilter) {
+                                     string item_id_arg, bool runFilter) {
   if (!Inf.is_object()) {
     BOOST_LOG_TRIVIAL(error)
         << Inf.serialize() << " is not valid Detail Info For Downloading"
@@ -393,7 +421,7 @@ void DownloadUtils::downloadFromInfo(web::json::value Inf, bool save,
 
   // videoInfo
   if (Inf.has_field("type") && Inf["type"].as_string() == "video" &&
-      Inf.has_field("video_info") &&downloadVideo==true) {
+      Inf.has_field("video_info") && downloadVideo == true) {
     string vid = Inf["video_info"]["vid"].as_string();
     boost::this_thread::interruption_point();
     web::json::value F = core.videoInfo(vid);
@@ -459,7 +487,8 @@ void DownloadUtils::downloadFromInfo(web::json::value Inf, bool save,
                                << __FILE__ << ":" << __LINE__ << endl;
     }
   }
-  vector<web::json::value> a2Methods;//Used for aria2 RPC's ``system.multicall``
+  vector<web::json::value>
+      a2Methods; // Used for aria2 RPC's ``system.multicall``
   for (web::json::value item : Inf["multi"].as_array()) {
     boost::this_thread::interruption_point();
     string URL = item["path"].as_string();
@@ -509,19 +538,20 @@ void DownloadUtils::downloadFromInfo(web::json::value Inf, bool save,
           if (stop) {
             return;
           }
-            try{
-          boost::this_thread::interruption_point();
-          auto R = core.GET(origURL);
-          boost::this_thread::interruption_point();
-          ofstream ofs(newFilePath.string(), ios::binary);
-          auto vec = R.extract_vector().get();
-          ofs.write(reinterpret_cast<const char *>(vec.data()), vec.size());
-          ofs.close();
-          boost::this_thread::interruption_point();
+          try {
+            boost::this_thread::interruption_point();
+            auto R = core.GET(origURL);
+            boost::this_thread::interruption_point();
+            ofstream ofs(newFilePath.string(), ios::binary);
+            auto vec = R.extract_vector().get();
+            ofs.write(reinterpret_cast<const char *>(vec.data()), vec.size());
+            ofs.close();
+            boost::this_thread::interruption_point();
+          } catch (const std::exception &exp) {
+            BOOST_LOG_TRIVIAL(error)
+                << "Download from " << origURL
+                << " failed with exception:" << exp.what() << endl;
           }
-            catch(const std::exception& exp){
-                BOOST_LOG_TRIVIAL(error)<<"Download from "<<origURL<<" failed with exception:"<<exp.what()<<endl;
-            }
         });
       } else {
         boost::this_thread::interruption_point();
@@ -557,39 +587,39 @@ void DownloadUtils::downloadFromInfo(web::json::value Inf, bool save,
       }
     }
   }
-if(a2Methods.size()>0){
-  try {
+  if (a2Methods.size() > 0) {
+    try {
 
-    web::json::value arg;
-    arg["jsonrpc"]=web::json::value("2.0");
-    arg["id"]=web::json::value();
-    arg["method"]=web::json::value("system.multicall");
-    vector<web::json::value> tmp;
-    tmp.push_back(web::json::value::array(a2Methods));
-    arg["params"]=web::json::value::array(tmp);
-    web::http::client::http_client client(RPCServer);
-    web::json::value rep =
-        client.request(web::http::methods::POST, U("/"), arg)
-            .get()
-            .extract_json(true)
-            .get();
+      web::json::value arg;
+      arg["jsonrpc"] = web::json::value("2.0");
+      arg["id"] = web::json::value();
+      arg["method"] = web::json::value("system.multicall");
+      vector<web::json::value> tmp;
+      tmp.push_back(web::json::value::array(a2Methods));
+      arg["params"] = web::json::value::array(tmp);
+      web::http::client::http_client client(RPCServer);
+      web::json::value rep =
+          client.request(web::http::methods::POST, U("/"), arg)
+              .get()
+              .extract_json(true)
+              .get();
 
-    if (rep.has_field("result")) {
-      BOOST_LOG_TRIVIAL(debug)
-          << item_id
-          << " Registered in Aria2 with GID:" << rep["result"].serialize()
-          << " Query:" << arg.serialize() << endl;
-    } else {
+      if (rep.has_field("result")) {
+        BOOST_LOG_TRIVIAL(debug)
+            << item_id
+            << " Registered in Aria2 with GID:" << rep["result"].serialize()
+            << " Query:" << arg.serialize() << endl;
+      } else {
+        BOOST_LOG_TRIVIAL(error)
+            << item_id << " Failed to Register with Aria2. Response:"
+            << rep["error"]["message"].as_string()
+            << " Query:" << arg.serialize() << endl;
+      }
+    } catch (const std::exception &exp) {
       BOOST_LOG_TRIVIAL(error)
-          << item_id << " Failed to Register with Aria2. Response:"
-          << rep["error"]["message"].as_string()
-          << " Query:" << arg.serialize() << endl;
+          << "Posting to Aria2 Error:" << exp.what() << endl;
     }
-  } catch (const std::exception &exp) {
-    BOOST_LOG_TRIVIAL(error)
-        << "Posting to Aria2 Error:" << exp.what() << endl;
   }
-}
 }
 void DownloadUtils::verifyUID(string UID, bool reverse) {
   verify("WHERE uid=?", {UID}, reverse);
@@ -778,14 +808,14 @@ void DownloadUtils::cleanup() {
   BOOST_LOG_TRIVIAL(info) << "Cleaning up..." << endl;
   thread_pool t(16);
   for (auto i = 0; i < filter->UIDList.size(); i++) {
-    boost::asio::post(t,[=](){
+    boost::asio::post(t, [=]() {
       string UID = filter->UIDList[i].as_string();
       cleanUID(UID);
     });
   }
-  //vector<string> Infos;
+  // vector<string> Infos;
   for (auto i = 0; i < filter->TagList.size(); i++) {
-    boost::asio::post(t,[=](){
+    boost::asio::post(t, [=]() {
       vector<string> Infos;
       string Tag = filter->TagList[i].as_string();
       cleanTag(Tag, Infos);
@@ -897,14 +927,15 @@ void DownloadUtils::downloadGroupID(string gid) {
                           << " Works For GroupID:" << gid << endl;
 }
 void DownloadUtils::downloadUserLiked(string uid) {
-  if(uid==core.UID){
-    BOOST_LOG_TRIVIAL(info) << "Iterating Liked Works For UserID:" << uid << endl;
+  if (uid == core.UID) {
+    BOOST_LOG_TRIVIAL(info)
+        << "Iterating Liked Works For UserID:" << uid << endl;
     auto l = core.space_getUserLikeTimeLine(uid, [&](web::json::value j) {
-      this->downloadFromAbstractInfo(j,false);
+      this->downloadFromAbstractInfo(j, false);
       return true;
     });
-    BOOST_LOG_TRIVIAL(info) << "Found " << l.size()
-                            << " Liked Works For UserID:" << uid << endl;
+    BOOST_LOG_TRIVIAL(info)
+        << "Found " << l.size() << " Liked Works For UserID:" << uid << endl;
     return;
   }
   BOOST_LOG_TRIVIAL(info) << "Iterating Liked Works For UserID:" << uid << endl;

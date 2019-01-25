@@ -115,6 +115,7 @@ static void verifyUID(string UID, bool reverse) { DU->verifyUID(UID, reverse); }
 static void verify(bool reverse) { DU->verify("", {}, reverse); }
 static void forcequit() { kill(getpid(), 9); }
 static void searchKW(string kw) { DU->downloadSearchKeyword(kw); }
+static void dEvent(string event_id){DU->downloadEvent(event_id);}
 static void verifyTag(string TagName, bool reverse) {
   DU->verifyTag(TagName, reverse);
 }
@@ -158,6 +159,15 @@ void JSONMode() {
   shuffle(Searches.begin(), Searches.end(), mt_rand);
   for (string item : Searches) {
     DU->downloadSearchKeyword(item);
+  }
+
+  vector<string> Events;
+  for (web::json::value j : config["Events"].as_array()) {
+    Events.push_back(j.as_string());
+  }
+  shuffle(Events.begin(), Events.end(), mt_rand);
+  for (string item : Events) {
+    DU->downloadEvent(item);
   }
 
   vector<string> Works;
@@ -230,6 +240,7 @@ void Interactive() {
   engine.add(chaiscript::fun(&joinHandle), "join");
   engine.add(chaiscript::fun(&cleanupHandle), "cleanup");
   engine.add(chaiscript::fun(&downloadVideo), "downloadVideo");
+  engine.add(chaiscript::fun(&dEvent), "event");
   string command;
   while (1) {
     cout << Prefix << ":$";
@@ -304,7 +315,11 @@ int main(int argc, char **argv) {
       "Download Works From these UIDs, Seperated by comma")(
       "Verify", "Verify everything in the database is downloaded")(
       "Works", po::value<string>(),
-      "Download Liked Works of these WorkIDs, Seperated by comma")(
+      "Download Liked Works of these WorkIDs, Seperated by comma")
+      (
+      "Events", po::value<string>(),
+      "Download Works From Those EventIDs, Seperated by comma")
+      (
       "aria2", po::value<string>(),
       "Aria2 RPC Server. Format: RPCURL[@RPCTOKEN]")(
       "email", po::value<string>(), "BCY Account email")(
@@ -367,7 +382,7 @@ int main(int argc, char **argv) {
         config["HTTPProxy"] = web::json::value(vm["HTTPProxy"].as<string>());
       }
       for (string K : {"Circles", "Filters", "Follows", "Groups", "Searches",
-                       "Tags", "Users", "Works"}) {
+                       "Tags", "Users", "Works","Events"}) {
         set<string> items;
         if (conf.has_field(K)) {
           for (auto item : conf[K].as_array()) {

@@ -70,7 +70,9 @@ http_response Core::GET(string URL, web::json::value Para,
     web::web_proxy proxy(this->proxy);
     cfg.set_proxy(proxy);
   }
+#ifdef DEBUG
   cfg.set_validate_certificates(false);
+#endif
   cfg.set_timeout(std::chrono::seconds(this->timeout));
   http_client client(U(URL), cfg);
   uri_builder builder;
@@ -129,7 +131,9 @@ http_response Core::POST(string URL, web::json::value Para, bool Auth,
     Para = mixHEXParam(Para);
   }
   http_client_config cfg;
+#ifdef DEBUG
   cfg.set_validate_certificates(false);
+#endif
   cfg.set_timeout(std::chrono::seconds(this->timeout));
   if (this->proxy != "") {
     web::web_proxy proxy(this->proxy);
@@ -476,6 +480,13 @@ web::json::value Core::circle_itemhottags(string item_id) {
   web::json::value r = R.extract_json().get();
   return r;
 }
+web::json::value Core::event_detail(string event_id) {
+  web::json::value j;
+  j["event_id"] = web::json::value(event_id);
+  auto R = POST("api/event/detail", j, true, true);
+  web::json::value r = R.extract_json().get();
+  return r;
+}
 vector<web::json::value>
 Core::circle_itemrecenttags(string TagName, string Filter,
                             BCYListIteratorCallback callback) {
@@ -613,6 +624,44 @@ Core::space_getUserLikeTimeLine(string UID, BCYListIteratorCallback callback) {
   }
   return ret;
 }
+vector<web::json::value>
+Core::event_listPosts(string event_id, Order ord,
+                      BCYListIteratorCallback callback) {
+  vector<web::json::value> ret;
+  int p = 1;
+  web::json::value j;
+  switch (ord) {
+  case Order::Hot: {
+    j["order"] = web::json::value("hot");
+    break;
+  }
+  case Order::Index: {
+    j["order"] = web::json::value("index");
+    break;
+  }
+  default: { throw invalid_argument("Invalid Order Type!"); }
+  }
+  j["event_id"] = web::json::value(event_id);
+  while (true) {
+    j["p"] = p;
+    p++;
+    auto R = POST("api/event/listPosts", j, true, true);
+    web::json::value foo = R.extract_json().get();
+    web::json::value data = foo["data"];
+    if (data.size() == 0) {
+      return ret;
+    }
+    for (web::json::value &ele : data.as_array()) {
+      if (callback) {
+        if (!callback(ele)) {
+          return ret;
+        }
+      }
+      ret.push_back(ele);
+    }
+  }
+  return ret;
+}
 vector<web::json::value> Core::search(string keyword, SearchType type,
                                       BCYListIteratorCallback callback) {
   vector<web::json::value> ret;
@@ -620,19 +669,19 @@ vector<web::json::value> Core::search(string keyword, SearchType type,
   string URL = "api/search/search";
   switch (type) {
   case SearchType::Content: {
-    URL = URL + "Content/";
+    URL = URL + "Content";
     break;
   }
   case SearchType::Works: {
-    URL = URL + "Works/";
+    URL = URL + "Works";
     break;
   }
   case SearchType::Tags: {
-    URL = URL + "Tags/";
+    URL = URL + "Tags";
     break;
   }
   case SearchType::User: {
-    URL = URL + "User/";
+    URL = URL + "User";
     break;
   }
   default: { throw invalid_argument("Invalid Search Type!"); }

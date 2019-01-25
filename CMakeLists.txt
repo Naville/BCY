@@ -34,7 +34,7 @@ file(GLOB BCYDOWNLOADUTILS_SRC
 )
 add_library(BCYCore STATIC ${BCYCORE_SRC})
 add_library(BCYDownloadUtils STATIC ${BCYDOWNLOADUTILS_SRC})
-add_executable(BCYDownloader utils/BCYDownloader.cpp)
+add_executable(BCYDownloader tools/BCYDownloader.cpp)
 
 include_directories(AFTER SYSTEM ${CMAKE_CURRENT_LIST_DIR}/ChaiScript/include/ ${BOOST_INCLUDE_DIRS} ${CMAKE_CURRENT_LIST_DIR}/include/ "/usr/local/include/" "/usr/include/")
 
@@ -71,6 +71,6 @@ ENDIF()
 find_package(Python ${PYTHON_VERSION} REQUIRED COMPONENTS Interpreter Development)
 target_include_directories(PyBCY PUBLIC ${BOOST_INCLUDE_DIRS} ${CMAKE_CURRENT_LIST_DIR}/include/ "/usr/local/include/" "/usr/include/" ${PYTHON_INCLUDE_DIRS} ${CMAKE_CURRENT_LIST_DIR}/SQLiteCpp/include ${Python_INCLUDE_DIRS})
 target_link_libraries(PyBCY ${CRYPTOPP_LIB} ${Boost_LIBRARIES} ${PYTHON_LIBRARIES} BCYCore BCYDownloadUtils)
-message(STATUS "Installing PyBCY to:"${Python_SITEARCH})
+message(STATUS "Installing PyBCY to:" ${Python_SITEARCH})
 install(TARGETS PyBCY DESTINATION "${Python_SITEARCH}/")
 ENDIF()

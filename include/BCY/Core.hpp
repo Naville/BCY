@@ -25,6 +25,10 @@ enum class CircleType {
   Tag = 0, //"tag"
   Work,    //"work"
 };
+enum class Order {
+  Hot = 0, //"hot"
+  Index,   //"index"
+};
 enum class PType { // First class Filter Types,Everything else is treated as
                    // normal tag
   Image = 1,
@@ -53,29 +57,36 @@ public:
                                web::json::value Payload = web::json::value(),
                                std::map<std::string, std::string> Params =
                                    std::map<std::string, std::string>());
+  bool item_doPostLike(std::string item_id);
+  bool item_cancelPostLike(std::string item_id);
+  bool user_follow(std::string uid, bool isFollow);
   web::json::value user_detail(std::string UID);
   web::json::value image_postCover(std::string item_id, std::string type);
-  bool user_follow(std::string uid, bool isFollow);
   web::json::value space_me();
   web::json::value loginWithEmailAndPassword(std::string email,
                                              std::string password);
   web::json::value item_detail(std::string item_id, bool autoFollow = true);
-  bool item_doPostLike(std::string item_id);
-  bool item_cancelPostLike(std::string item_id);
   web::json::value tag_status(std::string TagName);
   web::json::value user_getUserTag(std::string uid);
-  web::json::value user_userTagList();//A list of all available user tags and their ut_id
+  web::json::value event_detail(std::string event_id);//https://bcy.net/tags/event for a full event list
+  web::json::value user_userTagList(); // A list of all available user tags and their ut_id
+
   web::json::value circle_filterlist(std::string circle_id,
                                      CircleType circle_type,
                                      std::string circle_name);
   web::json::value circle_itemhottags(std::string item_id);
   web::json::value group_detail(std::string GID);
   web::json::value timeline_stream_refresh();
-  web::json::value timeline_stream_loadmore(std::string feed_type="",int first_enter=1,int refresh_num=25);
+  web::json::value timeline_stream_loadmore(std::string feed_type = "",
+                                            int first_enter = 1,
+                                            int refresh_num = 25);
   web::json::value core_status(std::string WorkID);
   web::json::value ParamByCRC32URL(std::string FullURL);
   web::json::value videoInfo(std::string video_id);
-    web::json::value timeline_friendfeed_hasmore(std::string since);
+  web::json::value timeline_friendfeed_hasmore(std::string since);
+  std::vector<web::json::value>
+  event_listPosts(std::string event_id, Order ord = Order::Hot,
+                  BCYListIteratorCallback callback = BCYListIteratorCallback());
   std::vector<web::json::value> circle_itemrecenttags(
       std::string TagName, std::string Filter,
       BCYListIteratorCallback callback = BCYListIteratorCallback());
