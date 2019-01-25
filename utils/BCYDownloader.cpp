@@ -122,6 +122,7 @@ static void block(string OPType, string arg) {
   boost::to_upper(OPType);
   if (OPType == "UID") {
     DU->filter->UIDList.push_back(web::json::value(arg));
+    DU->cleanUID(arg);
   } else if (OPType == "WORK") {
     DU->filter->WorkList.push_back(web::json::value(arg));
   } else if (OPType == "TAG") {
