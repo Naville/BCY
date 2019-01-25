@@ -36,12 +36,12 @@ enum class PType { // First class Filter Types,Everything else is treated as
   Video = 3,
   Undef = 999,
 };
-enum class NewPostType{
-  GroupAnswer=0,
+enum class NewPostType {
+  GroupAnswer = 0,
   ArticlePost,
   NotePost,
 };
-enum class PublishType{
+enum class PublishType {
   Note = 0,
   Article = 1,
   Gask = 3,
@@ -80,18 +80,24 @@ public:
   web::json::value item_detail(std::string item_id, bool autoFollow = true);
   web::json::value tag_status(std::string TagName);
   web::json::value user_getUserTag(std::string uid);
-  web::json::value event_detail(std::string event_id);//https://bcy.net/tags/event for a full event list
-  web::json::value user_userTagList(); // A list of all available user tags and their ut_id
+  web::json::value event_detail(
+      std::string event_id); // https://bcy.net/tags/event for a full event list
+  web::json::value
+  user_userTagList(); // A list of all available user tags and their ut_id
 
   web::json::value circle_filterlist(std::string circle_id,
                                      CircleType circle_type,
                                      std::string circle_name);
-  web::json::value circle_itemhottags(std::string item_id);
+  std::vector<web::json::value> circle_itemhottags(
+      std::string name,
+      BCYListIteratorCallback callback = BCYListIteratorCallback());
   web::json::value group_detail(std::string GID);
   web::json::value timeline_stream_refresh();
   web::json::value item_postUploadToken();
   web::json::value item_postUpLoadParam();
-  web::json::value qiniu_upload(web::json::value token,std::vector<unsigned char>& data,std::string extension="jpg");
+  web::json::value qiniu_upload(web::json::value token,
+                                std::vector<unsigned char> &data,
+                                std::string extension = "jpg");
   web::json::value item_doNewPost(NewPostType type);
   web::json::value item_postUploadToken(std::string GID);
   web::json::value timeline_stream_loadmore(std::string feed_type = "",
@@ -121,6 +127,12 @@ public:
       BCYListIteratorCallback callback = BCYListIteratorCallback());
   std::vector<web::json::value> space_getUserLikeTimeLine(
       std::string UID,
+      BCYListIteratorCallback callback = BCYListIteratorCallback());
+  std::vector<web::json::value> circle_itemrecentworks(
+      unsigned long long circle_id, std::string name,
+      BCYListIteratorCallback callback = BCYListIteratorCallback());
+  std::vector<web::json::value> circle_itemrecenttags(
+      std::string name,
       BCYListIteratorCallback callback = BCYListIteratorCallback());
   std::vector<web::json::value>
   search(std::string keyword, SearchType type,

@@ -431,34 +431,32 @@ bool Core::item_cancelPostLike(string item_id) {
   web::json::value r = R.extract_json().get();
   return r["status"] == 1;
 }
-web::json::value Core::item_postUpLoadParam(){
+web::json::value Core::item_postUpLoadParam() {
   web::json::value j;
   auto R = POST("api/item/postUpLoadParam", j, true, true);
   web::json::value r = R.extract_json().get();
   return r;
 }
-web::json::value Core::item_doNewPost(NewPostType type){
-  string URL="/api/item/doNew";
-  switch(type){
-    case NewPostType::GroupAnswer:{
-      URL=URL+"GroupAnswer";
-      break;
-    }
-    case NewPostType::ArticlePost:{
-      URL=URL+"ArticlePost";
-      break;
-    }
-    case NewPostType::NotePost:{
-      URL=URL+"NotePost";
-      break;
-    }
-    default: {
-      throw invalid_argument("Invalid NewPost Type!");
-    }
+web::json::value Core::item_doNewPost(NewPostType type) {
+  string URL = "/api/item/doNew";
+  switch (type) {
+  case NewPostType::GroupAnswer: {
+    URL = URL + "GroupAnswer";
+    break;
+  }
+  case NewPostType::ArticlePost: {
+    URL = URL + "ArticlePost";
+    break;
+  }
+  case NewPostType::NotePost: {
+    URL = URL + "NotePost";
+    break;
+  }
+  default: { throw invalid_argument("Invalid NewPost Type!"); }
   }
   web::json::value j;
-  web::json::value token=item_postUpLoadParam()["data"]["post_token"];
-  j["post_token"]=token;
+  web::json::value token = item_postUpLoadParam()["data"]["post_token"];
+  j["post_token"] = token;
   return web::json::value();
 }
 web::json::value Core::tag_status(string TagName) {
@@ -580,38 +578,86 @@ Core::circle_itemhotworks(string circle_id, BCYListIteratorCallback callback) {
     }
   }
 }
-web::json::value Core::circle_itemhottags(string item_id) {
-  web::json::value j;
-  j["item_id"] = web::json::value(item_id);
-  auto R = POST("apiv2/circle/itemhottags/", j, true, true);
-  web::json::value r = R.extract_json().get();
-  return r;
-}
-web::json::value Core::event_detail(string event_id) {
-  web::json::value j;
-  j["event_id"] = web::json::value(event_id);
-  auto R = POST("api/event/detail", j, true, true);
-  web::json::value r = R.extract_json().get();
-  return r;
-}
 vector<web::json::value>
-Core::circle_itemrecenttags(string TagName, string Filter,
-                            BCYListIteratorCallback callback) {
+Core::circle_itemrecentworks(unsigned long long circle_id, string name,
+                             BCYListIteratorCallback callback) {
   vector<web::json::value> ret;
   string since = "0";
   web::json::value j;
   j["grid_type"] = web::json::value("timeline");
-  j["filter"] = web::json::value(Filter);
-  j["name"] = web::json::value(TagName);
+  j["id"] = web::json::value(circle_id);
+  j["name"] = web::json::value(name);
+  // j["filter"] = web::json::value("all");
   while (true) {
     j["since"] = web::json::value(since);
-    auto R = POST("api/circle/itemRecentTags/", j, true, true);
+    auto R = POST("apiv2/circle/item/recent/works", j, true, true);
     web::json::value foo = R.extract_json().get();
     web::json::value data = foo["data"];
     if (data.size() == 0) {
       return ret;
     }
-    since = data[data.size() - 1]["since"].as_string();
+    for (web::json::value &ele : data.as_array()) {
+      if (callback) {
+        if (!callback(ele)) {
+          return ret;
+        }
+      }
+      ret.push_back(ele);
+    }
+    since = data[data.as_array().size() - 1]["since"].as_string();
+  }
+}
+vector<web::json::value>
+Core::circle_itemrecenttags(string name, string filter,
+                            BCYListIteratorCallback callback) {
+  vector<web::json::value> ret;
+  string since = "0";
+  web::json::value j;
+  j["grid_type"] = web::json::value("timeline");
+  j["id"] = tag_status(name)["data"]["tag_id"];
+  j["name"] = web::json::value(name);
+  j["filter"] = web::json::value("all");
+  while (true) {
+    j["since"] = web::json::value(since);
+    auto R = POST("apiv2/circle/item/recent/tags", j, true, true);
+    web::json::value foo = R.extract_json().get();
+    web::json::value data = foo["data"];
+    if (data.size() == 0) {
+      return ret;
+    }
+    for (web::json::value &ele : data.as_array()) {
+      if (callback) {
+        if (!callback(ele)) {
+          return ret;
+        }
+      }
+      ret.push_back(ele);
+    }
+    since = data[data.as_array().size() - 1]["since"].as_string();
+  }
+}
+vector<web::json::value>
+Core::circle_itemhottags(string name, BCYListIteratorCallback callback) {
+  vector<web::json::value> ret;
+  unsigned long long since = 0;
+  web::json::value j;
+  j["grid_type"] = web::json::value("timeline");
+  j["id"] = tag_status(name)["data"]["tag_id"];
+  j["name"] = web::json::value(name);
+  // j["filter"] = web::json::value("all");
+  while (true) {
+    if (since == 0) {
+      j["since"] = web::json::value(since);
+    } else {
+      j["since"] = web::json::value("rec:" + to_string(since));
+    }
+    since++;
+    auto R = POST("apiv2/circle/itemhottags", j, true, true);
+    web::json::value foo = R.extract_json().get();
+    web::json::value data = foo["data"]["data"];
+    if (data.size() == 0) {
+      return ret;
+    }
     for (web::json::value &ele : data.as_array()) {
       if (callback) {
         if (!callback(ele)) {
@@ -621,7 +667,13 @@ Core::circle_itemrecenttags(string TagName, string Filter,
       ret.push_back(ele);
     }
   }
-  return ret;
+}
+web::json::value Core::event_detail(string event_id) {
+  web::json::value j;
+  j["event_id"] = web::json::value(event_id);
+  auto R = POST("api/event/detail", j, true, true);
+  web::json::value r = R.extract_json().get();
+  return r;
 }
 vector<web::json::value> Core::item_getReply(string item_id,
                                              BCYListIteratorCallback callback) {

@@ -90,6 +90,8 @@ static void init(string path, int queryCnt, int downloadCnt,string DBPath) {
     cout << "Already Initialized" << endl;
   }
 }
+static void hotTags(string tagName,unsigned int cnt){DU->downloadHotTags(tagName,cnt);}
+static void hotWorks(string id,unsigned int cnt){DU->downloadHotWorks(id,cnt);}
 static void addtype(string typ) { DU->addTypeFilter(typ); }
 static void user(string UID) { DU->downloadUser(UID); }
 static void tag(string tag) { DU->downloadTag(tag); }
@@ -269,6 +271,8 @@ void Interactive() {
   engine.add(chaiscript::fun(&groups), "groups");
   engine.add(chaiscript::fun(&follows), "follows");
   engine.add(chaiscript::fun(&users), "users");
+  engine.add(chaiscript::fun(&hotTags), "hotTags");
+  engine.add(chaiscript::fun(&hotWorks), "hotWorks");
   string command;
   while (1) {
     cout << Prefix << ":$";
@@ -381,7 +385,7 @@ int main(int argc, char **argv) {
   if (vm["config"].as<string>() != "") {
     string JSONPath = vm["config"].as<string>();
     ifstream JSONStream(JSONPath);
-    if (JSONStream.bad() == false) {
+    if (JSONStream.good()) {
       string JSONStr;
       JSONStream.seekg(0, ios::end);
       JSONStr.reserve(JSONStream.tellg());

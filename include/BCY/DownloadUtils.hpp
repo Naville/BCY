@@ -61,6 +61,8 @@ public:
   void downloadTimeline();
   void downloadItemID(std::string item_id);
   void unlikeCached();
+  void downloadHotTags(std::string TagName,unsigned int cnt=20000);
+  void downloadHotWorks(std::string id,unsigned int cnt=20000);
 
 private:
   std::string md5(std::string &str);

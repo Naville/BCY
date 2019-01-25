@@ -51,7 +51,8 @@ DownloadUtils::DownloadUtils(string PathBase, int queryThreadCount,
   DB.exec("CREATE TABLE IF NOT EXISTS UserInfo (uid INTEGER,UserName "
           "STRING,UNIQUE(uid) ON CONFLICT IGNORE)");
   DB.exec("CREATE TABLE IF NOT EXISTS EventInfo (event_id INTEGER,etime "
-          "INTEGER,stime INTEGER,cover STRING,intro STRING,Info STRING,UNIQUE(event_id) ON CONFLICT IGNORE)");
+          "INTEGER,stime INTEGER,cover STRING,intro STRING,Info "
+          "STRING,UNIQUE(event_id) ON CONFLICT IGNORE)");
   DB.exec("CREATE TABLE IF NOT EXISTS GroupInfo (gid INTEGER,GroupName "
           "STRING,UNIQUE(gid) ON CONFLICT IGNORE)");
   DB.exec("CREATE TABLE IF NOT EXISTS WorkInfo (uid INTEGER DEFAULT 0,Title "
@@ -246,16 +247,18 @@ web::json::value DownloadUtils::loadInfo(string item_id) {
     return web::json::value();
   }
 }
-void DownloadUtils::downloadEvent(string event_id){
-  //  DB.exec("CREATE TABLE IF NOT EXISTS EventInfo (event_id INTEGER,etime INTEGER,stime INTEGER,cover STRING,intro STRING,UNIQUE(event_id) ON CONFLICT IGNORE)");
-  web::json::value det=loadEventInfo(event_id);
-  if(det.is_null()){
-    det=core.event_detail(event_id)["data"];
+void DownloadUtils::downloadEvent(string event_id) {
+  //  DB.exec("CREATE TABLE IF NOT EXISTS EventInfo (event_id INTEGER,etime
+  //  INTEGER,stime INTEGER,cover STRING,intro STRING,UNIQUE(event_id) ON
+  //  CONFLICT IGNORE)");
+  web::json::value det = loadEventInfo(event_id);
+  if (det.is_null()) {
+    det = core.event_detail(event_id)["data"];
     insertEventInfo(det);
   }
-  core.event_listPosts(event_id,Order::Index,downloadCallback);
+  core.event_listPosts(event_id, Order::Index, downloadCallback);
 }
-web::json::value DownloadUtils::loadEventInfo(string event_id){
+web::json::value DownloadUtils::loadEventInfo(string event_id) {
   std::lock_guard<mutex> guard(dbLock);
   Database DB(DBPath, SQLite::OPEN_READWRITE);
   Statement Q(DB, "SELECT Info FROM EventInfo WHERE event_id=?");
@@ -263,15 +266,16 @@ web::json::value DownloadUtils::loadEventInfo(string event_id){
   Q.executeStep();
   if (Q.hasRow()) {
     return web::json::value::parse(Q.getColumn(0).getString());
-  }
-  else{
+  } else {
     return web::json::value();
   }
 }
-void DownloadUtils::insertEventInfo(web::json::value Inf){
+void DownloadUtils::insertEventInfo(web::json::value Inf) {
   std::lock_guard<mutex> guard(dbLock);
   Database DB(DBPath, SQLite::OPEN_READWRITE);
-  Statement insertQuery(DB, "INSERT INTO EventInfo (event_id,etime,stime,cover,intro,Info) VALUES (?,?,?,?,?,?)");
+  Statement insertQuery(
+      DB, "INSERT INTO EventInfo (event_id,etime,stime,cover,intro,Info) "
+          "VALUES (?,?,?,?,?,?)");
   insertQuery.bind(1, Inf["event_id"].as_integer());
   insertQuery.bind(2, Inf["etime"].as_integer());
   insertQuery.bind(3, Inf["stime"].as_integer());
@@ -992,6 +996,17 @@ void DownloadUtils::downloadItemID(string item_id) {
     }
   });
 }
+void DownloadUtils::downloadHotTags(string TagName,unsigned int cnt) {
+  unsigned int c=0;
+  core.circle_itemhottags(TagName,[&](web::json::value j){
+    this->downloadFromAbstractInfo(j);
+    c++;
+    if(c<cnt){
+      return true;
+    }
+    return false;
+  });
+}
 void DownloadUtils::downloadWorkID(string item) {
   if (typeFilters.size() == 0) {
     BOOST_LOG_TRIVIAL(info) << "Iterating Works For WorkID:" << item << endl;
@@ -1054,6 +1069,17 @@ void DownloadUtils::join() {
   queryThread->join();
   BOOST_LOG_TRIVIAL(info) << "Joining Download Threads" << endl;
   downloadThread->join();
+}
+void DownloadUtils::downloadHotWorks(std::string id,unsigned int cnt) {
+  unsigned int c=0;
+  core.circle_itemhotworks(id,[&](web::json::value j){
+    this->downloadFromAbstractInfo(j);
+    c++;
+    if(c<cnt){
+      return true;
+    }
+    return false;
+  });
 }
 DownloadUtils::~DownloadUtils() {
   stop = true;
