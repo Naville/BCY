@@ -67,7 +67,7 @@ DownloadUtils::DownloadUtils(string PathBase, int queryThreadCount,
   fs::path TempPath = fs::path(PathBase) / fs::path("DownloadTemp");
   fs::create_directories(TempPath, ec);
 }
-void DownloadUtils::downloadFromAbstractInfo(web::json::value AbstractInfo) {
+void DownloadUtils::downloadFromAbstractInfo(web::json::value AbstractInfo,bool runFilter) {
   if (stop) {
     return;
   }
@@ -77,7 +77,7 @@ void DownloadUtils::downloadFromAbstractInfo(web::json::value AbstractInfo) {
     }
     boost::this_thread::interruption_point();
     try {
-      if (!filter->shouldBlockAbstract(AbstractInfo.at("item_detail"))) {
+      if (runFilter==false || filter->shouldBlockAbstract(AbstractInfo.at("item_detail"))==false) {
         boost::this_thread::interruption_point();
         web::json::value detail = loadInfo(
             ensure_string(AbstractInfo.at("item_detail").at("item_id")));
@@ -89,7 +89,7 @@ void DownloadUtils::downloadFromAbstractInfo(web::json::value AbstractInfo) {
           detail = core.item_detail(item_id)["data"];
           boost::this_thread::interruption_point();
           try {
-            downloadFromInfo(detail, true, item_id);
+            downloadFromInfo(detail, true, item_id,runFilter);
           } catch (boost::thread_interrupted) {
             BOOST_LOG_TRIVIAL(debug)
                 << "Cancelling Thread:" << boost::this_thread::get_id() << endl;
@@ -253,7 +253,7 @@ web::json::value DownloadUtils::loadInfo(string item_id) {
   }
 }
 void DownloadUtils::downloadFromInfo(web::json::value Inf, bool save,
-                                     string item_id_arg) {
+                                     string item_id_arg,bool runFilter) {
   if (!Inf.is_object()) {
     BOOST_LOG_TRIVIAL(error)
         << Inf.serialize() << " is not valid Detail Info For Downloading"
@@ -261,7 +261,7 @@ void DownloadUtils::downloadFromInfo(web::json::value Inf, bool save,
     return;
   }
 
-  if (item_id_arg != "") {
+  if (item_id_arg != "" && runFilter) {
     // Not Called by the AbstractInfo Worker
     // Need to run our own filter process
     if (filter->shouldBlockDetail(Inf) || filter->shouldBlockAbstract(Inf)) {
@@ -600,10 +600,10 @@ void DownloadUtils::verifyTag(string Tag, bool reverse) {
 void DownloadUtils::unlikeCached() {
   vector<web::json::value> Liked = core.space_getUserLikeTimeLine(core.UID);
   BOOST_LOG_TRIVIAL(info) << "Found " << Liked.size() << " Liked Works" << endl;
-  thread_pool *t = new thread_pool(16);
+  thread_pool t(16);
   for (web::json::value j : Liked) {
     string item_id = ensure_string(j["item_detail"]["item_id"]);
-    boost::asio::post(*t, [=] {
+    boost::asio::post(t, [=] {
       if (!loadInfo(item_id).is_null()) {
         if (core.item_cancelPostLike(item_id)) {
           BOOST_LOG_TRIVIAL(info)
@@ -619,8 +619,7 @@ void DownloadUtils::unlikeCached() {
     });
   }
   BOOST_LOG_TRIVIAL(info) << "Joining Unlike Threads\n";
-  t->join();
-  delete t;
+  t.join();
 }
 void DownloadUtils::verify(string condition, vector<string> args,
                            bool reverse) {
@@ -898,6 +897,16 @@ void DownloadUtils::downloadGroupID(string gid) {
                           << " Works For GroupID:" << gid << endl;
 }
 void DownloadUtils::downloadUserLiked(string uid) {
+  if(uid==core.UID){
+    BOOST_LOG_TRIVIAL(info) << "Iterating Liked Works For UserID:" << uid << endl;
+    auto l = core.space_getUserLikeTimeLine(uid, [&](web::json::value j) {
+      this->downloadFromAbstractInfo(j,false);
+      return true;
+    });
+    BOOST_LOG_TRIVIAL(info) << "Found " << l.size()
+                            << " Liked Works For UserID:" << uid << endl;
+    return;
+  }
   BOOST_LOG_TRIVIAL(info) << "Iterating Liked Works For UserID:" << uid << endl;
   auto l = core.space_getUserLikeTimeLine(uid, downloadCallback);
   BOOST_LOG_TRIVIAL(info) << "Found " << l.size()

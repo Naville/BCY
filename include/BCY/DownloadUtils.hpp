@@ -29,9 +29,9 @@ public:
   DownloadUtils(std::string PathBase, int queryThreadCount = -1,
                 int downloadThreadCount = -1,
                 std::string DBPath = ""); //-1 to use hardware thread count
-  void downloadFromAbstractInfo(web::json::value Inf);
+  void downloadFromAbstractInfo(web::json::value Inf,bool runFilter=true);
   void downloadFromInfo(web::json::value Inf, bool save = true,
-                        std::string item_id_arg = "");
+                        std::string item_id_arg = "",bool runFilter=true);
   // Will try to extract item_id from info first, if not it loads from the
   // argument,if still invalid an error is displayed and download cancelled
   std::string loadTitle(std::string title, web::json::value Inf);
