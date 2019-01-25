@@ -75,7 +75,7 @@ static void aria2(string addr, string secret) {
 static void init(string path, int queryCnt, int downloadCnt,string DBPath) {
   if (DU == nullptr) {
     try {
-      DU = new DownloadUtils(path, queryCnt, downloadCnt);
+      DU = new DownloadUtils(path, queryCnt, downloadCnt,DBPath);
     } catch (const SQLite::Exception &ex) {
       cout << "Database Error:" << ex.getErrorStr() << endl
            << "Error Code:" << ex.getErrorCode() << endl
@@ -431,7 +431,7 @@ int main(int argc, char **argv) {
         }
       }
       try {
-          
+
           init(config["SaveBase"].as_string(), queryThreadCount,
                downloadThreadCount,
                config["DBPath"].as_string());
