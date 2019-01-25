@@ -102,17 +102,13 @@ http_response Core::GET(string URL, web::json::value Para,
     } catch (...) {
     }
   }
-  try {
-    http_request req(methods::GET);
-    req.set_request_uri(builder.to_uri());
-    req.headers() = this->Headers;
-    req.set_body(body);
-    pplx::task<web::http::http_response> task = client.request(req);
-    task.wait();
-    return task.get();
-  } catch (const std::exception &exp) {
-    throw exp;
-  }
+  http_request req(methods::GET);
+  req.set_request_uri(builder.to_uri());
+  req.headers() = this->Headers;
+  req.set_body(body);
+  pplx::task<web::http::http_response> task = client.request(req);
+  task.wait();
+  return task.get();
 }
 http_response Core::POST(string URL, web::json::value Para, bool Auth,
                          bool Encrypt, map<string, string> Par) {
@@ -166,17 +162,13 @@ http_response Core::POST(string URL, web::json::value Para, bool Auth,
     } catch (...) {
     }
   }
-  try {
-    http_request req(methods::POST);
-    req.set_request_uri(builder.to_uri());
-    req.headers() = this->Headers;
-    req.set_body(body, "application/x-www-form-urlencoded");
-    pplx::task<web::http::http_response> task = client.request(req);
-    task.wait();
-    return task.get();
-  } catch (const std::exception &exp) {
-    throw exp;
-  }
+  http_request req(methods::POST);
+  req.set_request_uri(builder.to_uri());
+  req.headers() = this->Headers;
+  req.set_body(body, "application/x-www-form-urlencoded");
+  pplx::task<web::http::http_response> task = client.request(req);
+  task.wait();
+  return task.get();
 }
 web::json::value Core::mixHEXParam(web::json::value Params) {
   if (Params.is_null()) {

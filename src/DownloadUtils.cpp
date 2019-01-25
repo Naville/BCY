@@ -557,7 +557,7 @@ void DownloadUtils::downloadFromInfo(web::json::value Inf, bool save,
       }
     }
   }
-
+if(a2Methods.size()>0){
   try {
 
     web::json::value arg;
@@ -589,6 +589,7 @@ void DownloadUtils::downloadFromInfo(web::json::value Inf, bool save,
     BOOST_LOG_TRIVIAL(error)
         << "Posting to Aria2 Error:" << exp.what() << endl;
   }
+}
 }
 void DownloadUtils::verifyUID(string UID, bool reverse) {
   verify("WHERE uid=?", {UID}, reverse);
