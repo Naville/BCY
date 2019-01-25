@@ -3,6 +3,8 @@
 #include "BCY/Utils.hpp"
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/regex.hpp>
+#include <boost/date_time/posix_time/posix_time.hpp>
+#include <boost/filesystem.hpp>
 #include <boost/log/trivial.hpp>
 #include <boost/regex.hpp>
 #include <boost/thread.hpp>
@@ -242,6 +244,81 @@ web::json::value Core::timeline_stream_refresh() {
   auto R = POST("apiv2/timeline/stream", j, true, true);
   return R.extract_json().get();
 }
+web::json::value Core::qiniu_upload(web::json::value token,
+                                    vector<unsigned char> &data,
+                                    string extension) {
+  string cloud_upToken = token["data"]["cloud_upToken"].as_string();
+  string cloud_uploader = token["data"]["cloud_uploader"].as_string();
+  string cloud_prefix = token["data"]["cloud_prefix"].as_string();
+  posix_time::ptime pt = posix_time::second_clock::local_time();
+  string dateStr = to_iso_string(pt).substr(0, 8);
+  const string base36 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  /* log(2**64) / log(36) = 12.38 => max 13 char + '\0' */
+  char buffer[14];
+  unsigned int offset = sizeof(buffer);
+  int value = boost::lexical_cast<int>(dateStr);
+  buffer[--offset] = '\0';
+  do {
+    buffer[--offset] = base36[value % 36];
+  } while (value /= 36);
+
+  string base36Timestamp = string(&buffer[offset]);
+  string fileName =
+      generateRandomString(
+          "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXZY0123456789",
+          0x20) +
+      extension;
+  string path = cloud_prefix + base36Timestamp + "/" + fileName;
+  http_client_config cfg;
+#ifdef DEBUG
+  cfg.set_validate_certificates(false);
+#endif
+  cfg.set_timeout(std::chrono::seconds(this->timeout));
+  if (this->proxy != "") {
+    web::web_proxy proxy(this->proxy);
+    cfg.set_proxy(proxy);
+  }
+  map<string, string> params;
+  params["token"] = cloud_upToken;
+  params["key"] = path;
+  params["fileName"] = fileName;
+  vector<unsigned char> body;
+  for (map<string, string>::iterator it = params.begin(); it != params.end();
+       it++) {
+    string line = "--werghnvt54wef654rjuhgb56trtg34tweuyrgf\r\nContent-"
+                  "Disposition: form-data; name=\"" +
+                  it->first + "\"\r\n\r\n" + it->second + "\r\n";
+    copy(line.begin(), line.end(), back_inserter(body));
+  }
+  string part1 = "--werghnvt54wef654rjuhgb56trtg34tweuyrgf\r\nContent-"
+                 "Disposition: form-data; name=\"file\"; filename=\"" +
+                 path + "\"\nContent-Type:image/jpeg\r\n\r\n";
+  copy(part1.begin(), part1.end(), back_inserter(body));
+  copy(data.begin(), data.end(), back_inserter(body));
+  string part2 = "\r\n--werghnvt54wef654rjuhgb56trtg34tweuyrgf--\r\n";
+  copy(part2.begin(), part2.end(), back_inserter(body));
+
+  http_request req;
+  http_client client(U(cloud_uploader));
+  req.set_method(methods::POST);
+  req.headers().add("Content-Length", to_string(body.size()));
+  req.headers().add(
+      "Content-Type",
+      "multipart/form-data; boundary=werghnvt54wef654rjuhgb56trtg34tweuyrgf");
+  req.set_body(body);
+  return client.request(req).get().extract_json().get();
+} // namespace BCY
+web::json::value Core::item_postUploadToken() {
+  web::json::value j;
+  auto R = POST("api/item/postUpLoadToken", j, true, true);
+  return R.extract_json().get();
+}
+web::json::value Core::item_postUploadToken(string GID) {
+  web::json::value j;
+  j["gid"] = web::json::value(GID);
+  auto R = POST("api/item/postUpLoadToken", j, true, true);
+  return R.extract_json().get();
+}
 web::json::value Core::timeline_stream_loadmore(string feed_type,
                                                 int first_enter,
                                                 int refresh_num) {
@@ -353,6 +430,35 @@ bool Core::item_cancelPostLike(string item_id) {
   auto R = POST("api/item/cancelPostLike", j, true, true);
   web::json::value r = R.extract_json().get();
   return r["status"] == 1;
+}
+web::json::value item_doNewPost(NewPostType type){
+#warning Unimplemented
+  string URL="/api/item/doNew";
+  switch(type){
+    case NewPostType::GroupAnswer:{
+      URL=URL+"GroupAnswer";
+      break;
+    }
+    case NewPostType::ArticlePost:{
+      URL=URL+"ArticlePost";
+      break;
+    }
+    case NewPostType::NotePost:{
+      URL=URL+"NotePost";
+      break;
+    }
+    default: { throw invalid_argument("Invalid NewPost Type!"); }
+  }
+  web::json::value j;
+  j["post_token"]=item_postUpLoadParam()["data"]["post_token"];
+  return web::json::value();
+
+}
+web::json::value Core::item_postUpLoadParam(){
+  web::json::value j;
+  auto R = POST("api/item/postUpLoadParam", j, true, true);
+  web::json::value r = R.extract_json().get();
+  return r;
 }
 web::json::value Core::tag_status(string TagName) {
   web::json::value j;
