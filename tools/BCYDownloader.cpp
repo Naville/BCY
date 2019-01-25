@@ -136,12 +136,7 @@ static void block(string OPType, string arg) {
     cout << "Unrecognized OPType" << endl;
   }
 }
-void JSONMode() {
-  if (DU == nullptr) {
-    cout << "You havn't initialize the downloader yet" << endl;
-    return;
-  }
-  DU->downloadLiked();
+void tags(){
   mt19937 mt_rand(time(0));
   vector<string> Tags;
   for (web::json::value j : config["Tags"].as_array()) {
@@ -151,7 +146,9 @@ void JSONMode() {
   for (string item : Tags) {
     DU->downloadTag(item);
   }
-
+}
+void searches(){
+  mt19937 mt_rand(time(0));
   vector<string> Searches;
   for (web::json::value j : config["Searches"].as_array()) {
     Searches.push_back(j.as_string());
@@ -160,7 +157,9 @@ void JSONMode() {
   for (string item : Searches) {
     DU->downloadSearchKeyword(item);
   }
-
+}
+void events(){
+  mt19937 mt_rand(time(0));
   vector<string> Events;
   for (web::json::value j : config["Events"].as_array()) {
     Events.push_back(j.as_string());
@@ -169,7 +168,9 @@ void JSONMode() {
   for (string item : Events) {
     DU->downloadEvent(item);
   }
-
+}
+void works(){
+  mt19937 mt_rand(time(0));
   vector<string> Works;
   for (web::json::value j : config["Works"].as_array()) {
     Works.push_back(j.as_string());
@@ -178,8 +179,10 @@ void JSONMode() {
   for (string item : Works) {
     DU->downloadWorkID(item);
   }
-
+}
+void groups(){
   vector<string> Groups;
+  mt19937 mt_rand(time(0));
   for (web::json::value j : config["Groups"].as_array()) {
     Groups.push_back(j.as_string());
   }
@@ -187,7 +190,9 @@ void JSONMode() {
   for (string item : Groups) {
     DU->downloadGroupID(item);
   }
-
+}
+void follows(){
+  mt19937 mt_rand(time(0));
   vector<string> Follows;
   for (web::json::value j : config["Follows"].as_array()) {
     Follows.push_back(j.as_string());
@@ -196,6 +201,9 @@ void JSONMode() {
   for (string item : Follows) {
     DU->downloadUserLiked(item);
   }
+}
+void users(){
+  mt19937 mt_rand(time(0));
   vector<string> Users;
   for (web::json::value j : config["Users"].as_array()) {
     Users.push_back(j.as_string());
@@ -204,7 +212,20 @@ void JSONMode() {
   for (string item : Users) {
     DU->downloadUser(item);
   }
-
+}
+void JSONMode() {
+  if (DU == nullptr) {
+    cout << "You havn't initialize the downloader yet" << endl;
+    return;
+  }
+  liked("");
+  tags();
+  searches();
+  works();
+  events();
+  groups();
+  follows();
+  users();
   DU->downloadTimeline();
   if (config.has_field("Verify")) {
     bool ver = config["Verify"].as_bool();
@@ -241,6 +262,13 @@ void Interactive() {
   engine.add(chaiscript::fun(&cleanupHandle), "cleanup");
   engine.add(chaiscript::fun(&downloadVideo), "downloadVideo");
   engine.add(chaiscript::fun(&dEvent), "event");
+  engine.add(chaiscript::fun(&events), "events");
+  engine.add(chaiscript::fun(&tags), "tags");
+  engine.add(chaiscript::fun(&searches), "searches");
+  engine.add(chaiscript::fun(&works), "works");
+  engine.add(chaiscript::fun(&groups), "groups");
+  engine.add(chaiscript::fun(&follows), "follows");
+  engine.add(chaiscript::fun(&users), "users");
   string command;
   while (1) {
     cout << Prefix << ":$";

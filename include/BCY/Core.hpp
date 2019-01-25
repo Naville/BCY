@@ -89,9 +89,9 @@ public:
   web::json::value circle_itemhottags(std::string item_id);
   web::json::value group_detail(std::string GID);
   web::json::value timeline_stream_refresh();
-  web::json::value qiniu_upload(web::json::value token,std::vector<unsigned char>& data,std::string extension="jpg");
   web::json::value item_postUploadToken();
   web::json::value item_postUpLoadParam();
+  web::json::value qiniu_upload(web::json::value token,std::vector<unsigned char>& data,std::string extension="jpg");
   web::json::value item_doNewPost(NewPostType type);
   web::json::value item_postUploadToken(std::string GID);
   web::json::value timeline_stream_loadmore(std::string feed_type = "",

@@ -431,8 +431,13 @@ bool Core::item_cancelPostLike(string item_id) {
   web::json::value r = R.extract_json().get();
   return r["status"] == 1;
 }
-web::json::value item_doNewPost(NewPostType type){
-#warning Unimplemented
+web::json::value Core::item_postUpLoadParam(){
+  web::json::value j;
+  auto R = POST("api/item/postUpLoadParam", j, true, true);
+  web::json::value r = R.extract_json().get();
+  return r;
+}
+web::json::value Core::item_doNewPost(NewPostType type){
   string URL="/api/item/doNew";
   switch(type){
     case NewPostType::GroupAnswer:{
@@ -447,18 +452,14 @@ web::json::value item_doNewPost(NewPostType type){
       URL=URL+"NotePost";
       break;
     }
-    default: { throw invalid_argument("Invalid NewPost Type!"); }
+    default: {
+      throw invalid_argument("Invalid NewPost Type!");
+    }
   }
   web::json::value j;
-  j["post_token"]=item_postUpLoadParam()["data"]["post_token"];
+  web::json::value token=item_postUpLoadParam()["data"]["post_token"];
+  j["post_token"]=token;
   return web::json::value();
-
-}
-web::json::value Core::item_postUpLoadParam(){
-  web::json::value j;
-  auto R = POST("api/item/postUpLoadParam", j, true, true);
-  web::json::value r = R.extract_json().get();
-  return r;
 }
 web::json::value Core::tag_status(string TagName) {
   web::json::value j;
