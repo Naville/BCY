@@ -51,6 +51,9 @@ void cleanup2() {
     DU = nullptr;
   }
 }
+void cleanupHandle(){
+  DU->cleanup();
+}
 static void quit() {
   if (DU != nullptr) {
     delete DU;
@@ -224,6 +227,7 @@ void Interactive() {
   engine.add(chaiscript::fun(&tag), "tag");
   engine.add(chaiscript::fun(&searchKW), "search");
   engine.add(chaiscript::fun(&joinHandle), "join");
+  engine.add(chaiscript::fun(&cleanupHandle), "cleanup");
   engine.add(chaiscript::fun(&downloadVideo), "downloadVideo");
   string command;
   while (1) {
