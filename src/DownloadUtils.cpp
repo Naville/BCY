@@ -459,6 +459,7 @@ void DownloadUtils::downloadFromInfo(web::json::value Inf, bool save,
                                << __FILE__ << ":" << __LINE__ << endl;
     }
   }
+  vector<web::json::value> a2Methods;//Used for aria2 RPC's ``system.multicall``
   for (web::json::value item : Inf["multi"].as_array()) {
     boost::this_thread::interruption_point();
     string URL = item["path"].as_string();
@@ -508,6 +509,7 @@ void DownloadUtils::downloadFromInfo(web::json::value Inf, bool save,
           if (stop) {
             return;
           }
+            try{
           boost::this_thread::interruption_point();
           auto R = core.GET(origURL);
           boost::this_thread::interruption_point();
@@ -516,6 +518,10 @@ void DownloadUtils::downloadFromInfo(web::json::value Inf, bool save,
           ofs.write(reinterpret_cast<const char *>(vec.data()), vec.size());
           ofs.close();
           boost::this_thread::interruption_point();
+          }
+            catch(const std::exception& exp){
+                BOOST_LOG_TRIVIAL(error)<<"Download from "<<origURL<<" failed with exception:"<<exp.what()<<endl;
+            }
         });
       } else {
         boost::this_thread::interruption_point();
@@ -545,39 +551,43 @@ void DownloadUtils::downloadFromInfo(web::json::value Inf, bool save,
           params.push_back(web::json::value(1));
         }
         rpcparams["params"] = web::json::value::array(params);
-        rpcparams["jsonrpc"] = web::json::value("2.0");
-        rpcparams["id"] = web::json::value();
-        rpcparams["method"] = web::json::value("aria2.addUri");
+        rpcparams["methodName"] = web::json::value("aria2.addUri");
+        a2Methods.push_back(rpcparams);
         boost::this_thread::interruption_point();
-        /*Session Sess;
-        Sess.SetUrl(Url{RPCServer});
-        Sess.SetBody(Body{rpcparams.serialize()});
-        Response X = Sess.Post();*/
-        try {
-          web::http::client::http_client client(RPCServer);
-          web::json::value rep =
-              client.request(web::http::methods::POST, U("/"), rpcparams)
-                  .get()
-                  .extract_json(true)
-                  .get();
-
-          if (rep.has_field("result")) {
-            BOOST_LOG_TRIVIAL(debug)
-                << origURL
-                << " Registered in Aria2 with GID:" << rep["result"].serialize()
-                << " Query:" << rpcparams.serialize() << endl;
-          } else {
-            BOOST_LOG_TRIVIAL(debug)
-                << origURL << " Failed to Register with Aria2. Response:"
-                << rep["error"]["message"].as_string()
-                << " Query:" << rpcparams.serialize() << endl;
-          }
-        } catch (const std::exception &exp) {
-          BOOST_LOG_TRIVIAL(error)
-              << "Posting to Aria2 Error:" << exp.what() << endl;
-        }
       }
     }
+  }
+
+  try {
+
+    web::json::value arg;
+    arg["jsonrpc"]=web::json::value("2.0");
+    arg["id"]=web::json::value();
+    arg["method"]=web::json::value("system.multicall");
+    vector<web::json::value> tmp;
+    tmp.push_back(web::json::value::array(a2Methods));
+    arg["params"]=web::json::value::array(tmp);
+    web::http::client::http_client client(RPCServer);
+    web::json::value rep =
+        client.request(web::http::methods::POST, U("/"), arg)
+            .get()
+            .extract_json(true)
+            .get();
+
+    if (rep.has_field("result")) {
+      BOOST_LOG_TRIVIAL(debug)
+          << item_id
+          << " Registered in Aria2 with GID:" << rep["result"].serialize()
+          << " Query:" << arg.serialize() << endl;
+    } else {
+      BOOST_LOG_TRIVIAL(error)
+          << item_id << " Failed to Register with Aria2. Response:"
+          << rep["error"]["message"].as_string()
+          << " Query:" << arg.serialize() << endl;
+    }
+  } catch (const std::exception &exp) {
+    BOOST_LOG_TRIVIAL(error)
+        << "Posting to Aria2 Error:" << exp.what() << endl;
   }
 }
 void DownloadUtils::verifyUID(string UID, bool reverse) {

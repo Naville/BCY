@@ -72,7 +72,7 @@ static void aria2(string addr, string secret) {
   DU->RPCServer = addr;
   DU->secret = secret;
 }
-static void init(string path, int queryCnt, int downloadCnt) {
+static void init(string path, int queryCnt, int downloadCnt,string DBPath) {
   if (DU == nullptr) {
     try {
       DU = new DownloadUtils(path, queryCnt, downloadCnt);
@@ -95,7 +95,7 @@ static void item(string item_id) { DU->downloadItemID(item_id); }
 static void proxy(string proxy) { DU->core.proxy = proxy; }
 static void group(string gid) { DU->downloadGroupID(gid); }
 static void cleanup() { DU->cleanup(); }
-static void join() { DU->join(); }
+static void joinHandle() { DU->join(); }
 static void login(string email, string password) {
   if (DU->core.UID == "") {
     web::json::value Res = DU->core.loginWithEmailAndPassword(email, password);
@@ -223,6 +223,7 @@ void Interactive() {
   engine.add(chaiscript::fun(&quit), "quit");
   engine.add(chaiscript::fun(&tag), "tag");
   engine.add(chaiscript::fun(&searchKW), "search");
+  engine.add(chaiscript::fun(&joinHandle), "join");
   engine.add(chaiscript::fun(&downloadVideo), "downloadVideo");
   string command;
   while (1) {
@@ -430,9 +431,10 @@ int main(int argc, char **argv) {
         }
       }
       try {
-        DU = new DownloadUtils(config["SaveBase"].as_string(), queryThreadCount,
-                               downloadThreadCount,
-                               config["DBPath"].as_string());
+          
+          init(config["SaveBase"].as_string(), queryThreadCount,
+               downloadThreadCount,
+               config["DBPath"].as_string());
         cout << "Initialized Downloader at: " << config["SaveBase"].as_string()
              << endl;
       } catch (const SQLite::Exception &ex) {
@@ -472,15 +474,7 @@ int main(int argc, char **argv) {
       if (config.has_field("email") && config.has_field("password") &&
           config.at("email").is_null() == false &&
           config.at("password").is_null() == false) {
-        cout << "Logging in..." << endl;
-        web::json::value Res = DU->core.loginWithEmailAndPassword(
-            config["email"].as_string(), config["password"].as_string());
-        if (!Res.is_null()) {
-          Prefix = Res["data"]["uname"].as_string();
-          cout << "Logged in as : " << Prefix << endl;
-        } else {
-          cout << "Login Failed" << endl;
-        }
+          login(config["email"].as_string(), config["password"].as_string());
       }
     }
     else{
