@@ -15,6 +15,7 @@ public:
   bool shouldBlockAbstract(web::json::value abstract);
   void loadRulesFromJSON(web::json::value rules);
   void addFilterHandler(BCYFilterHandler handle);
+  int evalScript(web::json::value abstract,std::string item_id);
   std::vector<web::json::value> UIDList;
   std::vector<web::json::value> WorkList;
   std::vector<web::json::value> TagList;

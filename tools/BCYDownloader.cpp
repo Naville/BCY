@@ -36,7 +36,6 @@ static string Prefix =
 typedef std::function<void(vector<string>)> commHandle;
 static map<string, commHandle> handlers;
 static map<string, string> handlerMsgs;
-chaiscript::ChaiScript engine;
 void JSONMode();
 void cleanup(int sig) {
   if (DU != nullptr) {
@@ -241,6 +240,7 @@ void JSONMode() {
 }
 void Interactive() {
   cout << "Entering Interactive Mode..." << endl;
+  chaiscript::ChaiScript engine;
   engine.add(chaiscript::fun(&block), "block");
   engine.add(chaiscript::fun(&verifyTag), "verifyTag");
   engine.add(chaiscript::fun(&init), "init");

@@ -8,16 +8,6 @@
 using namespace std;
 using namespace SQLite;
 namespace BCY {
-static bool containsTag(web::json::value inf, string tag) {
-  if (inf.has_field("post_tags")) {
-    for (web::json::value j : inf["post_tags"].as_array()) {
-      if (j["tag_name"].as_string() == tag) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
 DownloadFilter::DownloadFilter(string Path) {
   DBPath = Path;
   Database DB(DBPath, SQLite::OPEN_CREATE || OPEN_READWRITE);
@@ -47,24 +37,7 @@ bool DownloadFilter::shouldBlockDetail(web::json::value abstract) {
   if (abstract.has_field("item_id")) {
     item_id = ensure_string(abstract["item_id"]);
   }
-  if (ScriptList.size() > 0) {
-    chaiscript::ChaiScript engine;
-    engine.add(chaiscript::var(abstract), "Info");
-    engine.add(chaiscript::fun(containsTag), "containsTag");
-    for (web::json::value j : ScriptList) {
-      string scpt = j.as_string();
-      int result = engine.eval<int>(scpt);
-      if (result > 0) {
-        BOOST_LOG_TRIVIAL(debug) << item_id << " Allowed by Script" << endl;
-        return false;
-      } else if (result < 0) {
-        BOOST_LOG_TRIVIAL(debug) << item_id << " Blocked by Script" << endl;
-        return true;
-      } else {
-        continue;
-      }
-    }
-  }
+  evalScript(abstract,item_id);
   for (auto bar : UserNameList) {
     string name = bar.as_string();
     smatch match;
@@ -82,28 +55,47 @@ bool DownloadFilter::shouldBlockDetail(web::json::value abstract) {
   }
   return false;
 }
+int DownloadFilter::evalScript(web::json::value abstract,string item_id){
+  if (ScriptList.size() > 0) {
+    chaiscript::ChaiScript engine;
+    string val=abstract.serialize();
+    engine.add(chaiscript::var(val), "Infostr");
+    engine.add(chaiscript::var(item_id), "item_id");
+    engine.eval<chaiscript::Boxed_Value>("var Info=from_json(Infostr)");
+    auto initialState=engine.get_locals();//We need to reset the local vals on each loop
+    for (web::json::value j : ScriptList) {
+      string scpt = j.as_string();
+      engine.set_locals(initialState);
+      try{
+        int result = engine.eval<int>(scpt);
+        if (result > 0) {
+          BOOST_LOG_TRIVIAL(debug) << item_id << " Allowed by Script:" << endl;
+          return result;
+        } else if (result < 0) {
+          BOOST_LOG_TRIVIAL(debug) << item_id << " Blocked by Script:" << endl;
+          return result;
+        } else {
+          continue;
+        }
+      }
+      catch(std::exception& exp){
+        BOOST_LOG_TRIVIAL(error)<<"During Evalution Script:"<< scpt << " on item_id:"<<item_id<<", Exception is thrown:" <<exp.what()<<endl;
+      }
+
+    }
+  }
+  return 0;
+}
 bool DownloadFilter::shouldBlockAbstract(web::json::value abstract) {
   string item_id = "null";
   if (abstract.has_field("item_id")) {
     item_id = ensure_string(abstract["item_id"]);
   }
-  if (ScriptList.size() > 0) {
-    chaiscript::ChaiScript engine;
-    engine.add(chaiscript::var(abstract), "Info");
-    engine.add(chaiscript::fun(containsTag), "containsTag");
-    for (web::json::value j : ScriptList) {
-      string scpt = j.as_string();
-      int result = engine.eval<int>(scpt);
-      if (result > 0) {
-        BOOST_LOG_TRIVIAL(debug) << item_id << " Allowed by Script:" << endl;
-        return false;
-      } else if (result < 0) {
-        BOOST_LOG_TRIVIAL(debug) << item_id << " Blocked by Script:" << endl;
-        return true;
-      } else {
-        continue;
-      }
-    }
+  int state=evalScript(abstract,item_id);
+  if (state > 0) {
+    return false;
+  } else if (state < 0) {
+    return true;
   }
   if (find(UIDList.begin(), UIDList.end(), abstract["uid"]) != UIDList.end()) {
     BOOST_LOG_TRIVIAL(debug)
