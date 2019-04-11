@@ -37,7 +37,6 @@ bool DownloadFilter::shouldBlockDetail(web::json::value abstract) {
   if (abstract.has_field("item_id")) {
     item_id = ensure_string(abstract["item_id"]);
   }
-  evalScript(abstract,item_id);
   for (auto bar : UserNameList) {
     string name = bar.as_string();
     smatch match;
@@ -52,6 +51,10 @@ bool DownloadFilter::shouldBlockDetail(web::json::value abstract) {
       BOOST_LOG_TRIVIAL(error)
           << "UserName Regex Filter Error:" << e.what() << endl;
     }
+  }
+  int state=evalScript(abstract,item_id);
+  if (state < 0) {
+    return true;
   }
   return false;
 }
@@ -91,12 +94,6 @@ bool DownloadFilter::shouldBlockAbstract(web::json::value abstract) {
   if (abstract.has_field("item_id")) {
     item_id = ensure_string(abstract["item_id"]);
   }
-  int state=evalScript(abstract,item_id);
-  if (state > 0) {
-    return false;
-  } else if (state < 0) {
-    return true;
-  }
   if (find(UIDList.begin(), UIDList.end(), abstract["uid"]) != UIDList.end()) {
     BOOST_LOG_TRIVIAL(debug)
         << item_id << " Blocked By UID Rule:" << abstract["uid"] << endl;
@@ -131,6 +128,10 @@ bool DownloadFilter::shouldBlockAbstract(web::json::value abstract) {
       TypeList.end()) {
     BOOST_LOG_TRIVIAL(debug) << item_id << " Blocked Due to its type:"
                              << ensure_string(abstract["type"]) << endl;
+    return true;
+  }
+  int state=evalScript(abstract,item_id);
+  if (state < 0) {
     return true;
   }
   return false;
