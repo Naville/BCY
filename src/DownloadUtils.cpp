@@ -170,7 +170,7 @@ string DownloadUtils::loadTitle(string title, web::json::value Inf) {
   std::lock_guard<mutex> guard(dbLock);
   Database DB(DBPath, OPEN_READONLY);
   Statement Q(DB, query.str());
-  for (auto i = 0; i < keys.size(); i++) {
+  for (decltype(keys.size()) i = 0; i < keys.size(); i++) {
     Q.bind(i + 1, vals[i]);
   }
   boost::this_thread::interruption_point();
@@ -223,7 +223,7 @@ void DownloadUtils::saveInfo(string title, web::json::value Inf) {
   std::lock_guard<mutex> guard(dbLock);
   Database DB(DBPath, SQLite::OPEN_READWRITE);
   Statement Q(DB, query.str());
-  for (auto i = 0; i < tmps.size(); i++) {
+  for (decltype(tmps.size()) i = 0; i < tmps.size(); i++) {
     Q.bind(i + 1, vals[i]);
   }
   Q.executeStep();
@@ -665,7 +665,7 @@ void DownloadUtils::verify(string condition, vector<string> args,
     std::lock_guard<mutex> guard(dbLock);
     Database DB(DBPath, SQLite::OPEN_READONLY);
     Statement Q(DB, "SELECT item_id,Info FROM WorkInfo " + condition);
-    for (auto i = 1; i <= args.size(); i++) {
+    for (decltype(args.size()) i = 1; i <= args.size(); i++) {
       Q.bind(i, args[i - 1]);
     }
     while (Q.executeStep()) {
@@ -698,7 +698,7 @@ void DownloadUtils::verify(string condition, vector<string> args,
   }
   BOOST_LOG_TRIVIAL(info) << "Found " << Info.size() << " Cached Info" << endl;
   if (reverse == false) {
-    for (auto i = 0; i < Keys.size(); i++) {
+    for (decltype(Keys.size()) i = 0; i < Keys.size(); i++) {
       string K = Keys[i];
       web::json::value &j = Info[K];
       if (i % 1000 == 0) {
@@ -811,14 +811,14 @@ void DownloadUtils::cleanTag(string Tag, vector<string> &items) {
 void DownloadUtils::cleanup() {
   BOOST_LOG_TRIVIAL(info) << "Cleaning up..." << endl;
   thread_pool t(16);
-  for (auto i = 0; i < filter->UIDList.size(); i++) {
+  for (decltype(filter->UIDList.size()) i = 0; i < filter->UIDList.size(); i++) {
     boost::asio::post(t, [=]() {
       string UID = filter->UIDList[i].as_string();
       cleanUID(UID);
     });
   }
   // vector<string> Infos;
-  for (auto i = 0; i < filter->TagList.size(); i++) {
+  for (decltype(filter->TagList.size()) i = 0; i < filter->TagList.size(); i++) {
     boost::asio::post(t, [=]() {
       vector<string> Infos;
       string Tag = filter->TagList[i].as_string();

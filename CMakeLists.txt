@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.11)
 project(BCY)
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Wall -g -O0 -D DEBUG -Wall")
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O2 -D NDEBUG -Wall")
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_DEBUG} -Wall -g -O2 -D DEBUG -Wall")
@@ -47,6 +48,9 @@ target_link_libraries(BCYDownloadUtils BCYCore SQLiteCpp sqlite3 pthread z)
 
 target_include_directories(BCYDownloader PUBLIC ${CMAKE_CURRENT_LIST_DIR}/SQLiteCpp/include)
 target_link_libraries(BCYDownloader BCYDownloadUtils)
+IF(UNIX)
+target_link_libraries(BCYDownloader -ldl)
+ENDIF()
 
 install(TARGETS BCYDownloader DESTINATION bin COMPONENT BCYDownloader)
 install(TARGETS BCYCore BCYDownloadUtils

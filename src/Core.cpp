@@ -95,7 +95,7 @@ http_response Core::GET(string URL, web::json::value Para,
     }
   }
 
-  for (auto i = 0; i < retry + 1; i++) {
+  for (decltype(retry) i = 0; i < retry + 1; i++) {
     try {
       http_request req(methods::GET);
       req.set_request_uri(builder.to_uri());
@@ -157,7 +157,7 @@ http_response Core::POST(string URL, web::json::value Para, bool Auth,
     body += web::uri::encode_uri(iter->first) + "=" +
             web::uri::encode_data_string(iter->second.as_string());
   }
-  for (auto i = 0; i < retry; i++) {
+  for (decltype(retry) i = 0; i < retry; i++) {
     try {
       http_request req(methods::POST);
       req.set_request_uri(builder.to_uri());
@@ -203,7 +203,7 @@ web::json::value Core::ParamByCRC32URL(string FullURL) {
   stringstream tmp;
   split(results, FullURL, [](char c) { return c == '/'; });
   tmp << "/";
-  for (int i = 3; i < results.size(); i++) {
+  for (decltype(results.size()) i = 3; i < results.size(); i++) {
     tmp << results[i] << "/";
   }
   string CRC32Candidate = tmp.str();
@@ -212,8 +212,8 @@ web::json::value Core::ParamByCRC32URL(string FullURL) {
   CRC32Candidate = CRC32Candidate + "?r=" + nonce;
   CRC32 hash;
   unsigned int crc32_hash;
-  CryptoPP::CRC32().CalculateDigest((byte *)&crc32_hash,
-                                    (byte *)CRC32Candidate.c_str(),
+  CryptoPP::CRC32().CalculateDigest((CryptoPP::byte *)&crc32_hash,
+                                    (CryptoPP::byte *)CRC32Candidate.c_str(),
                                     CRC32Candidate.size());
   web::json::value j;
   j["r"] = web::json::value(nonce);
@@ -343,7 +343,7 @@ string Core::bda_hexMixedString(string input) {
   static const char key = 5;
   os << setfill('0') << setw(2);
   stringstream os2;
-  for (int i = 0; i < input.length(); i++) {
+  for (decltype(input.length()) i = 0; i < input.length(); i++) {
     char Val = input[i] ^ key;
     os2 << hex << Val;
   }
@@ -579,7 +579,7 @@ Core::circle_itemhotworks(string circle_id, BCYListIteratorCallback callback) {
   }
 }
 vector<web::json::value>
-Core::circle_itemrecentworks(unsigned long long circle_id, string name,
+Core::circle_itemrecentworks(uint64_t circle_id, string name,
                              BCYListIteratorCallback callback) {
   vector<web::json::value> ret;
   string since = "0";
@@ -639,7 +639,7 @@ Core::circle_itemrecenttags(string name, string filter,
 vector<web::json::value>
 Core::circle_itemhottags(string name, BCYListIteratorCallback callback) {
   vector<web::json::value> ret;
-  unsigned long long since = 0;
+  uint64_t since = 0;
   web::json::value j;
   j["grid_type"] = web::json::value("timeline");
   j["id"] = tag_status(name)["data"]["tag_id"];

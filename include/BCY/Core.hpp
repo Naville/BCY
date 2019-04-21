@@ -129,7 +129,7 @@ public:
       std::string UID,
       BCYListIteratorCallback callback = BCYListIteratorCallback());
   std::vector<web::json::value> circle_itemrecentworks(
-      unsigned long long circle_id, std::string name,
+      uint64_t circle_id, std::string name,
       BCYListIteratorCallback callback = BCYListIteratorCallback());
   std::vector<web::json::value> circle_itemrecenttags(
       std::string name,
