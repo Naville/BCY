@@ -405,6 +405,9 @@ int main(int argc, char **argv) {
       if (!conf.has_field("DBPath")) {
         config["DBPath"] = web::json::value(vm["DBPath"].as<string>());
       }
+      else{
+        config["DBPath"] = conf["DBPath"];
+      }
       if (!conf.has_field("QueryCount")) {
         config["QueryCount"] = vm["QueryCount"].as<int>();
       } else {
