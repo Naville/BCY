@@ -114,6 +114,10 @@ http_response Core::GET(string URL, web::json::value Para,
   task.wait();
   return task.get();
 }
+void Core::loginWithUIDAndSessionKey(std::string uid,std::string sKey){
+  this->UID=uid;
+  this->sessionKey=sKey;
+}
 http_response Core::POST(string URL, web::json::value Para, bool Auth,
                          bool Encrypt, map<string, string> Par) {
   if (Par.empty()) {

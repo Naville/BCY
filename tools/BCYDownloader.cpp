@@ -91,6 +91,9 @@ static void init(string path, int queryCnt, int downloadCnt,string DBPath) {
     cout << "Already Initialized" << endl;
   }
 }
+static void loginWithSKey(string uid,string SKey){
+  DU->core.loginWithUIDAndSessionKey(uid,SKey);
+}
 static void hotTags(string tagName,unsigned int cnt){DU->downloadHotTags(tagName,cnt);}
 static void hotWorks(string id,unsigned int cnt){DU->downloadHotWorks(id,cnt);}
 static void addtype(string typ) { DU->addTypeFilter(typ); }
@@ -275,6 +278,7 @@ void Interactive() {
   engine.add(chaiscript::fun(&users), "users");
   engine.add(chaiscript::fun(&hotTags), "hotTags");
   engine.add(chaiscript::fun(&hotWorks), "hotWorks");
+  engine.add(chaiscript::fun(&loginWithSKey), "loginWithSKey");
   string command;
   while (1) {
     cout << Prefix << ":$";
@@ -358,7 +362,10 @@ int main(int argc, char **argv) {
       "Aria2 RPC Server. Format: RPCURL[@RPCTOKEN]")(
       "email", po::value<string>(), "BCY Account email")(
       "password", po::value<string>(), "BCY Account password")(
-      "DBPath", po::value<string>()->default_value(""), "BCY Database Path");
+      "DBPath", po::value<string>()->default_value(""), "BCY Database Path")(
+      "UID", po::value<string>()->default_value(""), "BCY UID")
+      (
+      "sessionKey", po::value<string>()->default_value(""), "BCY sessionKey");
   try {
     po::store(
         po::command_line_parser(argc, argv).options(desc).positional(pos).run(),
@@ -539,6 +546,11 @@ int main(int argc, char **argv) {
           config.at("email").is_null() == false &&
           config.at("password").is_null() == false) {
           login(config["email"].as_string(), config["password"].as_string());
+      }
+      else if(config.has_field("UID") && config.has_field("sessionKey") &&
+          config.at("UID").is_null() == false &&
+          config.at("sessionKey").is_null() == false){
+          loginWithSKey(config["UID"].as_string(), config["sessionKey"].as_string());
       }
     }
     else{

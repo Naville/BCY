@@ -147,7 +147,7 @@ public:
       BCYListIteratorCallback callback = BCYListIteratorCallback());
   std::vector<web::json::value> item_favor_itemlist(
       BCYListIteratorCallback callback = BCYListIteratorCallback());
-
+  void loginWithUIDAndSessionKey(std::string uid,std::string sessionKey);
 private:
   std::string bda_hexMixedString(std::string input);
   std::map<std::string, std::string> Params;
