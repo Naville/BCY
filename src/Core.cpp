@@ -348,7 +348,7 @@ string Core::bda_hexMixedString(string input) {
     os2 << hex << Val;
   }
   os << os2.str();
-  return string_to_hex(os.str());
+  return BCY::string_to_hex(os.str());
 }
 web::json::value Core::space_me() {
   web::json::value j;
