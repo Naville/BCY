@@ -7,7 +7,7 @@
 #include <sstream>
 using json = web::json::value;
 using namespace std;
-string BCY::string_to_hex(const string &input) {
+string BCY::bcy_string_to_hex(const string &input) {
   static const char *const lut = "0123456789abcdef";
   size_t len = input.length();
 
