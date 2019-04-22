@@ -8,8 +8,6 @@ set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_DEBUG} -Wall -g -O2 -D DEB
 set(CMAKE_CXX_FLAGS_MINSIZEREL "${CMAKE_CXX_FLAGS_RELEASE} -O3 -D NDEBUG -Wall")
 
 option(SQLITECPP_INTERNAL_SQLITE "" OFF)
-option(ENABLE_PYTHON_BINDING "Enable PyBCY" OFF)
-set(PYTHON_VERSION "3.7" CACHE STRING "Python Version Used For Python Binding" )
 add_compile_definitions("SQLITE_OMIT_LOAD_EXTENSION")
 ADD_DEFINITIONS(-DBOOST_LOG_DYN_LINK)
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/SQLiteCpp EXCLUDE_FROM_ALL)
@@ -58,23 +56,3 @@ install(TARGETS BCYCore BCYDownloadUtils
         LIBRARY DESTINATION lib
         PUBLIC_HEADER DESTINATION include/BCY/
 )
-
-IF(ENABLE_PYTHON_BINDING)
-message(STATUS "Building For Python${PYTHON_VERSION}")
-add_library(PyBCY SHARED src/binding.cpp)
-find_package(PythonLibs ${PYTHON_VERSION} REQUIRED)
-STRING(REPLACE "." "" PYTHON_VERSION_NODOT ${PYTHON_VERSION})
-find_package(Boost 1.67.0 REQUIRED COMPONENTS system filesystem thread regex program_options log python${PYTHON_VERSION_NODOT})
-# Suppress prefix "lib" because Python does not allow this prefix
-set_target_properties(PyBCY PROPERTIES PREFIX "")
-IF(WIN32)
-  set_target_properties(PyBCY PROPERTIES SUFFIX ".dll")
-ELSE()
-  set_target_properties(PyBCY PROPERTIES SUFFIX ".so")
-ENDIF()
-find_package(Python ${PYTHON_VERSION} REQUIRED COMPONENTS Interpreter Development)
-target_include_directories(PyBCY PUBLIC ${BOOST_INCLUDE_DIRS} ${CMAKE_CURRENT_LIST_DIR}/include/ "/usr/local/include/" "/usr/include/" ${PYTHON_INCLUDE_DIRS} ${CMAKE_CURRENT_LIST_DIR}/SQLiteCpp/include ${Python_INCLUDE_DIRS})
-target_link_libraries(PyBCY ${CRYPTOPP_LIB} ${Boost_LIBRARIES} ${PYTHON_LIBRARIES} BCYCore BCYDownloadUtils)
-message(STATUS "Installing PyBCY to:" ${Python_SITEARCH})
-install(TARGETS PyBCY DESTINATION "${Python_SITEARCH}/")
-ENDIF()

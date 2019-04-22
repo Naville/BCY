@@ -9,6 +9,7 @@
 #include <boost/log/support/date_time.hpp>
 #include <boost/log/trivial.hpp>
 #include <boost/log/utility/setup.hpp>
+#include <boost/filesystem.hpp>
 #include <boost/program_options.hpp>
 #include <chaiscript/chaiscript.hpp>
 #include <chaiscript/utility/json.hpp>
@@ -20,6 +21,7 @@ using namespace BCY;
 using namespace std::placeholders;
 using namespace std;
 using namespace boost;
+namespace bfs=boost::filesystem;
 namespace po = boost::program_options;
 namespace logging = boost::log;
 namespace src = boost::log::sources;
@@ -481,6 +483,13 @@ int main(int argc, char **argv) {
           cout << "SaveBase Not Specified. Default to ~/BCY/" << endl;
           config["SaveBase"] = web::json::value(BCY::expand_user("~/BCY/"));
         }
+      }
+
+      if (!config.has_field("DBPath")) {
+        bfs::path dir(config["SaveBase"].as_string());
+        bfs::path file("BCYInfo.db");
+        bfs::path full_path = dir / file;
+        config["DBPath"] =web::json::value(full_path.string());
       }
       try {
 
