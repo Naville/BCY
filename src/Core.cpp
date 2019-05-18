@@ -114,9 +114,9 @@ http_response Core::GET(string URL, web::json::value Para,
   task.wait();
   return task.get();
 }
-void Core::loginWithUIDAndSessionKey(std::string uid,std::string sKey){
-  this->UID=uid;
-  this->sessionKey=sKey;
+void Core::loginWithUIDAndSessionKey(std::string uid, std::string sKey) {
+  this->UID = uid;
+  this->sessionKey = sKey;
 }
 http_response Core::POST(string URL, web::json::value Para, bool Auth,
                          bool Encrypt, map<string, string> Par) {
@@ -193,6 +193,12 @@ web::json::value Core::mixHEXParam(web::json::value Params) {
   }
   return j;
 }
+web::json::value Core::item_sharePost(string item_id) {
+  web::json::value j;
+  j["item_id"] = web::json::value(item_id);
+  auto R = POST("api/item/sharePost", j, true, true);
+  return R.extract_json().get();
+}
 web::json::value Core::ParamByCRC32URL(string FullURL) {
   // First a 16digit random number is generated and appended as param r=
   // So for example if baseurl is https://123456.com/item/detail/a , then random
@@ -248,8 +254,7 @@ web::json::value Core::timeline_stream_refresh() {
   auto R = POST("apiv2/timeline/stream", j, true, true);
   return R.extract_json().get();
 }
-web::json::value Core::qiniu_upload(web::json::value token,
-                                    vector<unsigned char> &data,
+web::json::value Core::qiniu_upload(web::json::value token, vector<char> &data,
                                     string extension) {
   string cloud_upToken = token["data"]["cloud_upToken"].as_string();
   string cloud_uploader = token["data"]["cloud_uploader"].as_string();
@@ -441,7 +446,7 @@ web::json::value Core::item_postUpLoadParam() {
   web::json::value r = R.extract_json().get();
   return r;
 }
-web::json::value Core::item_doNewPost(NewPostType type) {
+web::json::value Core::item_doNewPost(NewPostType type, web::json::value args) {
   string URL = "/api/item/doNew";
   switch (type) {
   case NewPostType::GroupAnswer: {
@@ -458,10 +463,72 @@ web::json::value Core::item_doNewPost(NewPostType type) {
   }
   default: { throw invalid_argument("Invalid NewPost Type!"); }
   }
-  web::json::value j;
   web::json::value token = item_postUpLoadParam()["data"]["post_token"];
-  j["post_token"] = token;
-  return web::json::value();
+  args["post_token"] = token;
+  auto R = POST(URL, args, true, true);
+  web::json::value r = R.extract_json().get();
+  return r;
+}
+web::json::value
+Core::prepareNoteUploadArg(vector<string> &tags,
+                           vector<struct UploadImageInfo> &Infos,
+                           string content, bool allowSave, bool addWatermark,
+                           bool modify, bool trans, VisibilityType view) {
+  web::json::value j;
+  string vType = "";
+  switch (view) {
+  case (VisibilityType::All): {
+    vType = "all";
+    break;
+  }
+  case (VisibilityType::Login): {
+    vType = "login";
+    break;
+  }
+  case (VisibilityType::Fans): {
+    vType = "fans";
+    break;
+  }
+  default: {
+    throw invalid_argument("Unknown VisibilityType");
+    break;
+  }
+  }
+  vector<web::json::value> Tags;
+  vector<web::json::value> URLs;
+  for (string tag : tags) {
+    Tags.push_back(web::json::value(tag));
+  }
+  j["tag_names"] = web::json::value::array(Tags);
+  for (struct UploadImageInfo inf : Infos) {
+    web::json::value ele;
+    ele["h"] = web::json::value(inf.Height);
+    ele["w"] = web::json::value(inf.Width);
+    ele["path"] = web::json::value(inf.URL);
+    ele["ratio"] = web::json::value(inf.Ratio);
+    URLs.push_back(ele);
+  }
+  j["multi"] = web::json::value::array(URLs);
+  j["content"] = web::json::value(content);
+  web::json::value x;
+  web::json::value y;
+  y["download"] = web::json::value(allowSave);
+  y["water_mark"] = web::json::value(addWatermark);
+  x["save"] = y;
+  web::json::value z;
+  z["no_modify"] = web::json::value(!modify);
+  z["no_trans"] = web::json::value(!trans);
+  x["transmit"] = z;
+  x["view"] = web::json::value(vType);
+  j["authority"] = x;
+  return j;
+}
+web::json::value Core::deletePost(string item_id) {
+  web::json::value j;
+  j["item_id"] = web::json::value(item_id);
+  auto R = POST("api/item/deletePost", j, true, true);
+  web::json::value r = R.extract_json().get();
+  return r;
 }
 web::json::value Core::tag_status(string TagName) {
   web::json::value j;

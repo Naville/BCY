@@ -12,7 +12,9 @@ public:
   ~DownloadFilter();
   DownloadFilter(std::string DBPath);
   bool shouldBlockDetail(web::json::value detail);
+  bool shouldBlockDetail(web::json::value detail,std::string item_id);
   bool shouldBlockAbstract(web::json::value abstract);
+  bool shouldBlockAbstract(web::json::value detail,std::string item_id);
   void loadRulesFromJSON(web::json::value rules);
   void addFilterHandler(BCYFilterHandler handle);
   int evalScript(web::json::value abstract,std::string item_id);

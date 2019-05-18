@@ -15,8 +15,9 @@ class DownloadUtils {
 public:
   Core core;
   DownloadFilter *filter = nullptr;
-  bool useCachedInfo = true; // Would be really slow for large databases
+  bool useCachedInfo = true;
   bool downloadVideo = true;
+  bool enableFilter = true;
   bool allowCompressed = false; // if enabled, downloader will try to use the
   // official API to download compressed
   // (~20%quality lost )images instead of
@@ -29,7 +30,8 @@ public:
   DownloadUtils(std::string PathBase, int queryThreadCount = -1,
                 int downloadThreadCount = -1,
                 std::string DBPath = ""); //-1 to use hardware thread count
-  void downloadFromAbstractInfo(web::json::value Inf, bool runFilter = true);
+  void downloadFromAbstractInfo(web::json::value Inf, bool runFilter);
+  void downloadFromAbstractInfo(web::json::value Inf);
   void downloadFromInfo(web::json::value Inf, bool save = true,
                         std::string item_id_arg = "", bool runFilter = true);
   // Will try to extract item_id from info first, if not it loads from the
@@ -43,6 +45,8 @@ public:
   void insertEventInfo(web::json::value Inf);
   void cleanup();
   void join();
+  boost::filesystem::path getUserPath(std::string UID);
+  boost::filesystem::path getItemPath(std::string UID,std::string item_id);
   void cleanUID(std::string UID);
   void cleanTag(std::string Tag, std::vector<std::string> &items);
   void verify(std::string condition = "", std::vector<std::string> args = {},
@@ -61,6 +65,7 @@ public:
   void downloadTimeline();
   void downloadItemID(std::string item_id);
   void unlikeCached();
+  void cleanByFilter();
   void downloadHotTags(std::string TagName,unsigned int cnt=20000);
   void downloadHotWorks(std::string id,unsigned int cnt=20000);
 

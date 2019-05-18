@@ -70,6 +70,9 @@ DownloadUtils::DownloadUtils(string PathBase, int queryThreadCount,
   fs::path TempPath = fs::path(PathBase) / fs::path("DownloadTemp");
   fs::create_directories(TempPath, ec);
 }
+void DownloadUtils::downloadFromAbstractInfo(web::json::value AbstractInfo) {
+  downloadFromAbstractInfo(AbstractInfo, this->enableFilter);
+}
 void DownloadUtils::downloadFromAbstractInfo(web::json::value AbstractInfo,
                                              bool runFilter) {
   if (stop) {
@@ -108,7 +111,8 @@ void DownloadUtils::downloadFromAbstractInfo(web::json::value AbstractInfo,
           try {
             downloadFromInfo(
                 detail, false,
-                ensure_string(AbstractInfo.at("item_detail").at("item_id")));
+                ensure_string(AbstractInfo.at("item_detail").at("item_id")),
+                runFilter);
           } catch (boost::thread_interrupted) {
             BOOST_LOG_TRIVIAL(debug)
                 << "Cancelling Thread:" << boost::this_thread::get_id() << endl;
@@ -296,7 +300,7 @@ void DownloadUtils::downloadFromInfo(web::json::value Inf, bool save,
   if (item_id_arg != "" && runFilter) {
     // Not Called by the AbstractInfo Worker
     // Need to run our own filter process
-    if (filter->shouldBlockDetail(Inf) || filter->shouldBlockAbstract(Inf)) {
+    if (filter->shouldBlockDetail(Inf,item_id_arg) || filter->shouldBlockAbstract(Inf,item_id_arg)) {
       return;
     }
   }
@@ -370,15 +374,7 @@ void DownloadUtils::downloadFromInfo(web::json::value Inf, bool save,
     saveInfo(Title, Inf);
     boost::this_thread::interruption_point();
   }
-  string tmp = UID;
-  while (tmp.length() < 3) {
-    tmp = "0" + tmp;
-  }
-  string L1Path = string(1, tmp[0]);
-  string L2Path = string(1, tmp[1]);
-  fs::path UserPath =
-      fs::path(saveRoot) / fs::path(L1Path) / fs::path(L2Path) / fs::path(UID);
-  fs::path newSavePath = UserPath / fs::path(item_id);
+  fs::path newSavePath = getItemPath(UID,item_id);
 
   if (Inf.has_field("multi") == false) {
     Inf["multi"] = web::json::value::array();
@@ -490,6 +486,8 @@ void DownloadUtils::downloadFromInfo(web::json::value Inf, bool save,
       BOOST_LOG_TRIVIAL(error) << "FileSystem Error: " << ec.message() << "@"
                                << __FILE__ << ":" << __LINE__ << endl;
     }
+  } else {
+    return;
   }
   vector<web::json::value>
       a2Methods; // Used for aria2 RPC's ``system.multicall``
@@ -710,7 +708,7 @@ void DownloadUtils::verify(string condition, vector<string> args,
           return;
         }
         try {
-          downloadFromInfo(j, false, K);
+          downloadFromInfo(j, false, K, enableFilter);
         } catch (boost::thread_interrupted) {
           BOOST_LOG_TRIVIAL(debug)
               << "Cancelling Thread:" << boost::this_thread::get_id() << endl;
@@ -734,7 +732,7 @@ void DownloadUtils::verify(string condition, vector<string> args,
           return;
         }
         try {
-          downloadFromInfo(j, false, K);
+          downloadFromInfo(j, false, K, enableFilter);
         } catch (boost::thread_interrupted) {
           BOOST_LOG_TRIVIAL(debug)
               << "Cancelling Thread:" << boost::this_thread::get_id() << endl;
@@ -749,17 +747,66 @@ void DownloadUtils::verify(string condition, vector<string> args,
   }
 }
 
+void DownloadUtils::cleanByFilter() {
+  vector<std::tuple<string, string, web::json::value>> Infos;
+  BOOST_LOG_TRIVIAL(info) << "Collecting Cached Infos" << endl;
+  {
+    std::lock_guard<mutex> guard(dbLock);
+    Database DB(DBPath, SQLite::OPEN_READONLY);
+    Statement Q(DB, "SELECT uid,item_id,Info FROM WorkInfo");
+    while (Q.executeStep()) {
+      string uid = Q.getColumn(0).getString();
+      string item_id = Q.getColumn(1).getString();
+      string InfoStr = Q.getColumn(2).getString();
+      try {
+        web::json::value j = web::json::value::parse(InfoStr);
+        if (item_id == "0" || item_id == "") {
+          BOOST_LOG_TRIVIAL(error)
+              << InfoStr << " Doesn't Have Valid item_id" << endl;
+          continue;
+        }
+        Infos.push_back(std::make_tuple(uid, item_id, j));
+
+        if (Infos.size() % 1000 == 0) {
+          BOOST_LOG_TRIVIAL(info) << Infos.size() << " Cache Loaded" << endl;
+        }
+      } catch (exception &exp) {
+        BOOST_LOG_TRIVIAL(info)
+            << exp.what() << __FILE__ << ":" << __LINE__ << endl;
+#ifdef __APPLE__
+        const boost::stacktrace::stacktrace *st =
+            boost::get_error_info<traced>(exp);
+        if (st) {
+          std::cerr << *st << '\n';
+        }
+#endif
+      }
+    }
+  }
+  decltype(Infos.size()) i = 0;
+  for (std::tuple<string, string, web::json::value> tup : Infos) {
+    string uid = std::get<0>(tup);
+    string item_id = std::get<1>(tup);
+    web::json::value Inf = std::get<2>(tup);
+    if (filter->shouldBlockDetail(Inf,item_id) || filter->shouldBlockAbstract(Inf,item_id)) {
+      boost::system::error_code ec;
+      fs::path WorkPath = getItemPath(uid,item_id);
+      bool isDirec = is_directory(WorkPath, ec);
+      if (isDirec) {
+        fs::remove_all(WorkPath, ec);
+        BOOST_LOG_TRIVIAL(debug) << "Removed " << WorkPath.string() << endl;
+      }
+    }
+    i++;
+    if (i % 1000 == 0) {
+      BOOST_LOG_TRIVIAL(info) << i << " Processed" << endl;
+    }
+  }
+}
 void DownloadUtils::cleanUID(string UID) {
   BOOST_LOG_TRIVIAL(debug) << "Cleaning up UID:" << UID << endl;
-  string tmp = UID;
-  while (tmp.length() < 3) {
-    tmp = "0" + tmp;
-  }
-  string L1Path = string(1, tmp[0]);
-  string L2Path = string(1, tmp[1]);
   boost::system::error_code ec;
-  fs::path UserPath =
-      fs::path(saveRoot) / fs::path(L1Path) / fs::path(L2Path) / fs::path(UID);
+  fs::path UserPath = getUserPath(UID);
   bool isDirec = is_directory(UserPath, ec);
   if (isDirec) {
     fs::remove_all(UserPath, ec);
@@ -770,6 +817,19 @@ void DownloadUtils::cleanUID(string UID) {
   Database DB(DBPath, SQLite::OPEN_READWRITE);
   Statement Q(DB, "DELETE FROM WorkInfo WHERE UID=" + UID);
   Q.executeStep();
+}
+fs::path DownloadUtils::getUserPath(string UID){
+  while (UID.length() < 3) {
+    UID = "0" + UID;
+  }
+  string L1Path = string(1, UID[0]);
+  string L2Path = string(1, UID[1]);
+  fs::path UserPath =
+      fs::path(saveRoot) / fs::path(L1Path) / fs::path(L2Path) / fs::path(UID);
+  return UserPath;
+}
+fs::path DownloadUtils::getItemPath(string UID,string item_id){
+  return getUserPath(UID)/fs::path(item_id);
 }
 void DownloadUtils::cleanTag(string Tag, vector<string> &items) {
   BOOST_LOG_TRIVIAL(info) << "Cleaning up Tag:" << Tag << endl;
@@ -787,15 +847,8 @@ void DownloadUtils::cleanTag(string Tag, vector<string> &items) {
       continue;
     }
     items.push_back(item_id);
-    string tmp = UID;
-    while (tmp.length() < 3) {
-      tmp = "0" + tmp;
-    }
-    string L1Path = string(1, tmp[0]);
-    string L2Path = string(1, tmp[1]);
     boost::system::error_code ec;
-    fs::path UserPath = fs::path(saveRoot) / fs::path(L1Path) /
-                        fs::path(L2Path) / fs::path(UID) / fs::path(item_id);
+    fs::path UserPath = getUserPath(UID);
     bool isDirec = is_directory(UserPath, ec);
     if (isDirec) {
       fs::remove_all(UserPath, ec);
@@ -811,34 +864,22 @@ void DownloadUtils::cleanTag(string Tag, vector<string> &items) {
 void DownloadUtils::cleanup() {
   BOOST_LOG_TRIVIAL(info) << "Cleaning up..." << endl;
   thread_pool t(16);
-  for (decltype(filter->UIDList.size()) i = 0; i < filter->UIDList.size(); i++) {
+  for (decltype(filter->UIDList.size()) i = 0; i < filter->UIDList.size();
+       i++) {
     boost::asio::post(t, [=]() {
       string UID = filter->UIDList[i].as_string();
       cleanUID(UID);
     });
   }
   // vector<string> Infos;
-  for (decltype(filter->TagList.size()) i = 0; i < filter->TagList.size(); i++) {
+  for (decltype(filter->TagList.size()) i = 0; i < filter->TagList.size();
+       i++) {
     boost::asio::post(t, [=]() {
       vector<string> Infos;
       string Tag = filter->TagList[i].as_string();
       cleanTag(Tag, Infos);
     });
   }
-  /*BOOST_LOG_TRIVIAL(info) << "Cleaning up Remaining " << Infos.size()
-                          << " Info from Database" << endl;
-  int i = 0;
-  for (string item_id : Infos) {
-    if ((i++) % 100 == 0) {
-      BOOST_LOG_TRIVIAL(info) << "Remaining " << Infos.size() - i
-                              << " Info to be removed from Database" << endl;
-    }
-    std::lock_guard<mutex> guard(dbLock);
-    Database DB(DBPath, SQLite::OPEN_READWRITE);
-    Statement Q(DB, "DELETE FROM WorkInfo WHERE item_id=?");
-    Q.bind(1, item_id);
-    Q.executeStep();
-  }*/
   t.join();
 }
 string DownloadUtils::md5(string &str) {
@@ -971,7 +1012,7 @@ void DownloadUtils::downloadItemID(string item_id) {
         detail = detail["data"];
       }
       try {
-        downloadFromInfo(detail, true, item_id);
+        downloadFromInfo(detail, true, item_id, enableFilter);
       } catch (boost::thread_interrupted) {
         BOOST_LOG_TRIVIAL(debug)
             << "Cancelling Thread:" << boost::this_thread::get_id() << endl;
@@ -983,7 +1024,7 @@ void DownloadUtils::downloadItemID(string item_id) {
       }
     } else {
       try {
-        downloadFromInfo(detail, false, item_id);
+        downloadFromInfo(detail, false, item_id, enableFilter);
       } catch (boost::thread_interrupted) {
         BOOST_LOG_TRIVIAL(debug)
             << "Cancelling Thread:" << boost::this_thread::get_id() << endl;
@@ -996,12 +1037,12 @@ void DownloadUtils::downloadItemID(string item_id) {
     }
   });
 }
-void DownloadUtils::downloadHotTags(string TagName,unsigned int cnt) {
-  unsigned int c=0;
-  core.circle_itemhottags(TagName,[&](web::json::value j){
-    this->downloadFromAbstractInfo(j);
+void DownloadUtils::downloadHotTags(string TagName, unsigned int cnt) {
+  unsigned int c = 0;
+  core.circle_itemhottags(TagName, [&](web::json::value j) {
+    this->downloadFromAbstractInfo(j, enableFilter);
     c++;
-    if(c<cnt){
+    if (c < cnt) {
       return true;
     }
     return false;
@@ -1070,12 +1111,12 @@ void DownloadUtils::join() {
   BOOST_LOG_TRIVIAL(info) << "Joining Download Threads" << endl;
   downloadThread->join();
 }
-void DownloadUtils::downloadHotWorks(std::string id,unsigned int cnt) {
-  unsigned int c=0;
-  core.circle_itemhotworks(id,[&](web::json::value j){
-    this->downloadFromAbstractInfo(j);
+void DownloadUtils::downloadHotWorks(std::string id, unsigned int cnt) {
+  unsigned int c = 0;
+  core.circle_itemhotworks(id, [&](web::json::value j) {
+    this->downloadFromAbstractInfo(j, enableFilter);
     c++;
-    if(c<cnt){
+    if (c < cnt) {
       return true;
     }
     return false;

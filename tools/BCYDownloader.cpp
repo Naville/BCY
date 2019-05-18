@@ -4,12 +4,12 @@
 #include "BCY/Utils.hpp"
 #include <algorithm>
 #include <boost/algorithm/string.hpp>
+#include <boost/filesystem.hpp>
 #include <boost/log/core.hpp>
 #include <boost/log/expressions.hpp>
 #include <boost/log/support/date_time.hpp>
 #include <boost/log/trivial.hpp>
 #include <boost/log/utility/setup.hpp>
-#include <boost/filesystem.hpp>
 #include <boost/program_options.hpp>
 #include <chaiscript/chaiscript.hpp>
 #include <chaiscript/utility/json.hpp>
@@ -21,7 +21,7 @@ using namespace BCY;
 using namespace std::placeholders;
 using namespace std;
 using namespace boost;
-namespace bfs=boost::filesystem;
+namespace bfs = boost::filesystem;
 namespace po = boost::program_options;
 namespace logging = boost::log;
 namespace src = boost::log::sources;
@@ -52,9 +52,7 @@ void cleanup2() {
     DU = nullptr;
   }
 }
-void cleanupHandle(){
-  DU->cleanup();
-}
+void cleanupHandle() { DU->cleanup(); }
 static void quit() {
   if (DU != nullptr) {
     delete DU;
@@ -70,16 +68,17 @@ static void liked(string UID) {
   }
 }
 static void unlike() { DU->unlikeCached(); }
-static void downloadVideo(bool flag) { DU->downloadVideo=flag; }
+static void downloadVideo(bool flag) { DU->downloadVideo = flag; }
 static void process() { JSONMode(); }
 static void aria2(string addr, string secret) {
   DU->RPCServer = addr;
   DU->secret = secret;
 }
-static void init(string path, int queryCnt, int downloadCnt,string DBPath) {
+static void cleanByFilter() { DU->cleanByFilter(); }
+static void init(string path, int queryCnt, int downloadCnt, string DBPath) {
   if (DU == nullptr) {
     try {
-      DU = new DownloadUtils(path, queryCnt, downloadCnt,DBPath);
+      DU = new DownloadUtils(path, queryCnt, downloadCnt, DBPath);
     } catch (const SQLite::Exception &ex) {
       cout << "Database Error:" << ex.getErrorStr() << endl
            << "Error Code:" << ex.getErrorCode() << endl
@@ -91,11 +90,15 @@ static void init(string path, int queryCnt, int downloadCnt,string DBPath) {
     cout << "Already Initialized" << endl;
   }
 }
-static void loginWithSKey(string uid,string SKey){
-  DU->core.loginWithUIDAndSessionKey(uid,SKey);
+static void loginWithSKey(string uid, string SKey) {
+  DU->core.loginWithUIDAndSessionKey(uid, SKey);
 }
-static void hotTags(string tagName,unsigned int cnt){DU->downloadHotTags(tagName,cnt);}
-static void hotWorks(string id,unsigned int cnt){DU->downloadHotWorks(id,cnt);}
+static void hotTags(string tagName, unsigned int cnt) {
+  DU->downloadHotTags(tagName, cnt);
+}
+static void hotWorks(string id, unsigned int cnt) {
+  DU->downloadHotWorks(id, cnt);
+}
 static void addtype(string typ) { DU->addTypeFilter(typ); }
 static void user(string UID) { DU->downloadUser(UID); }
 static void tag(string tag) { DU->downloadTag(tag); }
@@ -105,6 +108,7 @@ static void proxy(string proxy) { DU->core.proxy = proxy; }
 static void group(string gid) { DU->downloadGroupID(gid); }
 static void cleanup() { DU->cleanup(); }
 static void joinHandle() { DU->join(); }
+static void toggleFilter(bool stat) { DU->enableFilter = stat; }
 static void login(string email, string password) {
   if (DU->core.UID == "") {
     web::json::value Res = DU->core.loginWithEmailAndPassword(email, password);
@@ -121,9 +125,36 @@ static void verifyUID(string UID, bool reverse) { DU->verifyUID(UID, reverse); }
 static void verify(bool reverse) { DU->verify("", {}, reverse); }
 static void forcequit() { kill(getpid(), 9); }
 static void searchKW(string kw) { DU->downloadSearchKeyword(kw); }
-static void dEvent(string event_id){DU->downloadEvent(event_id);}
+static void dEvent(string event_id) { DU->downloadEvent(event_id); }
 static void verifyTag(string TagName, bool reverse) {
   DU->verifyTag(TagName, reverse);
+}
+static void uploadWork(vector<chaiscript::Boxed_Value> paths,
+                       vector<chaiscript::Boxed_Value> tags, string content) {
+  vector<struct UploadImageInfo> Infos;
+  vector<string> Tags;
+  for (chaiscript::Boxed_Value bv : tags) {
+    Tags.push_back(chaiscript::boxed_cast<string>(bv));
+  }
+  for (chaiscript::Boxed_Value bv : paths) {
+    string path = chaiscript::boxed_cast<string>(bv);
+    std::vector<char> vec;
+    ifstream file(path);
+    file.seekg(0, std::ios_base::end);
+    std::streampos fileSize = file.tellg();
+    vec.resize(fileSize);
+    file.seekg(0, std::ios_base::beg);
+    file.read(&vec[0], fileSize);
+    auto j = DU->core.qiniu_upload(DU->core.item_postUploadToken(), vec);
+    struct UploadImageInfo UII;
+    UII.URL = j["key"].as_string();
+    UII.Height = j["h"].as_double();
+    UII.Width = j["w"].as_double();
+    UII.Ratio = 0.0;
+    Infos.push_back(UII);
+  }
+  web::json::value req = DU->core.prepareNoteUploadArg(Tags, Infos, content);
+  DU->core.item_doNewPost(NewPostType::NotePost, req);
 }
 static void block(string OPType, string arg) {
   boost::to_upper(OPType);
@@ -142,7 +173,7 @@ static void block(string OPType, string arg) {
     cout << "Unrecognized OPType" << endl;
   }
 }
-void tags(){
+void tags() {
   mt19937 mt_rand(time(0));
   vector<string> Tags;
   for (web::json::value j : config["Tags"].as_array()) {
@@ -153,7 +184,7 @@ void tags(){
     DU->downloadTag(item);
   }
 }
-void searches(){
+void searches() {
   mt19937 mt_rand(time(0));
   vector<string> Searches;
   for (web::json::value j : config["Searches"].as_array()) {
@@ -164,7 +195,7 @@ void searches(){
     DU->downloadSearchKeyword(item);
   }
 }
-void events(){
+void events() {
   mt19937 mt_rand(time(0));
   vector<string> Events;
   for (web::json::value j : config["Events"].as_array()) {
@@ -175,7 +206,7 @@ void events(){
     DU->downloadEvent(item);
   }
 }
-void works(){
+void works() {
   mt19937 mt_rand(time(0));
   vector<string> Works;
   for (web::json::value j : config["Works"].as_array()) {
@@ -186,7 +217,7 @@ void works(){
     DU->downloadWorkID(item);
   }
 }
-void groups(){
+void groups() {
   vector<string> Groups;
   mt19937 mt_rand(time(0));
   for (web::json::value j : config["Groups"].as_array()) {
@@ -197,7 +228,7 @@ void groups(){
     DU->downloadGroupID(item);
   }
 }
-void follows(){
+void follows() {
   mt19937 mt_rand(time(0));
   vector<string> Follows;
   for (web::json::value j : config["Follows"].as_array()) {
@@ -208,7 +239,7 @@ void follows(){
     DU->downloadUserLiked(item);
   }
 }
-void users(){
+void users() {
   mt19937 mt_rand(time(0));
   vector<string> Users;
   for (web::json::value j : config["Users"].as_array()) {
@@ -279,6 +310,9 @@ void Interactive() {
   engine.add(chaiscript::fun(&hotTags), "hotTags");
   engine.add(chaiscript::fun(&hotWorks), "hotWorks");
   engine.add(chaiscript::fun(&loginWithSKey), "loginWithSKey");
+  engine.add(chaiscript::fun(&uploadWork), "uploadWork");
+  engine.add(chaiscript::fun(&cleanByFilter), "cleanByFilter");
+  engine.add(chaiscript::fun(&toggleFilter), "toggleFilter");
   string command;
   while (1) {
     cout << Prefix << ":$";
@@ -315,8 +349,8 @@ std::istream &operator>>(std::istream &in,
   }
   return in;
 }
-static bool containsTag(web::json::value inf,string key){
-  if(inf.has_field(key)){
+static bool containsTag(web::json::value inf, string key) {
+  if (inf.has_field(key)) {
     return true;
   }
   return false;
@@ -353,18 +387,15 @@ int main(int argc, char **argv) {
       "Download Works From these UIDs, Seperated by comma")(
       "Verify", "Verify everything in the database is downloaded")(
       "Works", po::value<string>(),
-      "Download Liked Works of these WorkIDs, Seperated by comma")
-      (
+      "Download Liked Works of these WorkIDs, Seperated by comma")(
       "Events", po::value<string>(),
-      "Download Works From Those EventIDs, Seperated by comma")
-      (
+      "Download Works From Those EventIDs, Seperated by comma")(
       "aria2", po::value<string>(),
       "Aria2 RPC Server. Format: RPCURL[@RPCTOKEN]")(
       "email", po::value<string>(), "BCY Account email")(
       "password", po::value<string>(), "BCY Account password")(
       "DBPath", po::value<string>()->default_value(""), "BCY Database Path")(
-      "UID", po::value<string>()->default_value(""), "BCY UID")
-      (
+      "UID", po::value<string>()->default_value(""), "BCY UID")(
       "sessionKey", po::value<string>()->default_value(""), "BCY sessionKey");
   try {
     po::store(
@@ -411,8 +442,7 @@ int main(int argc, char **argv) {
       }
       if (!conf.has_field("DBPath")) {
         config["DBPath"] = web::json::value(vm["DBPath"].as<string>());
-      }
-      else{
+      } else {
         config["DBPath"] = conf["DBPath"];
       }
       if (!conf.has_field("QueryCount")) {
@@ -426,7 +456,7 @@ int main(int argc, char **argv) {
         config["HTTPProxy"] = web::json::value(vm["HTTPProxy"].as<string>());
       }
       for (string K : {"Circles", "Filters", "Follows", "Groups", "Searches",
-                       "Tags", "Users", "Works","Events"}) {
+                       "Tags", "Users", "Works", "Events"}) {
         set<string> items;
         if (conf.has_field(K)) {
           for (auto item : conf[K].as_array()) {
@@ -499,13 +529,12 @@ int main(int argc, char **argv) {
         bfs::path dir(config["SaveBase"].as_string());
         bfs::path file("BCYInfo.db");
         bfs::path full_path = dir / file;
-        config["DBPath"] =web::json::value(full_path.string());
+        config["DBPath"] = web::json::value(full_path.string());
       }
       try {
 
-          init(config["SaveBase"].as_string(), queryThreadCount,
-               downloadThreadCount,
-               config["DBPath"].as_string());
+        init(config["SaveBase"].as_string(), queryThreadCount,
+             downloadThreadCount, config["DBPath"].as_string());
         cout << "Initialized Downloader at: " << config["SaveBase"].as_string()
              << endl;
       } catch (const SQLite::Exception &ex) {
@@ -545,15 +574,14 @@ int main(int argc, char **argv) {
       if (config.has_field("email") && config.has_field("password") &&
           config.at("email").is_null() == false &&
           config.at("password").is_null() == false) {
-          login(config["email"].as_string(), config["password"].as_string());
+        login(config["email"].as_string(), config["password"].as_string());
+      } else if (config.has_field("UID") && config.has_field("sessionKey") &&
+                 config.at("UID").is_null() == false &&
+                 config.at("sessionKey").is_null() == false) {
+        loginWithSKey(config["UID"].as_string(),
+                      config["sessionKey"].as_string());
       }
-      else if(config.has_field("UID") && config.has_field("sessionKey") &&
-          config.at("UID").is_null() == false &&
-          config.at("sessionKey").is_null() == false){
-          loginWithSKey(config["UID"].as_string(), config["sessionKey"].as_string());
-      }
-    }
-    else{
+    } else {
       cout << "Failed to Open File at:" << JSONPath << "!" << endl;
     }
   }
