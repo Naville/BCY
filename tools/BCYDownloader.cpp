@@ -111,11 +111,16 @@ static void joinHandle() { DU->join(); }
 static void toggleFilter(bool stat) { DU->enableFilter = stat; }
 static void login(string email, string password) {
   if (DU->core.UID == "") {
-    web::json::value Res = DU->core.loginWithEmailAndPassword(email, password);
-    if (!Res.is_null()) {
-      Prefix = Res["data"]["uname"].as_string();
-    } else {
-      cout << "Login Failed" << endl;
+    try {
+      web::json::value Res =
+          DU->core.loginWithEmailAndPassword(email, password);
+      if (!Res.is_null()) {
+        Prefix = Res["data"]["uname"].as_string();
+      } else {
+        cout << "Login Failed" << endl;
+      }
+    } catch (std::exception &exc) {
+      cout << "Exception:" << exc.what() << endl;
     }
   } else {
     cout << "Already logged in as UID:" << DU->core.UID << endl;

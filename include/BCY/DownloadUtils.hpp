@@ -48,7 +48,7 @@ public:
   boost::filesystem::path getUserPath(std::string UID);
   boost::filesystem::path getItemPath(std::string UID,std::string item_id);
   void cleanUID(std::string UID);
-  void cleanTag(std::string Tag, std::vector<std::string> &items);
+  void cleanTag(std::string Tag);
   void verify(std::string condition = "", std::vector<std::string> args = {},
               bool reverse = false);
   void verifyUID(std::string UID, bool reverse = false);

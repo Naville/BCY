@@ -136,6 +136,8 @@ void DownloadUtils::downloadFromAbstractInfo(web::json::value AbstractInfo,
       }
 #endif
     }
+
+
   });
 }
 string DownloadUtils::loadOrSaveGroupName(string name, string GID) {
@@ -300,7 +302,8 @@ void DownloadUtils::downloadFromInfo(web::json::value Inf, bool save,
   if (item_id_arg != "" && runFilter) {
     // Not Called by the AbstractInfo Worker
     // Need to run our own filter process
-    if (filter->shouldBlockDetail(Inf,item_id_arg) || filter->shouldBlockAbstract(Inf,item_id_arg)) {
+    if (filter->shouldBlockDetail(Inf, item_id_arg) ||
+        filter->shouldBlockAbstract(Inf, item_id_arg)) {
       return;
     }
   }
@@ -374,7 +377,7 @@ void DownloadUtils::downloadFromInfo(web::json::value Inf, bool save,
     saveInfo(Title, Inf);
     boost::this_thread::interruption_point();
   }
-  fs::path newSavePath = getItemPath(UID,item_id);
+  fs::path newSavePath = getItemPath(UID, item_id);
 
   if (Inf.has_field("multi") == false) {
     Inf["multi"] = web::json::value::array();
@@ -783,25 +786,31 @@ void DownloadUtils::cleanByFilter() {
       }
     }
   }
-  decltype(Infos.size()) i = 0;
+  BOOST_LOG_TRIVIAL(info) << "Processing..." << endl;
+  thread_pool t(16);
+  std::atomic<unsigned long long> i = 0;
   for (std::tuple<string, string, web::json::value> tup : Infos) {
     string uid = std::get<0>(tup);
     string item_id = std::get<1>(tup);
     web::json::value Inf = std::get<2>(tup);
-    if (filter->shouldBlockDetail(Inf,item_id) || filter->shouldBlockAbstract(Inf,item_id)) {
+    boost::asio::post(t, [=, &i]() {
       boost::system::error_code ec;
-      fs::path WorkPath = getItemPath(uid,item_id);
+      fs::path WorkPath = getItemPath(uid, item_id);
       bool isDirec = is_directory(WorkPath, ec);
       if (isDirec) {
-        fs::remove_all(WorkPath, ec);
-        BOOST_LOG_TRIVIAL(debug) << "Removed " << WorkPath.string() << endl;
+        if (filter->shouldBlockDetail(Inf, item_id) ||
+            filter->shouldBlockAbstract(Inf, item_id)) {
+          fs::remove_all(WorkPath, ec);
+          BOOST_LOG_TRIVIAL(debug) << "Removed " << WorkPath.string() << endl;
+        }
       }
-    }
-    i++;
-    if (i % 1000 == 0) {
-      BOOST_LOG_TRIVIAL(info) << i << " Processed" << endl;
-    }
+      i++;
+      if (i % 1000 == 0) {
+        BOOST_LOG_TRIVIAL(info) << i << " Processed" << endl;
+      }
+    });
   }
+  t.join();
 }
 void DownloadUtils::cleanUID(string UID) {
   BOOST_LOG_TRIVIAL(debug) << "Cleaning up UID:" << UID << endl;
@@ -818,7 +827,7 @@ void DownloadUtils::cleanUID(string UID) {
   Statement Q(DB, "DELETE FROM WorkInfo WHERE UID=" + UID);
   Q.executeStep();
 }
-fs::path DownloadUtils::getUserPath(string UID){
+fs::path DownloadUtils::getUserPath(string UID) {
   while (UID.length() < 3) {
     UID = "0" + UID;
   }
@@ -828,10 +837,10 @@ fs::path DownloadUtils::getUserPath(string UID){
       fs::path(saveRoot) / fs::path(L1Path) / fs::path(L2Path) / fs::path(UID);
   return UserPath;
 }
-fs::path DownloadUtils::getItemPath(string UID,string item_id){
-  return getUserPath(UID)/fs::path(item_id);
+fs::path DownloadUtils::getItemPath(string UID, string item_id) {
+  return getUserPath(UID) / fs::path(item_id);
 }
-void DownloadUtils::cleanTag(string Tag, vector<string> &items) {
+void DownloadUtils::cleanTag(string Tag) {
   BOOST_LOG_TRIVIAL(info) << "Cleaning up Tag:" << Tag << endl;
   std::lock_guard<mutex> guard(dbLock);
   Database DB(DBPath, SQLite::OPEN_READWRITE);
@@ -846,7 +855,6 @@ void DownloadUtils::cleanTag(string Tag, vector<string> &items) {
     if (item_id == "" || item_id == "0") {
       continue;
     }
-    items.push_back(item_id);
     boost::system::error_code ec;
     fs::path UserPath = getUserPath(UID);
     bool isDirec = is_directory(UserPath, ec);
@@ -868,6 +876,7 @@ void DownloadUtils::cleanup() {
        i++) {
     boost::asio::post(t, [=]() {
       string UID = filter->UIDList[i].as_string();
+      BOOST_LOG_TRIVIAL(debug) << "Removing UID: " << UID << endl;
       cleanUID(UID);
     });
   }
@@ -875,9 +884,9 @@ void DownloadUtils::cleanup() {
   for (decltype(filter->TagList.size()) i = 0; i < filter->TagList.size();
        i++) {
     boost::asio::post(t, [=]() {
-      vector<string> Infos;
       string Tag = filter->TagList[i].as_string();
-      cleanTag(Tag, Infos);
+      BOOST_LOG_TRIVIAL(debug) << "Removing Tag: " << Tag << endl;
+      cleanTag(Tag);
     });
   }
   t.join();

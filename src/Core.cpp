@@ -461,7 +461,9 @@ web::json::value Core::item_doNewPost(NewPostType type, web::json::value args) {
     URL = URL + "NotePost";
     break;
   }
-  default: { throw invalid_argument("Invalid NewPost Type!"); }
+  default: {
+    throw invalid_argument("Invalid NewPost Type!");
+  }
   }
   web::json::value token = item_postUpLoadParam()["data"]["post_token"];
   args["post_token"] = token;
@@ -571,7 +573,9 @@ web::json::value Core::circle_filterlist(string circle_id,
     j["circle_type"] = web::json::value("work");
     break;
   }
-  default: { throw invalid_argument("Invalid Circle Type!"); }
+  default: {
+    throw invalid_argument("Invalid Circle Type!");
+  }
   }
   j["circle_name"] = web::json::value(circle_name);
   auto R = POST("apiv2/circle/filterlist/", j, true, true);
@@ -869,7 +873,9 @@ Core::event_listPosts(string event_id, Order ord,
     j["order"] = web::json::value("index");
     break;
   }
-  default: { throw invalid_argument("Invalid Order Type!"); }
+  default: {
+    throw invalid_argument("Invalid Order Type!");
+  }
   }
   j["event_id"] = web::json::value(event_id);
   while (true) {
@@ -914,7 +920,9 @@ vector<web::json::value> Core::search(string keyword, SearchType type,
     URL = URL + "User";
     break;
   }
-  default: { throw invalid_argument("Invalid Search Type!"); }
+  default: {
+    throw invalid_argument("Invalid Search Type!");
+  }
   }
   web::json::value j;
   j["query"] = web::json::value(keyword);
