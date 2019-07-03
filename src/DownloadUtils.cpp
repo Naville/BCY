@@ -11,11 +11,9 @@
 #include <regex>
 #ifdef __APPLE__
 #define BOOST_STACKTRACE_GNU_SOURCE_NOT_REQUIRED
+#endif
 #include <boost/exception/all.hpp>
 #include <boost/stacktrace.hpp>
-typedef boost::error_info<struct tag_stacktrace, boost::stacktrace::stacktrace>
-    traced;
-#endif
 using namespace CryptoPP;
 namespace fs = boost::filesystem;
 using namespace boost::asio;
@@ -61,8 +59,6 @@ DownloadUtils::DownloadUtils(string PathBase, int queryThreadCount,
           "(item_id) ON CONFLICT REPLACE)");
   DB.exec("CREATE TABLE IF NOT EXISTS PyBCY (Key STRING DEFAULT '',Value "
           "STRING NOT NULL DEFAULT '',UNIQUE(Key) ON CONFLICT IGNORE)");
-  DB.exec("CREATE TABLE IF NOT EXISTS Compressed (item_id STRING NOT NULL "
-          "DEFAULT '',UNIQUE(item_id) ON CONFLICT IGNORE)");
   DB.exec("PRAGMA journal_mode=WAL;");
   filter = new DownloadFilter(DBPath);
   // Create Download Temp First
@@ -85,7 +81,7 @@ void DownloadUtils::downloadFromAbstractInfo(web::json::value AbstractInfo,
     boost::this_thread::interruption_point();
     try {
       if (runFilter == false || filter->shouldBlockAbstract(
-                                    AbstractInfo.at("item_detail")) == false) {
+                                    AbstractInfo.at("item_detail")) == false||filter->shouldBlockTags(AbstractInfo.at("item_detail"),"",ensure_string(AbstractInfo.at("item_detail").at("item_id")))) {
         boost::this_thread::interruption_point();
         web::json::value detail = loadInfo(
             ensure_string(AbstractInfo.at("item_detail").at("item_id")));
@@ -128,13 +124,7 @@ void DownloadUtils::downloadFromAbstractInfo(web::json::value AbstractInfo,
       BOOST_LOG_TRIVIAL(error)
           << exp.what() << __FILE__ << ":" << __LINE__ << endl
           << AbstractInfo.serialize() << endl;
-#ifdef __APPLE__
-      const boost::stacktrace::stacktrace *st =
-          boost::get_error_info<traced>(exp);
-      if (st) {
-        std::cerr << *st << '\n';
-      }
-#endif
+std::cerr << boost::stacktrace::stacktrace() << '\n';
     }
 
 
@@ -206,19 +196,31 @@ void DownloadUtils::saveInfo(string title, web::json::value Inf) {
   keys.push_back("Tags");
   tmps.push_back("(?)");
   if (Inf.has_field("post_tags")) {
-    vector<string> tags;
-    for (web::json::value tagD : Inf["post_tags"].as_array()) {
-      string tag = tagD["tag_name"].as_string();
-      tags.push_back("\"" + tag + "\"");
-    }
-    stringstream tagss;
-    tagss << "[" << ::BCY::join(tags.begin(), tags.end(), ",") << "]";
-    vals.push_back(tagss.str());
+    vector<web::json::value> tagsB; // Inner Param
+  for (web::json::value tagD : Inf["post_tags"].as_array()) {
+    string tag = tagD["tag_name"].as_string();
+      tagsB.push_back(web::json::value(tag));
+  }
+    web::json::value arr=web::json::value::array(tagsB);
+    vals.push_back(arr.serialize());
   } else {
     vals.push_back("[]");
   }
   keys.push_back("Info");
   tmps.push_back("(?)");
+  //Strip duplicate/useless info key/val pairs
+#define StripKV(name) \
+  if(Inf.has_field(name)){ \
+    Inf.erase(name); \
+  }
+
+  StripKV("recommend_rela")
+  StripKV("post_tags")
+  StripKV("user_favored")
+  StripKV("user_liked")
+  StripKV("view_count")
+#undef StripKV
+
   vals.push_back(Inf.serialize());
 
   keys.push_back("Title");
@@ -233,13 +235,6 @@ void DownloadUtils::saveInfo(string title, web::json::value Inf) {
     Q.bind(i + 1, vals[i]);
   }
   Q.executeStep();
-}
-void DownloadUtils::insertRecordForCompressedImage(string item_id) {
-  std::lock_guard<mutex> guard(dbLock);
-  Database DB(DBPath, SQLite::OPEN_READWRITE);
-  Statement insertQuery(DB, "INSERT INTO Compressed (item_id) VALUES (?)");
-  insertQuery.bind(1, item_id);
-  insertQuery.executeStep();
 }
 web::json::value DownloadUtils::loadInfo(string item_id) {
   std::lock_guard<mutex> guard(dbLock);
@@ -302,8 +297,17 @@ void DownloadUtils::downloadFromInfo(web::json::value Inf, bool save,
   if (item_id_arg != "" && runFilter) {
     // Not Called by the AbstractInfo Worker
     // Need to run our own filter process
+    string tagStr;
+    if (Inf.has_field("post_tags")==false){
+      //Extract from DB
+      std::lock_guard<mutex> guard(dbLock);
+      Database DB(DBPath, SQLite::OPEN_READONLY);
+      Statement Q(DB, "SELECT Tags FROM WorkInfo WHERE item_id=" + item_id_arg);
+      Q.executeStep();
+      tagStr=Q.getColumn(0).getString();
+    }
     if (filter->shouldBlockDetail(Inf, item_id_arg) ||
-        filter->shouldBlockAbstract(Inf, item_id_arg)) {
+        filter->shouldBlockAbstract(Inf, item_id_arg)||filter->shouldBlockTags(Inf,tagStr,item_id_arg)) {
       return;
     }
   }
@@ -474,10 +478,6 @@ void DownloadUtils::downloadFromInfo(web::json::value Inf, bool save,
         core.image_postCover(item_id, Inf["type"].as_string())["data"];
     if (!covers.is_null() && covers.has_field("multi")) {
       Inf["multi"] = covers["multi"];
-      BOOST_LOG_TRIVIAL(debug)
-          << "Inserting Compressed Images Record For item_id: " << item_id
-          << endl;
-      insertRecordForCompressedImage(item_id);
       isCompressedInfo = true;
     }
   }
@@ -490,6 +490,7 @@ void DownloadUtils::downloadFromInfo(web::json::value Inf, bool save,
                                << __FILE__ << ":" << __LINE__ << endl;
     }
   } else {
+    BOOST_LOG_TRIVIAL(error) << item_id <<" has no item to download"<< endl;
     return;
   }
   vector<web::json::value>
@@ -665,13 +666,14 @@ void DownloadUtils::verify(string condition, vector<string> args,
   {
     std::lock_guard<mutex> guard(dbLock);
     Database DB(DBPath, SQLite::OPEN_READONLY);
-    Statement Q(DB, "SELECT item_id,Info FROM WorkInfo " + condition);
+    Statement Q(DB, "SELECT item_id,Info,Tags FROM WorkInfo " + condition);
     for (decltype(args.size()) i = 1; i <= args.size(); i++) {
       Q.bind(i, args[i - 1]);
     }
     while (Q.executeStep()) {
       string item_id = Q.getColumn(0).getString();
       string InfoStr = Q.getColumn(1).getString();
+      string TagStr = Q.getColumn(2).getString();
       try {
         web::json::value j = web::json::value::parse(InfoStr);
         if (item_id == "0" || item_id == "") {
@@ -679,6 +681,18 @@ void DownloadUtils::verify(string condition, vector<string> args,
               << InfoStr << " Doesn't Have Valid item_id" << endl;
           continue;
         }
+          try{
+              if(filter->shouldBlockTags(j,TagStr,item_id)){
+                  continue;
+              }
+          }
+          catch (exception &exp) {
+              BOOST_LOG_TRIVIAL(info)
+              << exp.what() << __FILE__ << ":" << __LINE__ << endl;
+              std::cerr << boost::stacktrace::stacktrace() << '\n';
+
+          }
+
         Info[item_id] = j;
         Keys.push_back(item_id);
         if (Info.size() % 1000 == 0) {
@@ -687,13 +701,8 @@ void DownloadUtils::verify(string condition, vector<string> args,
       } catch (exception &exp) {
         BOOST_LOG_TRIVIAL(info)
             << exp.what() << __FILE__ << ":" << __LINE__ << endl;
-#ifdef __APPLE__
-        const boost::stacktrace::stacktrace *st =
-            boost::get_error_info<traced>(exp);
-        if (st) {
-          std::cerr << *st << '\n';
-        }
-#endif
+          std::cerr << boost::stacktrace::stacktrace() << '\n';
+
       }
     }
   }
@@ -776,13 +785,8 @@ void DownloadUtils::cleanByFilter() {
       } catch (exception &exp) {
         BOOST_LOG_TRIVIAL(info)
             << exp.what() << __FILE__ << ":" << __LINE__ << endl;
-#ifdef __APPLE__
-        const boost::stacktrace::stacktrace *st =
-            boost::get_error_info<traced>(exp);
-        if (st) {
-          std::cerr << *st << '\n';
-        }
-#endif
+          std::cerr << boost::stacktrace::stacktrace() << '\n';
+
       }
     }
   }

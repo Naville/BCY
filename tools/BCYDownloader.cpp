@@ -482,7 +482,7 @@ int main(int argc, char **argv) {
         }
         config[K] = web::json::value::array(j);
       }
-      for (string K : {"Verify", "UseCache", "Compress"}) {
+      for (string K : {"Verify", "UseCache", "Compress","DownloadVideo"}) {
         if (conf.has_field(K)) {
           if (vm.count(K)) {
             config[K] = web::json::value::boolean(true);
@@ -575,6 +575,11 @@ int main(int argc, char **argv) {
           config.at("Compress").is_null() == false) {
         bool flag = config["Compress"].as_bool();
         DU->allowCompressed = flag;
+      }
+      if (config.has_field("DownloadVideo") &&
+          config.at("DownloadVideo").is_null() == false) {
+        bool flag = config["DownloadVideo"].as_bool();
+        DU->downloadVideo = flag;
       }
       if (config.has_field("email") && config.has_field("password") &&
           config.at("email").is_null() == false &&

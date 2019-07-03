@@ -41,7 +41,6 @@ public:
   web::json::value loadInfo(std::string item_id);
   std::string loadOrSaveGroupName(std::string name, std::string GID);
   web::json::value loadEventInfo(std::string event_id);
-  void insertRecordForCompressedImage(std::string item_id);
   void insertEventInfo(web::json::value Inf);
   void cleanup();
   void join();
