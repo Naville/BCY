@@ -389,7 +389,7 @@ web::json::value Core::loginWithEmailAndPassword(string email,
 web::json::value Core::user_detail(string UID) {
   web::json::value j;
   j["uid"] = web::json::value(UID);
-  auto R = POST("api/token/doLogin", j, true, true);
+  auto R = POST("api/user/detail", j, true, true);
   return R.extract_json().get();
 }
 web::json::value Core::image_postCover(string item_id, string type) {

@@ -29,6 +29,7 @@ public:
   std::vector<web::json::value> TagList;
   std::vector<web::json::value> UserNameList;
   std::vector<web::json::value> TypeList;
+  std::vector<web::json::value> ItemList;
   std::vector<web::json::value>
       AbstractScriptList; // Each should return an integer value. > 0 for allow, =0 for
                   // defer, <0 for deny. JSON has variable name Info

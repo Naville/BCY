@@ -174,6 +174,9 @@ static void block(string OPType, string arg) {
     DU->filter->UserNameList.push_back(web::json::value(arg));
   } else if (OPType == "TYPE") {
     DU->filter->TypeList.push_back(web::json::value(arg));
+  } else if (OPType == "ITEM") {
+    DU->filter->ItemList.push_back(web::json::value(arg));
+    DU->cleanItem(arg);
   } else {
     cout << "Unrecognized OPType" << endl;
   }
@@ -186,7 +189,12 @@ void tags() {
   }
   shuffle(Tags.begin(), Tags.end(), mt_rand);
   for (string item : Tags) {
-    DU->downloadTag(item);
+    try {
+      DU->downloadTag(item);
+    } catch (std::exception &exp) {
+      cout << "Exception: " << exp.what()
+           << " During Downloading of Tag:" << item << endl;
+    }
   }
 }
 void searches() {
@@ -197,7 +205,12 @@ void searches() {
   }
   shuffle(Searches.begin(), Searches.end(), mt_rand);
   for (string item : Searches) {
-    DU->downloadSearchKeyword(item);
+    try {
+      DU->downloadSearchKeyword(item);
+    } catch (std::exception &exp) {
+      cout << "Exception: " << exp.what()
+           << " During Searching Keyword:" << item << endl;
+    }
   }
 }
 void events() {
@@ -208,7 +221,12 @@ void events() {
   }
   shuffle(Events.begin(), Events.end(), mt_rand);
   for (string item : Events) {
-    DU->downloadEvent(item);
+    try {
+      DU->downloadEvent(item);
+    } catch (std::exception &exp) {
+      cout << "Exception: " << exp.what()
+           << " During Downloading Event:" << item << endl;
+    }
   }
 }
 void works() {
@@ -219,7 +237,12 @@ void works() {
   }
   shuffle(Works.begin(), Works.end(), mt_rand);
   for (string item : Works) {
-    DU->downloadWorkID(item);
+    try {
+      DU->downloadWorkID(item);
+    } catch (std::exception &exp) {
+      cout << "Exception: " << exp.what()
+           << " During Downloading WorkID:" << item << endl;
+    }
   }
 }
 void groups() {
@@ -230,7 +253,12 @@ void groups() {
   }
   shuffle(Groups.begin(), Groups.end(), mt_rand);
   for (string item : Groups) {
-    DU->downloadGroupID(item);
+    try {
+      DU->downloadGroupID(item);
+    } catch (std::exception &exp) {
+      cout << "Exception: " << exp.what()
+           << " During Downloading GroupID:" << item << endl;
+    }
   }
 }
 void follows() {
@@ -241,7 +269,12 @@ void follows() {
   }
   shuffle(Follows.begin(), Follows.end(), mt_rand);
   for (string item : Follows) {
-    DU->downloadUserLiked(item);
+    try {
+      DU->downloadUserLiked(item);
+    } catch (std::exception &exp) {
+      cout << "Exception: " << exp.what()
+           << " During Downloading User Liked:" << item << endl;
+    }
   }
 }
 void users() {
@@ -252,7 +285,12 @@ void users() {
   }
   shuffle(Users.begin(), Users.end(), mt_rand);
   for (string item : Users) {
-    DU->downloadUser(item);
+    try {
+      DU->downloadUser(item);
+    } catch (std::exception &exp) {
+      cout << "Exception: " << exp.what() << " During Downloading User:" << item
+           << endl;
+    }
   }
 }
 void JSONMode() {
@@ -482,7 +520,7 @@ int main(int argc, char **argv) {
         }
         config[K] = web::json::value::array(j);
       }
-      for (string K : {"Verify", "UseCache", "Compress","DownloadVideo"}) {
+      for (string K : {"Verify", "UseCache", "Compress", "DownloadVideo"}) {
         if (conf.has_field(K)) {
           if (vm.count(K)) {
             config[K] = web::json::value::boolean(true);

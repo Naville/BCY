@@ -46,17 +46,19 @@ DownloadUtils::DownloadUtils(string PathBase, int queryThreadCount,
   queryThread = new thread_pool(queryThreadCount);
   downloadThread = new thread_pool(downloadThreadCount);
   std::lock_guard<mutex> guard(dbLock);
-  DB.exec("CREATE TABLE IF NOT EXISTS UserInfo (uid INTEGER,UserName "
-          "STRING,UNIQUE(uid) ON CONFLICT IGNORE)");
+  DB.exec("CREATE TABLE IF NOT EXISTS UserInfo (uid INTEGER,uname "
+          "STRING,self_intro STRING,avatar STRING,isValueUser INTEGER,Tags "
+          "STRING NOT NULL DEFAULT '[]',UNIQUE(uid) ON CONFLICT IGNORE)");
   DB.exec("CREATE TABLE IF NOT EXISTS EventInfo (event_id INTEGER,etime "
           "INTEGER,stime INTEGER,cover STRING,intro STRING,Info "
           "STRING,UNIQUE(event_id) ON CONFLICT IGNORE)");
   DB.exec("CREATE TABLE IF NOT EXISTS GroupInfo (gid INTEGER,GroupName "
           "STRING,UNIQUE(gid) ON CONFLICT IGNORE)");
-  DB.exec("CREATE TABLE IF NOT EXISTS WorkInfo (uid INTEGER DEFAULT 0,Title "
-          "STRING NOT NULL DEFAULT '',item_id INTEGER DEFAULT 0,Info STRING "
-          "NOT NULL DEFAULT '',Tags STRING NOT NULL DEFAULT '[]',UNIQUE "
-          "(item_id) ON CONFLICT REPLACE)");
+  DB.exec("CREATE TABLE IF NOT EXISTS ItemInfo (uid INTEGER DEFAULT 0,item_id "
+          "INTEGER DEFAULT 0,Title STRING NOT NULL DEFAULT '',Tags STRING NOT "
+          "NULL DEFAULT '[]',ctime INTEGER DEFAULT 0,Description STRING NOT "
+          "NULL DEFAULT '',Images STRING NOT NULL DEFAULT '[]',VideoID STRING "
+          "NOT NULL DEFAULT '',UNIQUE (item_id) ON CONFLICT REPLACE)");
   DB.exec("CREATE TABLE IF NOT EXISTS PyBCY (Key STRING DEFAULT '',Value "
           "STRING NOT NULL DEFAULT '',UNIQUE(Key) ON CONFLICT IGNORE)");
   DB.exec("PRAGMA journal_mode=WAL;");
@@ -80,8 +82,12 @@ void DownloadUtils::downloadFromAbstractInfo(web::json::value AbstractInfo,
     }
     boost::this_thread::interruption_point();
     try {
-      if (runFilter == false || filter->shouldBlockAbstract(
-                                    AbstractInfo.at("item_detail")) == false||filter->shouldBlockTags(AbstractInfo.at("item_detail"),"",ensure_string(AbstractInfo.at("item_detail").at("item_id")))) {
+      if (runFilter == false ||
+          filter->shouldBlockAbstract(AbstractInfo.at("item_detail")) ==
+              false ||
+          filter->shouldBlockTags(
+              AbstractInfo.at("item_detail"), "",
+              ensure_string(AbstractInfo.at("item_detail").at("item_id")))) {
         boost::this_thread::interruption_point();
         web::json::value detail = loadInfo(
             ensure_string(AbstractInfo.at("item_detail").at("item_id")));
@@ -124,11 +130,51 @@ void DownloadUtils::downloadFromAbstractInfo(web::json::value AbstractInfo,
       BOOST_LOG_TRIVIAL(error)
           << exp.what() << __FILE__ << ":" << __LINE__ << endl
           << AbstractInfo.serialize() << endl;
-std::cerr << boost::stacktrace::stacktrace() << '\n';
+      std::cerr << boost::stacktrace::stacktrace() << '\n';
     }
-
-
   });
+}
+web::json::value DownloadUtils::saveOrLoadUser(string uid, string uname,
+                                               string intro, string avatar,
+                                               bool isValueUser,
+                                               vector<string> tags) {
+  std::lock_guard<mutex> guard(dbLock);
+  Database DB(DBPath, SQLite::OPEN_READWRITE);
+  Statement Q(DB, "SELECT uid,uname,self_intro,avatar,isValueUser,Tags FROM UserInfo WHERE uid=?");
+  Q.bind(1, uid);
+  Q.executeStep();
+  if (Q.hasRow()) {
+    web::json::value j;
+    j["uid"]=web::json::value::string(Q.getColumn(0).getString());
+    j["uname"]=web::json::value::string(Q.getColumn(1).getString());
+    j["intro"]=web::json::value::string(Q.getColumn(2).getString());
+    j["avatar"]=web::json::value::string(Q.getColumn(3).getString());
+    int isV=Q.getColumn(4).getInt();
+    j["isValueUser"]=web::json::value::boolean((isV!=0));
+    j["Tags"]=web::json::value::parse(Q.getColumn(5).getString());
+    return j;
+  } else {
+    Statement Q(DB, "INSERT INTO UserInfo(uid,uname,self_intro,avatar,isValueUser,Tags) VALUES(?,?,?,?,?,?)");
+    Q.bind(1,uid);
+    Q.bind(2,uname);
+    Q.bind(3,intro);
+    Q.bind(4,avatar);
+    Q.bind(5,(isValueUser==1)?"1":"0");
+    vector<web::json::value> vals;
+    for(string v:tags){
+      vals.push_back(web::json::value::string(v));
+    }
+    Q.bind(6,web::json::value::array(vals).serialize());
+    Q.executeStep();
+    web::json::value j;
+    j["uid"]=web::json::value::string(uid);
+    j["uname"]=web::json::value::string(uname);
+    j["intro"]=web::json::value::string(intro);
+    j["avatar"]=web::json::value::string(avatar);
+    j["isValueUser"]=web::json::value::boolean(isValueUser!=0);
+    j["Tags"]=web::json::value::array(vals);
+    return j;
+  }
 }
 string DownloadUtils::loadOrSaveGroupName(string name, string GID) {
   std::lock_guard<mutex> guard(dbLock);
@@ -147,28 +193,12 @@ string DownloadUtils::loadOrSaveGroupName(string name, string GID) {
     return name;
   }
 }
-string DownloadUtils::loadTitle(string title, web::json::value Inf) {
-  // return title;
-  vector<string> keys;
-  vector<string> vals;
-  stringstream query;
-  vector<string> tmps;
-  query << "SELECT Title FROM WorkInfo WHERE ";
-  for (string K : InfoKeys) {
-    if (Inf.has_field(K)) {
-      tmps.push_back(K + "=(?)");
-      keys.push_back(K);
-      string V = ensure_string(Inf[K]);
-      vals.push_back(V);
-    }
-  }
-  query << ::BCY::join(tmps.begin(), tmps.end(), " AND ");
+string DownloadUtils::loadTitle(string title, string item_id) {
+  string query = "SELECT Title FROM ItemInfo WHERE item_id=(?)";
   std::lock_guard<mutex> guard(dbLock);
   Database DB(DBPath, OPEN_READONLY);
-  Statement Q(DB, query.str());
-  for (decltype(keys.size()) i = 0; i < keys.size(); i++) {
-    Q.bind(i + 1, vals[i]);
-  }
+  Statement Q(DB, query);
+  Q.bind(1, item_id);
   boost::this_thread::interruption_point();
   Q.executeStep();
   if (Q.hasRow()) {
@@ -181,69 +211,61 @@ string DownloadUtils::loadTitle(string title, web::json::value Inf) {
 }
 void DownloadUtils::saveInfo(string title, web::json::value Inf) {
   // return;
-  vector<string> keys;
   vector<string> vals;
-  stringstream query;
-  vector<string> tmps;
-  query << "INSERT OR REPLACE INTO WorkInfo (";
-  for (string K : InfoKeys) {
-    if (Inf.has_field(K)) {
-      tmps.push_back("(?)");
-      keys.push_back(K);
-      vals.push_back(ensure_string(Inf[K]));
-    }
-  }
-  keys.push_back("Tags");
-  tmps.push_back("(?)");
+  string query = "INSERT INTO ItemInfo "
+                 "(uid,item_id,Title,Tags,ctime,Description,Images,VideoID) "
+                 "VALUES(?,?,?,?,?,?,?,?)";
+  vals.push_back(ensure_string(Inf["uid"]));
+  vals.push_back(ensure_string(Inf["item_id"]));
+  vals.push_back(title);
   if (Inf.has_field("post_tags")) {
     vector<web::json::value> tagsB; // Inner Param
-  for (web::json::value tagD : Inf["post_tags"].as_array()) {
-    string tag = tagD["tag_name"].as_string();
+    for (web::json::value tagD : Inf["post_tags"].as_array()) {
+      string tag = tagD["tag_name"].as_string();
       tagsB.push_back(web::json::value(tag));
-  }
-    web::json::value arr=web::json::value::array(tagsB);
+    }
+    web::json::value arr = web::json::value::array(tagsB);
     vals.push_back(arr.serialize());
   } else {
     vals.push_back("[]");
   }
-  keys.push_back("Info");
-  tmps.push_back("(?)");
-  //Strip duplicate/useless info key/val pairs
-#define StripKV(name) \
-  if(Inf.has_field(name)){ \
-    Inf.erase(name); \
+  vals.push_back(ensure_string(Inf["ctime"]));
+  if (Inf.has_field("plain")) {
+    vals.push_back(ensure_string(Inf["plain"]));
+  } else {
+    vals.push_back("");
   }
-
-  StripKV("recommend_rela")
-  StripKV("post_tags")
-  StripKV("user_favored")
-  StripKV("user_liked")
-  StripKV("view_count")
-#undef StripKV
-
-  vals.push_back(Inf.serialize());
-
-  keys.push_back("Title");
-  tmps.push_back("(?)");
-  vals.push_back(title);
-  query << ::BCY::join(keys.begin(), keys.end(), ",") << ") VALUES ("
-        << ::BCY::join(tmps.begin(), tmps.end(), ",") << ")";
+  vals.push_back(Inf["multi"].serialize());
+  if (Inf.has_field("type") && Inf["type"].as_string() == "video" &&
+      Inf.has_field("video_info")) {
+    vals.push_back(Inf["video_info"]["vid"].as_string());
+  }
+  else{
+    vals.push_back("");
+  }
   std::lock_guard<mutex> guard(dbLock);
   Database DB(DBPath, SQLite::OPEN_READWRITE);
-  Statement Q(DB, query.str());
-  for (decltype(tmps.size()) i = 0; i < tmps.size(); i++) {
+  Statement Q(DB, query);
+  for (decltype(vals.size()) i = 0; i < vals.size(); i++) {
     Q.bind(i + 1, vals[i]);
   }
   Q.executeStep();
 }
 web::json::value DownloadUtils::loadInfo(string item_id) {
+    return web::json::value();
   std::lock_guard<mutex> guard(dbLock);
   Database DB(DBPath, SQLite::OPEN_READONLY);
-  Statement Q(DB, "SELECT Info FROM WorkInfo WHERE item_id=?");
+  Statement Q(DB, "SELECT uid,item_id,Title,Tags,ctime,Description,Images FROM ItemInfo WHERE item_id=?");
   Q.bind(1, item_id);
   Q.executeStep();
+#warning Unimplemented
   if (Q.hasRow()) {
-    return web::json::value::parse(Q.getColumn(0).getString());
+      web::json::value v;
+      v["uid"]=web::json::value(Q.getColumn(0).getString());
+      v["item_id"]=web::json::value(Q.getColumn(1).getString());
+      v["title"]=web::json::value(Q.getColumn(2).getString());
+      v[""]=web::json::value(Q.getColumn(2).getString());
+    return v;
   } else {
     return web::json::value();
   }
@@ -298,16 +320,17 @@ void DownloadUtils::downloadFromInfo(web::json::value Inf, bool save,
     // Not Called by the AbstractInfo Worker
     // Need to run our own filter process
     string tagStr;
-    if (Inf.has_field("post_tags")==false){
-      //Extract from DB
+    if (Inf.has_field("post_tags") == false) {
+      // Extract from DB
       std::lock_guard<mutex> guard(dbLock);
       Database DB(DBPath, SQLite::OPEN_READONLY);
-      Statement Q(DB, "SELECT Tags FROM WorkInfo WHERE item_id=" + item_id_arg);
+      Statement Q(DB, "SELECT Tags FROM ItemInfo WHERE item_id=" + item_id_arg);
       Q.executeStep();
-      tagStr=Q.getColumn(0).getString();
+      tagStr = Q.getColumn(0).getString();
     }
     if (filter->shouldBlockDetail(Inf, item_id_arg) ||
-        filter->shouldBlockAbstract(Inf, item_id_arg)||filter->shouldBlockTags(Inf,tagStr,item_id_arg)) {
+        filter->shouldBlockAbstract(Inf, item_id_arg) ||
+        filter->shouldBlockTags(Inf, tagStr, item_id_arg)) {
       return;
     }
   }
@@ -366,7 +389,11 @@ void DownloadUtils::downloadFromInfo(web::json::value Inf, bool save,
   if (Title == "") {
     Title = item_id;
   }
-  Title = loadTitle(Title, Inf);
+  Title = loadTitle(Title, item_id);
+  #warning Implement User Tags
+  web::json::value userInfo=saveOrLoadUser(UID,ensure_string(Inf["profile"]["uname"]),
+          ensure_string(Inf["plain"]),ensure_string(Inf["profile"]["avatar"])
+          ,Inf["profile"]["value_user"].as_bool(),{});
   /*
   Title usually contains UTF8 characters which causes trouble on certain
   platforms. (I'm looking at you Windowshit) Migrate to item_id based ones
@@ -490,7 +517,7 @@ void DownloadUtils::downloadFromInfo(web::json::value Inf, bool save,
                                << __FILE__ << ":" << __LINE__ << endl;
     }
   } else {
-    BOOST_LOG_TRIVIAL(error) << item_id <<" has no item to download"<< endl;
+    BOOST_LOG_TRIVIAL(error) << item_id << " has no item to download" << endl;
     return;
   }
   vector<web::json::value>
@@ -666,7 +693,7 @@ void DownloadUtils::verify(string condition, vector<string> args,
   {
     std::lock_guard<mutex> guard(dbLock);
     Database DB(DBPath, SQLite::OPEN_READONLY);
-    Statement Q(DB, "SELECT item_id,Info,Tags FROM WorkInfo " + condition);
+    Statement Q(DB, "SELECT item_id,Info,Tags FROM ItemInfo " + condition);
     for (decltype(args.size()) i = 1; i <= args.size(); i++) {
       Q.bind(i, args[i - 1]);
     }
@@ -681,17 +708,15 @@ void DownloadUtils::verify(string condition, vector<string> args,
               << InfoStr << " Doesn't Have Valid item_id" << endl;
           continue;
         }
-          try{
-              if(filter->shouldBlockTags(j,TagStr,item_id)){
-                  continue;
-              }
+        try {
+          if (filter->shouldBlockTags(j, TagStr, item_id)) {
+            continue;
           }
-          catch (exception &exp) {
-              BOOST_LOG_TRIVIAL(info)
+        } catch (exception &exp) {
+          BOOST_LOG_TRIVIAL(info)
               << exp.what() << __FILE__ << ":" << __LINE__ << endl;
-              std::cerr << boost::stacktrace::stacktrace() << '\n';
-
-          }
+          std::cerr << boost::stacktrace::stacktrace() << '\n';
+        }
 
         Info[item_id] = j;
         Keys.push_back(item_id);
@@ -701,8 +726,7 @@ void DownloadUtils::verify(string condition, vector<string> args,
       } catch (exception &exp) {
         BOOST_LOG_TRIVIAL(info)
             << exp.what() << __FILE__ << ":" << __LINE__ << endl;
-          std::cerr << boost::stacktrace::stacktrace() << '\n';
-
+        std::cerr << boost::stacktrace::stacktrace() << '\n';
       }
     }
   }
@@ -765,7 +789,7 @@ void DownloadUtils::cleanByFilter() {
   {
     std::lock_guard<mutex> guard(dbLock);
     Database DB(DBPath, SQLite::OPEN_READONLY);
-    Statement Q(DB, "SELECT uid,item_id,Info FROM WorkInfo");
+    Statement Q(DB, "SELECT uid,item_id,Info FROM ItemInfo");
     while (Q.executeStep()) {
       string uid = Q.getColumn(0).getString();
       string item_id = Q.getColumn(1).getString();
@@ -785,8 +809,7 @@ void DownloadUtils::cleanByFilter() {
       } catch (exception &exp) {
         BOOST_LOG_TRIVIAL(info)
             << exp.what() << __FILE__ << ":" << __LINE__ << endl;
-          std::cerr << boost::stacktrace::stacktrace() << '\n';
-
+        std::cerr << boost::stacktrace::stacktrace() << '\n';
       }
     }
   }
@@ -828,7 +851,14 @@ void DownloadUtils::cleanUID(string UID) {
 
   std::lock_guard<mutex> guard(dbLock);
   Database DB(DBPath, SQLite::OPEN_READWRITE);
-  Statement Q(DB, "DELETE FROM WorkInfo WHERE UID=" + UID);
+  Statement Q(DB, "DELETE FROM ItemInfo WHERE UID=" + UID);
+  Q.executeStep();
+}
+void DownloadUtils::cleanItem(string item_id) {
+  BOOST_LOG_TRIVIAL(debug) << "Cleaning up Item:" << item_id << endl;
+  std::lock_guard<mutex> guard(dbLock);
+  Database DB(DBPath, SQLite::OPEN_READWRITE);
+  Statement Q(DB, "DELETE FROM ItemInfo WHERE item_id=" + item_id);
   Q.executeStep();
 }
 fs::path DownloadUtils::getUserPath(string UID) {
@@ -849,7 +879,7 @@ void DownloadUtils::cleanTag(string Tag) {
   std::lock_guard<mutex> guard(dbLock);
   Database DB(DBPath, SQLite::OPEN_READWRITE);
   Statement Q(DB,
-              "SELECT UID,Title,Info,item_id FROM WorkInfo WHERE Tags Like ?");
+              "SELECT UID,Title,Info,item_id FROM ItemInfo WHERE Tags Like ?");
   Q.bind(1, "%%\"" + Tag + "\"%%");
   while (Q.executeStep()) {
     string UID = Q.getColumn(0).getString();

@@ -36,7 +36,7 @@ public:
                         std::string item_id_arg = "", bool runFilter = true);
   // Will try to extract item_id from info first, if not it loads from the
   // argument,if still invalid an error is displayed and download cancelled
-  std::string loadTitle(std::string title, web::json::value Inf);
+  std::string loadTitle(std::string title,std::string item_id);
   void saveInfo(std::string title, web::json::value Inf);
   web::json::value loadInfo(std::string item_id);
   std::string loadOrSaveGroupName(std::string name, std::string GID);
@@ -44,9 +44,11 @@ public:
   void insertEventInfo(web::json::value Inf);
   void cleanup();
   void join();
+  web::json::value saveOrLoadUser(std::string uid,std::string uname,std::string intro,std::string avatar,bool isValueUser,std::vector<std::string> tags);
   boost::filesystem::path getUserPath(std::string UID);
   boost::filesystem::path getItemPath(std::string UID,std::string item_id);
   void cleanUID(std::string UID);
+  void cleanItem(std::string ItemID);
   void cleanTag(std::string Tag);
   void verify(std::string condition = "", std::vector<std::string> args = {},
               bool reverse = false);

@@ -121,6 +121,7 @@ public:
   web::json::value ParamByCRC32URL(std::string FullURL);
   web::json::value videoInfo(std::string video_id);
   web::json::value timeline_friendfeed_hasmore(std::string since);
+  web::json::value user_getUserTagList(std::string uid);
   std::vector<web::json::value>
   event_listPosts(std::string event_id, Order ord = Order::Hot,
                   BCYListIteratorCallback callback = BCYListIteratorCallback());
