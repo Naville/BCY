@@ -111,7 +111,9 @@ static void joinHandle() { DU->join(); }
 static void toggleFilter(bool stat) { DU->enableFilter = stat; }
 static void login(string email, string password) {
   if (DU->core.UID == "") {
+#ifndef DEBUG
     try {
+#endif
       web::json::value Res =
           DU->core.loginWithEmailAndPassword(email, password);
       if (!Res.is_null()) {
@@ -119,9 +121,11 @@ static void login(string email, string password) {
       } else {
         cout << "Login Failed" << endl;
       }
+#ifndef DEBUG
     } catch (std::exception &exc) {
       cout << "Exception:" << exc.what() << endl;
     }
+#endif
   } else {
     cout << "Already logged in as UID:" << DU->core.UID << endl;
   }
@@ -358,11 +362,15 @@ void Interactive() {
     if (!cin.good()) {
       break;
     }
+#ifndef DEBUG
     try {
+#endif
       engine.eval(command);
+#ifndef DEBUG
     } catch (const std::exception &exc) {
       cout << "Exception:" << exc.what() << endl;
     }
+#endif
   }
 }
 std::istream &operator>>(std::istream &in,

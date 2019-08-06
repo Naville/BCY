@@ -93,12 +93,16 @@ void DownloadUtils::downloadFromAbstractInfo(web::json::value& AbstractInfo,
   if (stop) {
     return;
   }
+#ifndef DEBUG
   boost::asio::post(*queryThread, [=]() {
+ #endif
     if (stop) {
       return;
     }
     boost::this_thread::interruption_point();
+#ifndef DEBUG
     try {
+#endif
       if (runFilter == false || filter->shouldBlockAbstract(const_cast<web::json::value&>(AbstractInfo))==false
           ) {
         boost::this_thread::interruption_point();
@@ -117,10 +121,6 @@ void DownloadUtils::downloadFromAbstractInfo(web::json::value& AbstractInfo,
             BOOST_LOG_TRIVIAL(debug)
                 << "Cancelling Thread:" << boost::this_thread::get_id() << endl;
             return;
-          } catch (const exception &exc) {
-            BOOST_LOG_TRIVIAL(error)
-              << "Verifying from Info:" << std::get<1>(*detail)
-                << " Raised Exception:" << exc.what() << endl;
           }
         } else {
           try {
@@ -131,20 +131,22 @@ void DownloadUtils::downloadFromAbstractInfo(web::json::value& AbstractInfo,
             BOOST_LOG_TRIVIAL(debug)
                 << "Cancelling Thread:" << boost::this_thread::get_id() << endl;
             return;
-          } catch (const exception &exc) {
-            BOOST_LOG_TRIVIAL(error)
-              << "Verifying from Info:" << std::get<1>(*detail)
-                << " Raised Exception:" << exc.what() << endl;
           }
         }
       }
-    } catch (exception &exp) {
+#ifndef DEBUG
+    }
+    catch (exception &exp) {
       BOOST_LOG_TRIVIAL(error)
           << exp.what() << __FILE__ << ":" << __LINE__ << endl
           << AbstractInfo.serialize() << endl;
       std::cerr << boost::stacktrace::stacktrace() << '\n';
     }
+#endif
+#ifndef DEBUG
   });
+#endif
+
 }
 web::json::value DownloadUtils::saveOrLoadUser(string uid, string uname,
                                                string intro, string avatar,
@@ -914,7 +916,7 @@ void DownloadUtils::downloadItemID(string item_id) {
     }
     if (detail.has_value()==false) {
       boost::this_thread::interruption_point();
-      detail.emplace(canonicalizeRawServerDetail(core.item_detail(item_id)["detail"]));
+      detail.emplace(canonicalizeRawServerDetail(core.item_detail(item_id)["data"]));
       boost::this_thread::interruption_point();
       if (detail.has_value()==false) {
         BOOST_LOG_TRIVIAL(error) << "Querying detail for item_id:" << item_id

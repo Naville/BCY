@@ -100,7 +100,8 @@ bool DownloadFilter::shouldBlockAbstract(web::json::value& Inf){
     // AbstractInfo's multi is incomplete
     // Use this as a placeholder.
     // Our second pass with Detail will execute those multi-based filter rules
-    web::json::array multi=web::json::value().as_array();
+    vector<web::json::value> tmp;
+    web::json::array multi=web::json::value(tmp).as_array();
     auto tup=std::tuple<std::string /*UID*/, std::string /*item_id*/,
             std::string /*Title*/, vector<string> /*Tags*/,
             std::string /*ctime*/, std::string /*Description*/,
