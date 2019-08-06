@@ -670,7 +670,7 @@ void DownloadUtils::unlikeCached() {
         {
             std::lock_guard<mutex> guard(dbLock);
             Database DB(DBPath, SQLite::OPEN_READONLY);
-            Statement Q(DB, "SELECT item_id FROM WorkInfo " + condition);
+            Statement Q(DB, "SELECT item_id FROM ItemInfo " + condition);
             for (decltype(args.size()) i = 1; i <= args.size(); i++) {
                 Q.bind(i, args[i - 1]);
             }
