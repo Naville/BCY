@@ -105,6 +105,9 @@ void DownloadUtils::downloadFromAbstractInfo(web::json::value& AbstractInfo,
 #endif
       if (runFilter == false || filter->shouldBlockAbstract(const_cast<web::json::value&>(AbstractInfo))==false
           ) {
+          if(AbstractInfo.has_field("item_detail")){
+              AbstractInfo=AbstractInfo["item_detail"];
+          }
           string item_id =
               ensure_string(AbstractInfo.at("item_id"));
 
