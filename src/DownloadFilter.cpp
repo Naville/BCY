@@ -81,6 +81,9 @@ bool DownloadFilter::shouldBlockItem(DownloadUtils::Info& Inf){
     }
     return false;
 }
+void DownloadFilter::addFilterHandler(BCYFilterHandler handle){
+    filterHandlers.push_back(handle);
+}
 bool DownloadFilter::shouldBlockAbstract(web::json::value& Inf){
 
     if(Inf.has_field("item_detail")){
