@@ -1,7 +1,8 @@
-#include "BCY/Base64.h"
-#include "BCY/Core.hpp"
-#include "BCY/DownloadUtils.hpp"
-#include "BCY/Utils.hpp"
+#include <BCY/Base64.h>
+#include <BCY/Core.hpp>
+#include <BCY/DownloadUtils.hpp>
+#include <BCY/Utils.hpp>
+#include <BCY/DownloadFilter.hpp>
 #include <algorithm>
 #include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
@@ -74,7 +75,6 @@ static void aria2(string addr, string secret) {
   DU->RPCServer = addr;
   DU->secret = secret;
 }
-static void cleanByFilter() { DU->cleanByFilter(); }
 static void init(string path, int queryCnt, int downloadCnt, string DBPath) {
   if (DU == nullptr) {
     try {
@@ -164,18 +164,14 @@ static void uploadWork(vector<chaiscript::Boxed_Value> paths,
 static void block(string OPType, string arg) {
   boost::to_upper(OPType);
   if (OPType == "UID") {
-    DU->filter->UIDList.push_back(web::json::value(arg));
+    DU->filter->UIDList.push_back(arg);
     DU->cleanUID(arg);
-  } else if (OPType == "WORK") {
-    DU->filter->WorkList.push_back(web::json::value(arg));
-  } else if (OPType == "TAG") {
-    DU->filter->TagList.push_back(web::json::value(arg));
+  }else if (OPType == "TAG") {
+    DU->filter->TagList.push_back(arg);
   } else if (OPType == "USERNAME") {
-    DU->filter->UserNameList.push_back(web::json::value(arg));
-  } else if (OPType == "TYPE") {
-    DU->filter->TypeList.push_back(web::json::value(arg));
+    DU->filter->UserNameList.push_back(arg);
   } else if (OPType == "ITEM") {
-    DU->filter->ItemList.push_back(web::json::value(arg));
+    DU->filter->ItemList.push_back(arg);
     DU->cleanItem(arg);
   } else {
     cout << "Unrecognized OPType" << endl;
@@ -354,7 +350,6 @@ void Interactive() {
   engine.add(chaiscript::fun(&hotWorks), "hotWorks");
   engine.add(chaiscript::fun(&loginWithSKey), "loginWithSKey");
   engine.add(chaiscript::fun(&uploadWork), "uploadWork");
-  engine.add(chaiscript::fun(&cleanByFilter), "cleanByFilter");
   engine.add(chaiscript::fun(&toggleFilter), "toggleFilter");
   string command;
   while (1) {
@@ -412,7 +407,6 @@ int main(int argc, char **argv) {
       "Log Level")("HTTPProxy", po::value<string>(),
                    "HTTP Proxy")("Circles", po::value<string>(),
                                  "CircleIDs to Download, Seperated by comma")(
-      "Compress", "Enable Downloading Compressed Images")(
       "DownloadCount", po::value<int>()->default_value(16),
       "Download Thread Count")(
       "QueryCount", po::value<int>()->default_value(16), "Query Thread Count")(
@@ -520,7 +514,7 @@ int main(int argc, char **argv) {
         }
         config[K] = web::json::value::array(j);
       }
-      for (string K : {"Verify", "UseCache", "Compress", "DownloadVideo"}) {
+      for (string K : {"Verify", "UseCache","DownloadVideo"}) {
         if (conf.has_field(K)) {
           if (vm.count(K)) {
             config[K] = web::json::value::boolean(true);
@@ -607,12 +601,6 @@ int main(int argc, char **argv) {
           DU->secret = config["aria2"]["secret"].as_string();
         }
         DU->RPCServer = config["aria2"]["RPCServer"].as_string();
-      }
-
-      if (config.has_field("Compress") &&
-          config.at("Compress").is_null() == false) {
-        bool flag = config["Compress"].as_bool();
-        DU->allowCompressed = flag;
       }
       if (config.has_field("DownloadVideo") &&
           config.at("DownloadVideo").is_null() == false) {

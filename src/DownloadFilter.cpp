@@ -1,11 +1,13 @@
-#include "BCY/DownloadFilter.hpp"
-#include "BCY/Base64.h"
-#include "BCY/Utils.hpp"
+#include <BCY/DownloadFilter.hpp>
+#include <BCY/Base64.h>
+#include <BCY/Utils.hpp>
 #include <algorithm>
 #include <boost/log/trivial.hpp>
 #include <fstream>
 #include <iostream>
 #include <regex>
+#include <chaiscript/chaiscript.hpp>
+#warning Implementing Scripting Support
 using namespace std;
 using namespace SQLite;
 namespace BCY {
@@ -21,265 +23,111 @@ DownloadFilter::DownloadFilter(string Path) {
 }
 DownloadFilter::~DownloadFilter() {
   web::json::value j;
-  j["UID"] = web::json::value::array(UIDList);
-  j["Work"] = web::json::value::array(WorkList);
-  j["Tag"] = web::json::value::array(TagList);
-  j["UserName"] = web::json::value::array(UserNameList);
-  j["Type"] = web::json::value::array(TypeList);
-  j["Items"] = web::json::value::array(ItemList);
-  vector<vector<web::json::value>> lsts = {AbstractScriptList, DetailScriptList,
-                                           TagScriptList};
-  vector<string> names = {"AbstractScriptList", "DetailScriptList",
-                          "TagScriptList"};
-  for (decltype(lsts.size()) i = 0; i < lsts.size(); i++) {
-    string name = names[i];
-    vector<web::json::value> &lst = lsts[i];
-    vector<web::json::value> encoded;
-    for (auto item : lst) {
-      string src = item.as_string();
-      string enc;
-      Base64::Encode(src, &enc);
-      encoded.push_back(web::json::value(enc));
-    }
-    j[name] = web::json::value::array(encoded);
-  }
-  Database DB(DBPath, OPEN_READWRITE);
-  Statement Q(DB, "INSERT OR REPLACE INTO PyBCY (Key,Value) VALUES(?,?)");
-  Q.bind(1, "BCYDownloadFilter");
-  Q.bind(2, j.serialize());
-  Q.executeStep();
-}
-bool DownloadFilter::shouldBlockDetail(web::json::value abstract) {
-  string item_id = "null";
-  if (abstract.has_field("item_id")) {
-    item_id = ensure_string(abstract["item_id"]);
-  }
-  if (find(ItemList.begin(), ItemList.end(), abstract["item_id"]) !=
-      ItemList.end()) {
-    BOOST_LOG_TRIVIAL(debug)
-        << item_id << " Blocked By ItemID Rule:" << abstract["item_id"] << endl;
-    return true;
-  }
-  return shouldBlockDetail(abstract, item_id);
-}
-bool DownloadFilter::shouldBlockDetail(web::json::value abstract,
-                                       string item_id) {
-  for (auto bar : UserNameList) {
-    string name = bar.as_string();
-    smatch match;
-    string foo = abstract["profile"]["uname"].as_string();
-    try {
-      if (regex_search(foo, match, regex(name)) && match.size() >= 1) {
-        BOOST_LOG_TRIVIAL(debug)
-            << item_id << " Blocked By Regex UserName Rule:" << name << endl;
-        return true;
-      }
-    } catch (const std::regex_error &e) {
-      BOOST_LOG_TRIVIAL(error)
-          << "UserName Regex Filter Error:" << e.what() << endl;
-    }
-  }
-  int state = evalScript(abstract, item_id, ScriptEvalMode::Detail);
-  return state < 0;
-}
-bool DownloadFilter::shouldBlockTags(web::json::value Inf, string tags,
-                                     string item_id) {
-  if (tags == "") {
-    if (Inf.has_field("post_tags")) {
-      vector<web::json::value> tagsB; // Inner Param
-      for (web::json::value tagD : Inf["post_tags"].as_array()) {
-        string tag = tagD["tag_name"].as_string();
-        tagsB.push_back(web::json::value(tag));
-      }
-      web::json::value arr = web::json::value::array(tagsB);
-      tags = arr.serialize();
-    } else {
-      tags = "[]";
-    }
-  }
-  web::json::value tagsObj = web::json::value::parse(tags);
-  web::json::array tagsArr = tagsObj.as_array();
-  for (auto iter = tagsArr.cbegin(); iter != tagsArr.cend(); ++iter) {
-    string tagName = iter->as_string();
-    for (web::json::value j : TagList) {
-      if (j.as_string() == tagName) {
-
-        BOOST_LOG_TRIVIAL(debug)
-            << item_id << " Blocked By Tag Rule:" << tagName << endl;
-        return true;
-      }
-    }
-  }
-  return evalScript(Inf, item_id, ScriptEvalMode::Tags, tags) < 0;
-}
-int DownloadFilter::evalScript(web::json::value Info, string item_id,
-                               ScriptEvalMode sem, string tags) {
-  std::vector<web::json::value> ScriptList;
-  switch (sem) {
-  case ScriptEvalMode::Abstract: {
-    ScriptList = AbstractScriptList;
-    break;
-  }
-  case ScriptEvalMode::Detail: {
-    ScriptList = DetailScriptList;
-    break;
-  }
-  case ScriptEvalMode::Tags: {
-    ScriptList = TagScriptList;
-    break;
-  }
-  default: {
-    abort();
-  }
-  }
-  if (ScriptList.size() > 0) {
-    chaiscript::ChaiScript engine;
-    string val = Info.serialize();
-    engine.add(chaiscript::var(val), "Infostr");
-    engine.add(chaiscript::var(tags), "tagsStr");
-    engine.add(chaiscript::var(sem == ScriptEvalMode::Abstract), "isAbstract");
-    engine.add(chaiscript::var(item_id), "item_id");
-    engine.eval<chaiscript::Boxed_Value>("var Info=from_json(Infostr)");
-    engine.eval<chaiscript::Boxed_Value>("var Tags=from_json(tagsStr)");
-    auto initialState =
-        engine.get_locals(); // We need to reset the local vals on each loop
-    for (web::json::value j : ScriptList) {
-
-      string scpt = j.as_string();
-      engine.set_locals(initialState);
-      try {
-        int result = engine.eval<int>(scpt);
-        auto states = engine.get_locals();
-        string suff = "";
-        if (result != 0) {
-          if (states.find("Name") != states.end()) {
-            suff = ": " + chaiscript::boxed_cast<string>(states["Name"]);
-          }
+  vector<web::json::value> tmp;
+  const std::array<string,7> names={"UID","Tag","UserName","Items",
+                                    "TagScriptList"};
+  const std::array<vector<string>,7> elements={UIDList,TagList,UserNameList,ItemList,
+                                               TagScriptList};
+  static_assert(names.size()==elements.size(),"Array Size Mismatch");
+  for(decltype(names.size()) i=0;i<names.size();i++){
+    vector<string> element=elements[i];
+    vector<web::json::value> tmps;
+    string key=names[i];
+    for(string foo:element){
+        string processed;
+        if(key.find("Script")!=string::npos){
+            Base64::Encode(foo,&processed);
         }
-
-        if (result > 0) {
-          BOOST_LOG_TRIVIAL(debug)
-              << item_id << " Allowed by Script" << suff << endl;
-          return result;
-        } else if (result < 0) {
-          BOOST_LOG_TRIVIAL(debug)
-              << item_id << " Blocked by Script" << suff << endl;
-          return result;
-        } else {
-          continue;
+        else{
+            processed=foo;
         }
-      } catch (std::exception &exp) {
-        BOOST_LOG_TRIVIAL(error)
-            << "During Evalution Script:" << endl
-            << scpt << endl
-            << "on item_id:" << item_id
-            << ", Exception is thrown:" << exp.what() << endl;
-      }
+        tmps.push_back(web::json::value(processed));
     }
-  }
-  return 0;
-}
-bool DownloadFilter::shouldBlockAbstract(web::json::value abstract) {
-  string item_id = "null";
-  if (abstract.has_field("item_id")) {
-    item_id = ensure_string(abstract["item_id"]);
-  }
-  return shouldBlockAbstract(abstract, item_id);
-}
-bool DownloadFilter::shouldBlockAbstract(web::json::value abstract,
-                                         string item_id) {
-  if (find(UIDList.begin(), UIDList.end(), abstract["uid"]) != UIDList.end()) {
-    BOOST_LOG_TRIVIAL(debug)
-        << item_id << " Blocked By UID Rule:" << abstract["uid"] << endl;
-    return true;
-  }
-  if (find(ItemList.begin(), ItemList.end(), abstract["item_id"]) !=
-      ItemList.end()) {
-    BOOST_LOG_TRIVIAL(debug)
-        << item_id << " Blocked By ItemID Rule:" << abstract["item_id"] << endl;
-    return true;
-  }
-  if (abstract.has_field("post_tags")) {
-    for (web::json::value &j : abstract["post_tags"].as_array()) {
-      string tagName = j["tag_name"].as_string();
-      for (web::json::value j : TagList) {
-        if (j.as_string() == tagName) {
+    j[key]=web::json::value::array(tmps);
 
-          BOOST_LOG_TRIVIAL(debug)
-              << item_id << " Blocked By Tag Rule:" << tagName << endl;
-          return true;
-        }
-      }
-    }
   }
-  if (abstract.has_field("work")) {
-    for (auto bar : WorkList) {
-      string name = bar.as_string();
-      smatch match;
-      string foo = abstract["work"].as_string();
-      if (regex_search(foo, match, regex(name)) && match.size() >= 1) {
-        BOOST_LOG_TRIVIAL(debug)
-            << item_id << " Blocked By Regex Work Rule:" << name << endl;
+    Database DB(DBPath, OPEN_READWRITE);
+    Statement Q(DB, "INSERT OR REPLACE INTO PyBCY (Key,Value) VALUES(?,?)");
+    Q.bind(1, "BCYDownloadFilter");
+    Q.bind(2, j.serialize());
+    Q.executeStep();
+}
+bool DownloadFilter::shouldBlockItem(DownloadUtils::Info& Inf){
+    string uid = std::get<0>(Inf);
+    string item_id = std::get<1>(Inf);
+    std::vector<std::string> tags = std::get<3>(Inf);
+    vector<web::json::value> multi;
+    for (web::json::value x : std::get<6>(Inf)) {
+        multi.push_back(x);
+    }
+    if(find(UIDList.begin(),UIDList.end(),uid)!=UIDList.end()){
+        BOOST_LOG_TRIVIAL(debug)<<item_id<<" blocked by uid rules"<<endl;
         return true;
-      }
     }
-  }
-  if (find(TypeList.begin(), TypeList.end(), abstract["type"]) !=
-      TypeList.end()) {
-    BOOST_LOG_TRIVIAL(debug) << item_id << " Blocked Due to its type:"
-                             << ensure_string(abstract["type"]) << endl;
-    return true;
-  }
-  int state = evalScript(abstract, item_id, ScriptEvalMode::Abstract);
-  return state < 0;
+    if(find(ItemList.begin(),ItemList.end(),item_id)!=ItemList.end()){
+        BOOST_LOG_TRIVIAL(debug)<<item_id<<" blocked by item_id rules"<<endl;
+        return true;
+    }
+    for(string tag:tags){
+        if(find(TagList.begin(),TagList.end(),tag)!=TagList.end()){
+            BOOST_LOG_TRIVIAL(debug)<<item_id<<" blocked by tag rules"<<endl;
+            return true;
+        }
+    }
+    for(BCYFilterHandler handle:filterHandlers){
+        if(handle(Inf)<0){
+            return true;
+        }
+    }
+    return false;
+}
+bool DownloadFilter::shouldBlockAbstract(web::json::value& Inf){
+
+    if(Inf.has_field("item_detail")){
+        Inf=Inf["item_detail"];
+    }
+    string ctime=ensure_string(Inf["ctime"]);
+    string uid=ensure_string(Inf["uid"]);
+    string item_id=ensure_string(Inf["item_id"]);
+    string desc=ensure_string(Inf["plain"]);
+    vector<string> tags;
+    for(web::json::value foo : Inf["post_tags"].as_array()){
+        tags.push_back(foo["tag_name"].as_string());
+    }
+    // AbstractInfo's multi is incomplete
+    // Use this as a placeholder.
+    // Our second pass with Detail will execute those multi-based filter rules
+    web::json::array multi=web::json::value().as_array();
+    auto tup=std::tuple<std::string /*UID*/, std::string /*item_id*/,
+            std::string /*Title*/, vector<string> /*Tags*/,
+            std::string /*ctime*/, std::string /*Description*/,
+            web::json::array /*multi*/, std::string /*videoID*/>(
+            uid, item_id,"", tags,ctime, desc, multi,"");
+    return shouldBlockItem(tup);
 }
 void DownloadFilter::loadRulesFromJSON(web::json::value rules) {
   if (rules.has_field("UID")) {
     auto bar = rules["UID"].as_array();
     for (auto item : bar) {
-      UIDList.push_back(item);
-    }
-  }
-  if (rules.has_field("Work")) {
-    auto foo = rules["Work"].as_array();
-    for (auto item : foo) {
-      WorkList.push_back(item);
+      UIDList.push_back(item.as_string());
     }
   }
   if (rules.has_field("Items")) {
     auto foo = rules["Items"].as_array();
     for (auto item : foo) {
-      ItemList.push_back(item);
+      ItemList.push_back(item.as_string());
     }
   }
   if (rules.has_field("Tag")) {
     auto foo = rules["Tag"].as_array();
     for (auto item : foo) {
-      TagList.push_back(item);
+      TagList.push_back(item.as_string());
     }
   }
   if (rules.has_field("UserName")) {
     auto foo = rules["UserName"].as_array();
     for (auto item : foo) {
-      UserNameList.push_back(item);
-    }
-  }
-  if (rules.has_field("AbstractScriptList")) {
-    auto foo = rules["AbstractScriptList"].as_array();
-    for (auto item : foo) {
-      string SRC = item.as_string();
-      string dec;
-      Base64::Decode(SRC, &dec);
-      AbstractScriptList.push_back(web::json::value(dec));
-    }
-  }
-  if (rules.has_field("DetailScriptList")) {
-    auto foo = rules["DetailScriptList"].as_array();
-    for (auto item : foo) {
-      string SRC = item.as_string();
-      string dec;
-      Base64::Decode(SRC, &dec);
-      DetailScriptList.push_back(web::json::value(dec));
+      UserNameList.push_back(item.as_string());
     }
   }
   if (rules.has_field("TagScriptList")) {
@@ -288,13 +136,7 @@ void DownloadFilter::loadRulesFromJSON(web::json::value rules) {
       string SRC = item.as_string();
       string dec;
       Base64::Decode(SRC, &dec);
-      AbstractScriptList.push_back(web::json::value(dec));
-    }
-  }
-  if (rules.has_field("Type")) {
-    auto foo = rules["Type"].as_array();
-    for (auto item : foo) {
-      TypeList.push_back(item);
+      TagScriptList.push_back(dec);
     }
   }
 }

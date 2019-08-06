@@ -1,6 +1,7 @@
-#include "BCY/DownloadUtils.hpp"
-#include "BCY/Base64.h"
-#include "BCY/Utils.hpp"
+#include <BCY/DownloadUtils.hpp>
+#include <BCY/DownloadFilter.hpp>
+#include <BCY/Base64.h>
+#include <BCY/Utils.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/lockfree/stack.hpp>
 #include <boost/log/trivial.hpp>
@@ -21,7 +22,6 @@ using namespace std;
 using namespace SQLite;
 namespace keywords = boost::log::keywords;
 namespace expr = boost::log::expressions;
-static const vector<string> InfoKeys = {"item_id", "uid"};
 namespace BCY {
 DownloadUtils::DownloadUtils(string PathBase, int queryThreadCount,
                              int downloadThreadCount, string Path) {
@@ -67,11 +67,28 @@ DownloadUtils::DownloadUtils(string PathBase, int queryThreadCount,
   boost::system::error_code ec;
   fs::path TempPath = fs::path(PathBase) / fs::path("DownloadTemp");
   fs::create_directories(TempPath, ec);
+#warning Remove this after scripting support landed
+
+  filter->addFilterHandler([](DownloadUtils::Info& Inf){
+      std::vector<std::string> tags = std::get<3>(Inf);
+    if( find(tags.begin(),tags.end(),"COS")!=tags.end()){
+        return 0;
+    }
+    else{
+        array<string,4> drawKWs={"动画","漫画","绘画","手绘"};
+        for(string ele:drawKWs){
+            if( find(tags.begin(),tags.end(),ele)!=tags.end()){
+                return -1;
+            }
+        }
+        return 0;
+    }
+  });
 }
-void DownloadUtils::downloadFromAbstractInfo(web::json::value AbstractInfo) {
+void DownloadUtils::downloadFromAbstractInfo(web::json::value& AbstractInfo) {
   downloadFromAbstractInfo(AbstractInfo, this->enableFilter);
 }
-void DownloadUtils::downloadFromAbstractInfo(web::json::value AbstractInfo,
+void DownloadUtils::downloadFromAbstractInfo(web::json::value& AbstractInfo,
                                              bool runFilter) {
   if (stop) {
     return;
@@ -82,38 +99,33 @@ void DownloadUtils::downloadFromAbstractInfo(web::json::value AbstractInfo,
     }
     boost::this_thread::interruption_point();
     try {
-      if (runFilter == false ||
-          filter->shouldBlockAbstract(AbstractInfo.at("item_detail")) ==
-              false ||
-          filter->shouldBlockTags(
-              AbstractInfo.at("item_detail"), "",
-              ensure_string(AbstractInfo.at("item_detail").at("item_id")))) {
+      if (runFilter == false || filter->shouldBlockAbstract(const_cast<web::json::value&>(AbstractInfo))==false
+          ) {
         boost::this_thread::interruption_point();
-        web::json::value detail = loadInfo(
+              optional<DownloadUtils::Info> detail= loadInfo(
             ensure_string(AbstractInfo.at("item_detail").at("item_id")));
         boost::this_thread::interruption_point();
-        if (detail.is_null()) {
+        if (detail.has_value()==false) {
           boost::this_thread::interruption_point();
           string item_id =
               ensure_string(AbstractInfo.at("item_detail").at("item_id"));
-          detail = core.item_detail(item_id)["data"];
+          detail.emplace(canonicalizeRawServerDetail(core.item_detail(item_id)["data"]));
           boost::this_thread::interruption_point();
           try {
-            downloadFromInfo(detail, true, item_id, runFilter);
+            downloadFromInfo(*detail,runFilter);
           } catch (boost::thread_interrupted) {
             BOOST_LOG_TRIVIAL(debug)
                 << "Cancelling Thread:" << boost::this_thread::get_id() << endl;
             return;
           } catch (const exception &exc) {
             BOOST_LOG_TRIVIAL(error)
-                << "Verifying from Info:" << detail.serialize()
+              << "Verifying from Info:" << std::get<1>(*detail)
                 << " Raised Exception:" << exc.what() << endl;
           }
         } else {
           try {
             downloadFromInfo(
-                detail, false,
-                ensure_string(AbstractInfo.at("item_detail").at("item_id")),
+                *detail,
                 runFilter);
           } catch (boost::thread_interrupted) {
             BOOST_LOG_TRIVIAL(debug)
@@ -121,7 +133,7 @@ void DownloadUtils::downloadFromAbstractInfo(web::json::value AbstractInfo,
             return;
           } catch (const exception &exc) {
             BOOST_LOG_TRIVIAL(error)
-                << "Verifying from Info:" << detail.serialize()
+              << "Verifying from Info:" << std::get<1>(*detail)
                 << " Raised Exception:" << exc.what() << endl;
           }
         }
@@ -136,43 +148,47 @@ void DownloadUtils::downloadFromAbstractInfo(web::json::value AbstractInfo,
 }
 web::json::value DownloadUtils::saveOrLoadUser(string uid, string uname,
                                                string intro, string avatar,
-                                               bool isValueUser,
-                                               vector<string> tags) {
+                                               bool isValueUser) {
   std::lock_guard<mutex> guard(dbLock);
   Database DB(DBPath, SQLite::OPEN_READWRITE);
-  Statement Q(DB, "SELECT uid,uname,self_intro,avatar,isValueUser,Tags FROM UserInfo WHERE uid=?");
+  Statement Q(DB, "SELECT uid,uname,self_intro,avatar,isValueUser,Tags FROM "
+                  "UserInfo WHERE uid=?");
   Q.bind(1, uid);
   Q.executeStep();
   if (Q.hasRow()) {
     web::json::value j;
-    j["uid"]=web::json::value::string(Q.getColumn(0).getString());
-    j["uname"]=web::json::value::string(Q.getColumn(1).getString());
-    j["intro"]=web::json::value::string(Q.getColumn(2).getString());
-    j["avatar"]=web::json::value::string(Q.getColumn(3).getString());
-    int isV=Q.getColumn(4).getInt();
-    j["isValueUser"]=web::json::value::boolean((isV!=0));
-    j["Tags"]=web::json::value::parse(Q.getColumn(5).getString());
+    j["uid"] = web::json::value::string(Q.getColumn(0).getString());
+    j["uname"] = web::json::value::string(Q.getColumn(1).getString());
+    j["intro"] = web::json::value::string(Q.getColumn(2).getString());
+    j["avatar"] = web::json::value::string(Q.getColumn(3).getString());
+    int isV = Q.getColumn(4).getInt();
+    j["isValueUser"] = web::json::value::boolean((isV != 0));
+    j["Tags"] = web::json::value::parse(Q.getColumn(5).getString());
     return j;
   } else {
-    Statement Q(DB, "INSERT INTO UserInfo(uid,uname,self_intro,avatar,isValueUser,Tags) VALUES(?,?,?,?,?,?)");
-    Q.bind(1,uid);
-    Q.bind(2,uname);
-    Q.bind(3,intro);
-    Q.bind(4,avatar);
-    Q.bind(5,(isValueUser==1)?"1":"0");
+    Statement Q(
+        DB,
+        "INSERT INTO UserInfo(uid,uname,self_intro,avatar,isValueUser,Tags) "
+        "VALUES(?,?,?,?,?,?)");
+    Q.bind(1, uid);
+    Q.bind(2, uname);
+    Q.bind(3, intro);
+    Q.bind(4, avatar);
+    Q.bind(5, (isValueUser == 1) ? "1" : "0");
     vector<web::json::value> vals;
-    for(string v:tags){
-      vals.push_back(web::json::value::string(v));
-    }
-    Q.bind(6,web::json::value::array(vals).serialize());
+      web::json::array tagsArr= core.user_getUserTag(uid)["data"].as_array();
+      for(web::json::value x:tagsArr){
+          vals.push_back(x["ut_name"]);
+      }
+    Q.bind(6, web::json::value::array(vals).serialize());
     Q.executeStep();
     web::json::value j;
-    j["uid"]=web::json::value::string(uid);
-    j["uname"]=web::json::value::string(uname);
-    j["intro"]=web::json::value::string(intro);
-    j["avatar"]=web::json::value::string(avatar);
-    j["isValueUser"]=web::json::value::boolean(isValueUser!=0);
-    j["Tags"]=web::json::value::array(vals);
+    j["uid"] = web::json::value::string(uid);
+    j["uname"] = web::json::value::string(uname);
+    j["intro"] = web::json::value::string(intro);
+    j["avatar"] = web::json::value::string(avatar);
+    j["isValueUser"] = web::json::value::boolean(isValueUser != 0);
+    j["Tags"] = web::json::value::array(vals);
     return j;
   }
 }
@@ -193,6 +209,112 @@ string DownloadUtils::loadOrSaveGroupName(string name, string GID) {
     return name;
   }
 }
+DownloadUtils::Info
+DownloadUtils::canonicalizeRawServerDetail(web::json::value Inf) {
+  web::json::value tagsJSON = Inf["post_tags"];
+  string item_id = ensure_string(Inf["item_id"]);
+  string uid = ensure_string(Inf["uid"]);
+  string desc = ensure_string(Inf["plain"]);
+  vector<string> tags; // Inner Param
+  for (web::json::value tagD : Inf["post_tags"].as_array()) {
+    string tag = tagD["tag_name"].as_string();
+    tags.push_back(tag);
+  }
+  string title;
+  if (Inf.has_field("title") && Inf["title"].as_string() != "") {
+    title = Inf["title"].as_string();
+  } else {
+    if (Inf.has_field("post_core") && Inf.at("post_core").has_field("name") &&
+        Inf["post_core"]["name"].is_string()) {
+      title = Inf["post_core"]["name"].as_string();
+    } else {
+      if (Inf.has_field("ud_id")) {
+        string val = ensure_string(Inf["ud_id"]);
+        title = "日常-" + val;
+      } else if (Inf.has_field("cp_id")) {
+        string val = ensure_string(Inf["cp_id"]);
+        title = "Cosplay-" + val;
+      } else if (Inf.has_field("dp_id")) {
+        string val = ensure_string(Inf["dp_id"]);
+        title = "绘画" + val;
+      } else if (Inf.has_field("post_id")) {
+        string GID = ensure_string(Inf["group"]["gid"]);
+        string GroupName =
+            loadOrSaveGroupName(Inf["group"]["name"].as_string(), GID);
+        string val = "";
+        val = ensure_string(Inf["ud_id"]);
+        title = GroupName + "-" + val;
+      } else if (Inf.has_field("item_id")) {
+        string val = ensure_string(Inf["item_id"]);
+        if (Inf["type"].as_string() == "works") {
+          title = "Cosplay-" + val;
+        } else if (Inf["type"].as_string() == "preview") {
+          title = "预告-" + val;
+        } else if (Inf["type"].as_string() == "daily") {
+          title = "日常-" + val;
+        } else if (Inf["type"].as_string() == "video") {
+          title = "视频-" + val;
+        } else {
+          title = val;
+        }
+      }
+    }
+  }
+  if (title == "") {
+    title = item_id;
+  }
+  title = loadTitle(title, item_id);
+  vector<web::json::value> URLs;
+  if (Inf.has_field("multi")) {
+    for (web::json::value item : Inf["multi"].as_array()) {
+      URLs.push_back(item);
+    }
+  }
+  if (Inf.has_field("cover")) {
+    web::json::value j;
+    j["type"] = web::json::value("image");
+    j["path"] = Inf["cover"];
+    URLs.emplace_back(j);
+  }
+  if (Inf.has_field("content")) {
+    regex rgx("<img src=\"(.{80,100})\" alt=");
+    string tmpjson = Inf["content"].as_string();
+    smatch matches;
+    while (regex_search(tmpjson, matches, rgx)) {
+      web::json::value j;
+      string URL = matches[0];
+      j["type"] = web::json::value("image");
+      j["path"] = web::json::value(URL);
+      URLs.emplace_back(j);
+      tmpjson = matches.suffix();
+    }
+  }
+  if (Inf.has_field("group") && Inf["group"].has_field("multi")) {
+    for (web::json::value foo : Inf["group"]["multi"].as_array()) {
+      URLs.push_back(foo);
+    }
+  }
+  string vid;
+  if (Inf.has_field("type") && Inf["type"].as_string() == "video" &&
+      Inf.has_field("video_info") && downloadVideo == true) {
+    vid = Inf["video_info"]["vid"].as_string();
+  }
+
+  saveOrLoadUser(uid, ensure_string(Inf["profile"]["uname"]), desc,
+                 ensure_string(Inf["profile"]["avatar"]),
+                 Inf["profile"]["value_user"].as_bool());
+  web::json::array multi = web::json::value::array(URLs).as_array();
+  auto tup = std::tuple<std::string /*UID*/, std::string /*item_id*/,
+                        std::string /*Title*/, vector<string> /*Tags*/,
+                        std::string /*ctime*/, std::string /*Description*/,
+                        web::json::array /*multi*/, std::string /*videoID*/>(
+      uid, item_id, title, tags, ensure_string(Inf["ctime"]), desc, multi, vid);
+  boost::this_thread::interruption_point();
+  BOOST_LOG_TRIVIAL(debug) << "Saving Info For: " << title << endl;
+  saveInfo(tup);
+  boost::this_thread::interruption_point();
+  return tup;
+}
 string DownloadUtils::loadTitle(string title, string item_id) {
   string query = "SELECT Title FROM ItemInfo WHERE item_id=(?)";
   std::lock_guard<mutex> guard(dbLock);
@@ -209,65 +331,67 @@ string DownloadUtils::loadTitle(string title, string item_id) {
   }
   return title;
 }
-void DownloadUtils::saveInfo(string title, web::json::value Inf) {
-  // return;
-  vector<string> vals;
-  string query = "INSERT INTO ItemInfo "
-                 "(uid,item_id,Title,Tags,ctime,Description,Images,VideoID) "
-                 "VALUES(?,?,?,?,?,?,?,?)";
-  vals.push_back(ensure_string(Inf["uid"]));
-  vals.push_back(ensure_string(Inf["item_id"]));
-  vals.push_back(title);
-  if (Inf.has_field("post_tags")) {
-    vector<web::json::value> tagsB; // Inner Param
-    for (web::json::value tagD : Inf["post_tags"].as_array()) {
-      string tag = tagD["tag_name"].as_string();
-      tagsB.push_back(web::json::value(tag));
+void DownloadUtils::saveInfo(DownloadUtils::Info Inf){
+    vector<string> vals;
+    string query = "INSERT INTO ItemInfo "
+                   "(uid,item_id,Title,Tags,ctime,Description,Images,VideoID) "
+                   "VALUES(?,?,?,?,?,?,?,?)";
+    vals.push_back(std::get<0>(Inf));
+    vals.push_back(std::get<1>(Inf));
+    vals.push_back(std::get<2>(Inf));
+    vector<string> tags=std::get<3>(Inf);
+    vector<web::json::value> tmps;
+    for(string foo:tags){
+        tmps.push_back(web::json::value(foo));
     }
-    web::json::value arr = web::json::value::array(tagsB);
-    vals.push_back(arr.serialize());
-  } else {
-    vals.push_back("[]");
-  }
-  vals.push_back(ensure_string(Inf["ctime"]));
-  if (Inf.has_field("plain")) {
-    vals.push_back(ensure_string(Inf["plain"]));
-  } else {
-    vals.push_back("");
-  }
-  vals.push_back(Inf["multi"].serialize());
-  if (Inf.has_field("type") && Inf["type"].as_string() == "video" &&
-      Inf.has_field("video_info")) {
-    vals.push_back(Inf["video_info"]["vid"].as_string());
-  }
-  else{
-    vals.push_back("");
-  }
-  std::lock_guard<mutex> guard(dbLock);
-  Database DB(DBPath, SQLite::OPEN_READWRITE);
-  Statement Q(DB, query);
-  for (decltype(vals.size()) i = 0; i < vals.size(); i++) {
-    Q.bind(i + 1, vals[i]);
-  }
-  Q.executeStep();
-}
-web::json::value DownloadUtils::loadInfo(string item_id) {
-    return web::json::value();
+    vals.push_back(web::json::value::array(tmps).serialize());
+    vals.push_back(std::get<4>(Inf));
+      vals.push_back(std::get<5>(Inf));
+    tmps.clear();
+    for(web::json::value x:std::get<6>(Inf)){
+        tmps.push_back(x);
+    }
+    vals.push_back(web::json::value::array(tmps).serialize());
+    vals.push_back(std::get<7>(Inf));
+    std::lock_guard<mutex> guard(dbLock);
+    Database DB(DBPath, SQLite::OPEN_READWRITE);
+    Statement Q(DB, query);
+    for (decltype(vals.size()) i = 0; i < vals.size(); i++) {
+      Q.bind(i + 1, vals[i]);
+    }
+    Q.executeStep();
+} optional<DownloadUtils::Info> DownloadUtils::loadInfo(string item_id) {
   std::lock_guard<mutex> guard(dbLock);
   Database DB(DBPath, SQLite::OPEN_READONLY);
-  Statement Q(DB, "SELECT uid,item_id,Title,Tags,ctime,Description,Images FROM ItemInfo WHERE item_id=?");
+  Statement Q(
+      DB, "SELECT uid,item_id,Title,Tags,ctime,Description,Images,VideoID FROM "
+          "ItemInfo WHERE item_id=?");
   Q.bind(1, item_id);
   Q.executeStep();
-#warning Unimplemented
   if (Q.hasRow()) {
-      web::json::value v;
-      v["uid"]=web::json::value(Q.getColumn(0).getString());
-      v["item_id"]=web::json::value(Q.getColumn(1).getString());
-      v["title"]=web::json::value(Q.getColumn(2).getString());
-      v[""]=web::json::value(Q.getColumn(2).getString());
-    return v;
+    web::json::value v;
+    string uid = Q.getColumn(0).getString();
+    string item_id = Q.getColumn(1).getString();
+    string title = Q.getColumn(2).getString();
+    web::json::array tagsArr =
+        web::json::value::parse(Q.getColumn(3).getString()).as_array();
+    vector<string> tags;
+    for (web::json::value val : tagsArr) {
+      tags.push_back(val.as_string());
+    }
+    string ctime = Q.getColumn(4).getString();
+    string desc = Q.getColumn(5).getString();
+    web::json::array multi =
+        web::json::value::parse(Q.getColumn(6).getString()).as_array();
+    string videoID = Q.getColumn(7).getString();
+    auto tup = std::tuple<std::string /*UID*/, std::string /*item_id*/,
+                          std::string /*Title*/, vector<string> /*Tags*/,
+                          std::string /*ctime*/, std::string /*Description*/,
+                          web::json::array /*multi*/, std::string /*videoID*/>(
+        uid, item_id, title, tags, ctime, desc, multi, videoID);
+    return tup;
   } else {
-    return web::json::value();
+    return {};
   }
 }
 void DownloadUtils::downloadEvent(string event_id) {
@@ -307,211 +431,30 @@ void DownloadUtils::insertEventInfo(web::json::value Inf) {
   insertQuery.bind(6, Inf.serialize());
   insertQuery.executeStep();
 }
-void DownloadUtils::downloadFromInfo(web::json::value Inf, bool save,
-                                     string item_id_arg, bool runFilter) {
-  if (!Inf.is_object()) {
-    BOOST_LOG_TRIVIAL(error)
-        << Inf.serialize() << " is not valid Detail Info For Downloading"
-        << endl;
-    return;
-  }
-
-  if (item_id_arg != "" && runFilter) {
-    // Not Called by the AbstractInfo Worker
-    // Need to run our own filter process
-    string tagStr;
-    if (Inf.has_field("post_tags") == false) {
-      // Extract from DB
-      std::lock_guard<mutex> guard(dbLock);
-      Database DB(DBPath, SQLite::OPEN_READONLY);
-      Statement Q(DB, "SELECT Tags FROM ItemInfo WHERE item_id=" + item_id_arg);
-      Q.executeStep();
-      tagStr = Q.getColumn(0).getString();
-    }
-    if (filter->shouldBlockDetail(Inf, item_id_arg) ||
-        filter->shouldBlockAbstract(Inf, item_id_arg) ||
-        filter->shouldBlockTags(Inf, tagStr, item_id_arg)) {
-      return;
-    }
-  }
-  string UID = ensure_string(Inf["uid"]);
-  // tyvm cunts at ByteDance
-  string item_id = ensure_string(Inf["item_id"]);
-  if (item_id == "") {
-    if (item_id_arg != "") {
-      item_id = item_id_arg;
-    } else {
-      BOOST_LOG_TRIVIAL(error)
-          << Inf.serialize() << " doesnt have valid item_id" << endl;
-      return;
-    }
-  }
-  string Title = "";
-  if (Inf.has_field("title") && Inf["title"].as_string() != "") {
-    Title = Inf["title"].as_string();
-  } else {
-    if (Inf.has_field("post_core") && Inf.at("post_core").has_field("name") &&
-        Inf["post_core"]["name"].is_string()) {
-      Title = Inf["post_core"]["name"].as_string();
-    } else {
-      if (Inf.has_field("ud_id")) {
-        string val = ensure_string(Inf["ud_id"]);
-        Title = "日常-" + val;
-      } else if (Inf.has_field("cp_id")) {
-        string val = ensure_string(Inf["cp_id"]);
-        Title = "Cosplay-" + val;
-      } else if (Inf.has_field("dp_id")) {
-        string val = ensure_string(Inf["dp_id"]);
-        Title = "绘画" + val;
-      } else if (Inf.has_field("post_id")) {
-        string GID = ensure_string(Inf["group"]["gid"]);
-        string GroupName =
-            loadOrSaveGroupName(Inf["group"]["name"].as_string(), GID);
-        string val = "";
-        val = ensure_string(Inf["ud_id"]);
-        Title = GroupName + "-" + val;
-      } else if (Inf.has_field("item_id")) {
-        string val = ensure_string(Inf["item_id"]);
-        if (Inf["type"].as_string() == "works") {
-          Title = "Cosplay-" + val;
-        } else if (Inf["type"].as_string() == "preview") {
-          Title = "预告-" + val;
-        } else if (Inf["type"].as_string() == "daily") {
-          Title = "日常-" + val;
-        } else if (Inf["type"].as_string() == "video") {
-          Title = "视频-" + val;
-        } else {
-          Title = val;
-        }
-      }
-    }
-  }
-  if (Title == "") {
-    Title = item_id;
-  }
-  Title = loadTitle(Title, item_id);
-  #warning Implement User Tags
-  web::json::value userInfo=saveOrLoadUser(UID,ensure_string(Inf["profile"]["uname"]),
-          ensure_string(Inf["plain"]),ensure_string(Inf["profile"]["avatar"])
-          ,Inf["profile"]["value_user"].as_bool(),{});
+void DownloadUtils::downloadFromInfo(DownloadUtils::Info Inf, bool runFilter) {
   /*
   Title usually contains UTF8 characters which causes trouble on certain
   platforms. (I'm looking at you Windowshit) Migrate to item_id based ones
   */
+  if(runFilter && filter->shouldBlockItem(Inf)){
+    return;
+  }
+  string uid = std::get<0>(Inf);
+  string item_id = std::get<1>(Inf);
+  string title = std::get<2>(Inf);
+  std::vector<std::string> tags = std::get<3>(Inf);
+  string ctime = std::get<4>(Inf);
+  string desc = std::get<5>(Inf);
+  vector<web::json::value> multi;
+  string videoID = std::get<7>(Inf);
+  for (web::json::value x : std::get<6>(Inf)) {
+    multi.push_back(x);
+  }
+  fs::path savePath = getItemPath(uid, item_id);
 
-  boost::this_thread::interruption_point();
-  BOOST_LOG_TRIVIAL(debug) << "Loading Title For:" << Title << endl;
-  boost::this_thread::interruption_point();
-  if (save) {
-    boost::this_thread::interruption_point();
-    BOOST_LOG_TRIVIAL(debug) << "Saving Info For: " << Title << endl;
-    saveInfo(Title, Inf);
-    boost::this_thread::interruption_point();
-  }
-  fs::path newSavePath = getItemPath(UID, item_id);
-
-  if (Inf.has_field("multi") == false) {
-    Inf["multi"] = web::json::value::array();
-  }
-  if (Inf.has_field("cover")) {
-    vector<web::json::value> URLs;
-    for (web::json::value item : Inf["multi"].as_array()) {
-      URLs.push_back(item);
-    }
-    web::json::value j;
-    j["type"] = web::json::value("image");
-    j["path"] = Inf["cover"];
-    URLs.emplace_back(j);
-    Inf["multi"] = web::json::value::array(URLs);
-  }
-  if (Inf.has_field("type") && Inf["type"].as_string() == "larticle" &&
-      Inf["multi"].size() == 0) {
-    vector<web::json::value> URLs;
-    regex rgx("<img src=\"(.{80,100})\" alt=");
-    string tmpjson = Inf.serialize();
-    smatch matches;
-    while (regex_search(tmpjson, matches, rgx)) {
-      web::json::value j;
-      string URL = matches[0];
-      j["type"] = web::json::value("image");
-      j["path"] = web::json::value(URL);
-      URLs.emplace_back(j);
-      tmpjson = matches.suffix();
-    }
-    Inf["multi"] = web::json::value::array(URLs);
-  }
-  if (Inf.has_field("group") && Inf["group"].has_field("multi")) {
-    vector<web::json::value> URLs;
-    if (Inf.has_field("multi")) {
-      for (web::json::value foo : Inf["multi"].as_array()) {
-        URLs.push_back(foo);
-      }
-    }
-    for (web::json::value foo : Inf["group"]["multi"].as_array()) {
-      URLs.push_back(foo);
-    }
-    Inf["multi"] = web::json::value::array(URLs);
-  }
-
-  // videoInfo
-  if (Inf.has_field("type") && Inf["type"].as_string() == "video" &&
-      Inf.has_field("video_info") && downloadVideo == true) {
-    string vid = Inf["video_info"]["vid"].as_string();
-    boost::this_thread::interruption_point();
-    web::json::value F = core.videoInfo(vid);
-    boost::this_thread::interruption_point();
-    web::json::value videoList = F["data"]["video_list"];
-    // Find the most HD one
-    int bitrate = 0;
-    string videoID = "video_1";
-    if (videoList.is_null()) {
-      BOOST_LOG_TRIVIAL(error)
-          << "Can't query DownloadURL for videoID:" << videoID << endl;
-    } else {
-      for (auto it = videoList.as_object().cbegin();
-           it != videoList.as_object().cend(); ++it) {
-        string K = it->first;
-        web::json::value V = it->second;
-        if (V["bitrate"].as_integer() > bitrate) {
-          videoID = K;
-        }
-      }
-      if (videoList.size() > 0) {
-        // Videos needs to be manually reviewed before playable
-        string URL = "";
-        Base64::Decode(videoList[videoID]["main_url"].as_string(), &URL);
-        string FileName = vid + ".mp4";
-        web::json::value j;
-        j["path"] = web::json::value(URL);
-        j["FileName"] = web::json::value(FileName);
-        vector<web::json::value> URLs;
-        for (web::json::value bar : Inf["multi"].as_array()) {
-          URLs.push_back(bar);
-        }
-        URLs.push_back(j);
-        Inf["multi"] = web::json::value::array(URLs);
-      } else {
-        BOOST_LOG_TRIVIAL(info)
-            << item_id << " hasn't been reviewed yet and thus not downloadable"
-            << endl;
-      }
-    }
-  }
-
-  bool isCompressedInfo = false;
-  if (allowCompressed && Inf.has_field("item_id") && Inf.has_field("type")) {
-    string item_id = ensure_string(Inf["item_id"]);
-    web::json::value covers =
-        core.image_postCover(item_id, Inf["type"].as_string())["data"];
-    if (!covers.is_null() && covers.has_field("multi")) {
-      Inf["multi"] = covers["multi"];
-      isCompressedInfo = true;
-    }
-  }
-
-  if (Inf["multi"].size() > 0) {
+  if (multi.size() > 0) {
     boost::system::error_code ec;
-    fs::create_directories(newSavePath, ec);
+    fs::create_directories(savePath, ec);
     if (ec) {
       BOOST_LOG_TRIVIAL(error) << "FileSystem Error: " << ec.message() << "@"
                                << __FILE__ << ":" << __LINE__ << endl;
@@ -522,7 +465,46 @@ void DownloadUtils::downloadFromInfo(web::json::value Inf, bool save,
   }
   vector<web::json::value>
       a2Methods; // Used for aria2 RPC's ``system.multicall``
-  for (web::json::value item : Inf["multi"].as_array()) {
+
+  // videoInfo
+  if (videoID != "" && downloadVideo == true) {
+    boost::this_thread::interruption_point();
+    web::json::value F = core.videoInfo(videoID);
+    boost::this_thread::interruption_point();
+    web::json::value videoList = F["data"]["video_list"];
+    // Find the most HD one
+    int bitrate = 0;
+    string vid = "video_1";
+    if (videoList.is_null()) {
+      BOOST_LOG_TRIVIAL(error)
+          << "Can't query DownloadURL for videoID:" << vid << endl;
+    } else {
+      for (auto it = videoList.as_object().cbegin();
+           it != videoList.as_object().cend(); ++it) {
+        string K = it->first;
+        web::json::value V = it->second;
+        if (V["bitrate"].as_integer() > bitrate) {
+          vid = K;
+        }
+      }
+      if (videoList.size() > 0) {
+        // Videos needs to be manually reviewed before playable
+        string URL = "";
+        Base64::Decode(videoList[vid]["main_url"].as_string(), &URL);
+        string FileName = videoID + ".mp4";
+        web::json::value j;
+        j["path"] = web::json::value(URL);
+        j["FileName"] = web::json::value(FileName);
+
+        multi.push_back(j);
+      } else {
+        BOOST_LOG_TRIVIAL(info)
+            << item_id << " hasn't been reviewed yet and thus not downloadable"
+            << endl;
+      }
+    }
+  }
+  for (web::json::value item : multi) {
     boost::this_thread::interruption_point();
     string URL = item["path"].as_string();
     if (URL.find("http") != 0) {
@@ -535,23 +517,18 @@ void DownloadUtils::downloadFromInfo(web::json::value Inf, bool save,
     }
     string origURL = URL;
     string tmp = URL.substr(URL.find_last_of("/"), string::npos);
-    if (!isCompressedInfo && tmp.find(".") == string::npos) {
+    if (tmp.find(".") == string::npos) {
       origURL = URL.substr(0, URL.find_last_of("/"));
     }
-    string FileName = "";
-    if (!isCompressedInfo) {
-      FileName = origURL.substr(origURL.find_last_of("/") + 1);
-    } else {
-      string URLWithoutQuery = origURL.substr(0, origURL.find_last_of("?"));
-      FileName = URLWithoutQuery.substr(URLWithoutQuery.find_last_of("/") + 1);
-    }
+    string FileName = origURL.substr(origURL.find_last_of("/") + 1);
+
     if (item.has_field("FileName")) { // Support Video Downloading without
                                       // Introducing Extra
       // Code
       FileName = item["FileName"].as_string();
       origURL = item["path"].as_string();
     }
-    fs::path newFilePath = newSavePath / fs::path(FileName);
+    fs::path newFilePath = savePath / fs::path(FileName);
     if (!newFilePath.has_extension()) {
       newFilePath.replace_extension(".jpg");
     }
@@ -597,7 +574,7 @@ void DownloadUtils::downloadFromInfo(web::json::value Inf, bool save,
         }
         params.push_back(web::json::value::array(URLs));
         web::json::value options;
-        options["dir"] = web::json::value(newSavePath.string());
+        options["dir"] = web::json::value(savePath.string());
         options["out"] = web::json::value(newFilePath.filename().string());
         options["auto-file-renaming"] = web::json::value("false");
         options["allow-overwrite"] = web::json::value("false");
@@ -667,7 +644,7 @@ void DownloadUtils::unlikeCached() {
   for (web::json::value j : Liked) {
     string item_id = ensure_string(j["item_detail"]["item_id"]);
     boost::asio::post(t, [=] {
-      if (!loadInfo(item_id).is_null()) {
+      if (loadInfo(item_id).has_value()) {
         if (core.item_cancelPostLike(item_id)) {
           BOOST_LOG_TRIVIAL(info)
               << "Unlike item_id: " << item_id << " Success" << endl;
@@ -684,160 +661,51 @@ void DownloadUtils::unlikeCached() {
   BOOST_LOG_TRIVIAL(info) << "Joining Unlike Threads\n";
   t.join();
 }
-void DownloadUtils::verify(string condition, vector<string> args,
-                           bool reverse) {
-  BOOST_LOG_TRIVIAL(info) << "Verifying..." << endl;
-  map<string, web::json::value> Info;
-  vector<string> Keys;
-  BOOST_LOG_TRIVIAL(info) << "Collecting Cached Infos" << endl;
-  {
-    std::lock_guard<mutex> guard(dbLock);
-    Database DB(DBPath, SQLite::OPEN_READONLY);
-    Statement Q(DB, "SELECT item_id,Info,Tags FROM ItemInfo " + condition);
-    for (decltype(args.size()) i = 1; i <= args.size(); i++) {
-      Q.bind(i, args[i - 1]);
-    }
-    while (Q.executeStep()) {
-      string item_id = Q.getColumn(0).getString();
-      string InfoStr = Q.getColumn(1).getString();
-      string TagStr = Q.getColumn(2).getString();
-      try {
-        web::json::value j = web::json::value::parse(InfoStr);
-        if (item_id == "0" || item_id == "") {
-          BOOST_LOG_TRIVIAL(error)
-              << InfoStr << " Doesn't Have Valid item_id" << endl;
-          continue;
+    void DownloadUtils::verify(std::string condition, std::vector<std::string> args,
+                               bool reverse ){
+        
+        BOOST_LOG_TRIVIAL(info) << "Verifying..." << endl;
+        vector<string> IDs;
+        BOOST_LOG_TRIVIAL(info) << "Collecting Cached Infos" << endl;
+        {
+            std::lock_guard<mutex> guard(dbLock);
+            Database DB(DBPath, SQLite::OPEN_READONLY);
+            Statement Q(DB, "SELECT item_id FROM WorkInfo " + condition);
+            for (decltype(args.size()) i = 1; i <= args.size(); i++) {
+                Q.bind(i, args[i - 1]);
+            }
+            while (Q.executeStep()) {
+                IDs.push_back(Q.getColumn(0).getString());
+            }
         }
-        try {
-          if (filter->shouldBlockTags(j, TagStr, item_id)) {
-            continue;
-          }
-        } catch (exception &exp) {
-          BOOST_LOG_TRIVIAL(info)
-              << exp.what() << __FILE__ << ":" << __LINE__ << endl;
-          std::cerr << boost::stacktrace::stacktrace() << '\n';
+        BOOST_LOG_TRIVIAL(info) << "Found "<<IDs.size()<<" items" << endl;
+        unsigned long long idx=0;
+        if(reverse){
+            vector<string>::iterator i = IDs.end();
+            while (i != IDs.begin())
+            {
+                --i;
+                string item_id=*i;
+                DownloadUtils::Info inf=*(loadInfo(item_id));
+                downloadFromInfo(inf);
+                idx++;
+                if(idx%500==0){
+                    BOOST_LOG_TRIVIAL(info) << "Verified "<<idx<<" items" << endl;
+                }
+                
+            }
         }
-
-        Info[item_id] = j;
-        Keys.push_back(item_id);
-        if (Info.size() % 1000 == 0) {
-          BOOST_LOG_TRIVIAL(info) << Info.size() << " Cache Loaded" << endl;
+        else{
+            for(string item_id:IDs){
+                DownloadUtils::Info inf=*(loadInfo(item_id));
+                downloadFromInfo(inf);
+                idx++;
+                if(idx%500==0){
+                    BOOST_LOG_TRIVIAL(info) << "Verified "<<idx<<" items" << endl;
+                }
+            }
         }
-      } catch (exception &exp) {
-        BOOST_LOG_TRIVIAL(info)
-            << exp.what() << __FILE__ << ":" << __LINE__ << endl;
-        std::cerr << boost::stacktrace::stacktrace() << '\n';
-      }
-    }
-  }
-  BOOST_LOG_TRIVIAL(info) << "Found " << Info.size() << " Cached Info" << endl;
-  if (reverse == false) {
-    for (decltype(Keys.size()) i = 0; i < Keys.size(); i++) {
-      string K = Keys[i];
-      web::json::value &j = Info[K];
-      if (i % 1000 == 0) {
-        BOOST_LOG_TRIVIAL(info)
-            << "Remaining Caches to Process:" << Info.size() - i << endl;
-      }
-      boost::asio::post(*queryThread, [=]() {
-        if (stop) {
-          return;
-        }
-        try {
-          downloadFromInfo(j, false, K, enableFilter);
-        } catch (boost::thread_interrupted) {
-          BOOST_LOG_TRIVIAL(debug)
-              << "Cancelling Thread:" << boost::this_thread::get_id() << endl;
-          return;
-        } catch (const exception &exc) {
-          BOOST_LOG_TRIVIAL(error)
-              << "Verifying from Info:" << j.serialize()
-              << " Raised Exception:" << exc.what() << endl;
-        }
-      });
-    }
-  } else {
-    for (int i = Keys.size() - 1; i >= 0; i--) {
-      string K = Keys[i];
-      web::json::value &j = Info[K];
-      if (i % 1000 == 0) {
-        BOOST_LOG_TRIVIAL(info) << "Remaining Caches to Process:" << i << endl;
-      }
-      boost::asio::post(*queryThread, [=]() {
-        if (stop) {
-          return;
-        }
-        try {
-          downloadFromInfo(j, false, K, enableFilter);
-        } catch (boost::thread_interrupted) {
-          BOOST_LOG_TRIVIAL(debug)
-              << "Cancelling Thread:" << boost::this_thread::get_id() << endl;
-          return;
-        } catch (const exception &exc) {
-          BOOST_LOG_TRIVIAL(error)
-              << "Verifying from Info:" << j.serialize()
-              << " Raised Exception:" << exc.what() << endl;
-        }
-      });
-    }
-  }
-}
-
-void DownloadUtils::cleanByFilter() {
-  vector<std::tuple<string, string, web::json::value>> Infos;
-  BOOST_LOG_TRIVIAL(info) << "Collecting Cached Infos" << endl;
-  {
-    std::lock_guard<mutex> guard(dbLock);
-    Database DB(DBPath, SQLite::OPEN_READONLY);
-    Statement Q(DB, "SELECT uid,item_id,Info FROM ItemInfo");
-    while (Q.executeStep()) {
-      string uid = Q.getColumn(0).getString();
-      string item_id = Q.getColumn(1).getString();
-      string InfoStr = Q.getColumn(2).getString();
-      try {
-        web::json::value j = web::json::value::parse(InfoStr);
-        if (item_id == "0" || item_id == "") {
-          BOOST_LOG_TRIVIAL(error)
-              << InfoStr << " Doesn't Have Valid item_id" << endl;
-          continue;
-        }
-        Infos.push_back(std::make_tuple(uid, item_id, j));
-
-        if (Infos.size() % 1000 == 0) {
-          BOOST_LOG_TRIVIAL(info) << Infos.size() << " Cache Loaded" << endl;
-        }
-      } catch (exception &exp) {
-        BOOST_LOG_TRIVIAL(info)
-            << exp.what() << __FILE__ << ":" << __LINE__ << endl;
-        std::cerr << boost::stacktrace::stacktrace() << '\n';
-      }
-    }
-  }
-  BOOST_LOG_TRIVIAL(info) << "Processing..." << endl;
-  thread_pool t(16);
-  std::atomic<unsigned long long> i = 0;
-  for (std::tuple<string, string, web::json::value> tup : Infos) {
-    string uid = std::get<0>(tup);
-    string item_id = std::get<1>(tup);
-    web::json::value Inf = std::get<2>(tup);
-    boost::asio::post(t, [=, &i]() {
-      boost::system::error_code ec;
-      fs::path WorkPath = getItemPath(uid, item_id);
-      bool isDirec = is_directory(WorkPath, ec);
-      if (isDirec) {
-        if (filter->shouldBlockDetail(Inf, item_id) ||
-            filter->shouldBlockAbstract(Inf, item_id)) {
-          fs::remove_all(WorkPath, ec);
-          BOOST_LOG_TRIVIAL(debug) << "Removed " << WorkPath.string() << endl;
-        }
-      }
-      i++;
-      if (i % 1000 == 0) {
-        BOOST_LOG_TRIVIAL(info) << i << " Processed" << endl;
-      }
-    });
-  }
-  t.join();
+        
 }
 void DownloadUtils::cleanUID(string UID) {
   BOOST_LOG_TRIVIAL(debug) << "Cleaning up UID:" << UID << endl;
@@ -909,7 +777,7 @@ void DownloadUtils::cleanup() {
   for (decltype(filter->UIDList.size()) i = 0; i < filter->UIDList.size();
        i++) {
     boost::asio::post(t, [=]() {
-      string UID = filter->UIDList[i].as_string();
+      string UID = filter->UIDList[i];
       BOOST_LOG_TRIVIAL(debug) << "Removing UID: " << UID << endl;
       cleanUID(UID);
     });
@@ -918,7 +786,7 @@ void DownloadUtils::cleanup() {
   for (decltype(filter->TagList.size()) i = 0; i < filter->TagList.size();
        i++) {
     boost::asio::post(t, [=]() {
-      string Tag = filter->TagList[i].as_string();
+      string Tag = filter->TagList[i];
       BOOST_LOG_TRIVIAL(debug) << "Removing Tag: " << Tag << endl;
       cleanTag(Tag);
     });
@@ -1040,41 +908,39 @@ void DownloadUtils::downloadItemID(string item_id) {
       return;
     }
     boost::this_thread::interruption_point();
-    web::json::value detail = web::json::value::null();
+      optional<DownloadUtils::Info> detail;
     if (useCachedInfo) {
-      detail = loadInfo(item_id);
+      detail=loadInfo(item_id);
     }
-    if (detail.is_null()) {
+    if (detail.has_value()==false) {
       boost::this_thread::interruption_point();
-      detail = core.item_detail(item_id);
+      detail.emplace(canonicalizeRawServerDetail(core.item_detail(item_id)["detail"]));
       boost::this_thread::interruption_point();
-      if (detail.is_null()) {
+      if (detail.has_value()==false) {
         BOOST_LOG_TRIVIAL(error) << "Querying detail for item_id:" << item_id
                                  << " results in null" << endl;
-      } else {
-        detail = detail["data"];
       }
       try {
-        downloadFromInfo(detail, true, item_id, enableFilter);
+        downloadFromInfo(*detail,enableFilter);
       } catch (boost::thread_interrupted) {
         BOOST_LOG_TRIVIAL(debug)
             << "Cancelling Thread:" << boost::this_thread::get_id() << endl;
         return;
       } catch (const exception &exc) {
         BOOST_LOG_TRIVIAL(error)
-            << "Downloading from Info:" << detail.serialize()
+          << "Downloading from Info:" << std::get<1>(*detail)
             << " Raised Exception:" << exc.what() << endl;
       }
     } else {
       try {
-        downloadFromInfo(detail, false, item_id, enableFilter);
+        downloadFromInfo(*detail,enableFilter);
       } catch (boost::thread_interrupted) {
         BOOST_LOG_TRIVIAL(debug)
             << "Cancelling Thread:" << boost::this_thread::get_id() << endl;
         return;
       } catch (const exception &exc) {
         BOOST_LOG_TRIVIAL(error)
-            << "Downloading from Info:" << detail.serialize()
+            << "Downloading from Info:" << std::get<1>(*detail)
             << " Raised Exception:" << exc.what() << endl;
       }
     }

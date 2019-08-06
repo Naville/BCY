@@ -1,7 +1,6 @@
 #ifndef BCY_DOWNLOADUTILS_HPP
 #define BCY_DOWNLOADUTILS_HPP
-#include "BCY/Core.hpp"
-#include "BCY/DownloadFilter.hpp"
+#include <BCY/Core.hpp>
 #include <SQLiteCpp/SQLiteCpp.h>
 #define CRYPTOPP_ENABLE_NAMESPACE_WEAK 1
 #include <boost/asio.hpp>
@@ -10,18 +9,20 @@
 #include <cryptopp/hex.h>
 #include <cryptopp/md5.h>
 #include <set>
+#include <tuple>
+#include <optional>
 namespace BCY {
+    class DownloadFilter;
 class DownloadUtils {
+    
 public:
+    typedef std::tuple<std::string/*UID*/,std::string/*item_id*/,std::string/*Title*/,std::vector<std::string>/*Tags*/,std::string/*ctime*/,
+    std::string/*Description*/,web::json::array/*multi*/,std::string/*videoID*/> Info;
   Core core;
   DownloadFilter *filter = nullptr;
   bool useCachedInfo = true;
   bool downloadVideo = true;
   bool enableFilter = true;
-  bool allowCompressed = false; // if enabled, downloader will try to use the
-  // official API to download compressed
-  // (~20%quality lost )images instead of
-  // stripping URL to download the original one
   std::string secret = "";
   std::string RPCServer = "";
   ~DownloadUtils();
@@ -30,21 +31,21 @@ public:
   DownloadUtils(std::string PathBase, int queryThreadCount = -1,
                 int downloadThreadCount = -1,
                 std::string DBPath = ""); //-1 to use hardware thread count
-  void downloadFromAbstractInfo(web::json::value Inf, bool runFilter);
-  void downloadFromAbstractInfo(web::json::value Inf);
-  void downloadFromInfo(web::json::value Inf, bool save = true,
-                        std::string item_id_arg = "", bool runFilter = true);
+    Info  canonicalizeRawServerDetail(web::json::value);
+  void downloadFromAbstractInfo(web::json::value& Inf, bool runFilter);
+  void downloadFromAbstractInfo(web::json::value& Inf);
+  void downloadFromInfo(DownloadUtils::Info Inf,bool runFilter = true);
   // Will try to extract item_id from info first, if not it loads from the
   // argument,if still invalid an error is displayed and download cancelled
   std::string loadTitle(std::string title,std::string item_id);
-  void saveInfo(std::string title, web::json::value Inf);
-  web::json::value loadInfo(std::string item_id);
+    void saveInfo(Info);
+  std::optional<Info> loadInfo(std::string item_id);
   std::string loadOrSaveGroupName(std::string name, std::string GID);
   web::json::value loadEventInfo(std::string event_id);
   void insertEventInfo(web::json::value Inf);
   void cleanup();
   void join();
-  web::json::value saveOrLoadUser(std::string uid,std::string uname,std::string intro,std::string avatar,bool isValueUser,std::vector<std::string> tags);
+  web::json::value saveOrLoadUser(std::string uid,std::string uname,std::string intro,std::string avatar,bool isValueUser);
   boost::filesystem::path getUserPath(std::string UID);
   boost::filesystem::path getItemPath(std::string UID,std::string item_id);
   void cleanUID(std::string UID);
@@ -66,7 +67,6 @@ public:
   void downloadTimeline();
   void downloadItemID(std::string item_id);
   void unlikeCached();
-  void cleanByFilter();
   void downloadHotTags(std::string TagName,unsigned int cnt=20000);
   void downloadHotWorks(std::string id,unsigned int cnt=20000);
 
