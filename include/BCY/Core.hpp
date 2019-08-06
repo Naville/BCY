@@ -85,7 +85,7 @@ public:
   bool item_cancelPostLike(std::string item_id);
   bool user_follow(std::string uid, bool isFollow);
   web::json::value user_detail(std::string UID);
-  web::json::value image_postCover(std::string item_id, std::string type);
+  web::json::value image_postCover(std::string item_id);
   web::json::value space_me();
   web::json::value prepareNoteUploadArg(std::vector<std::string>& tags,std::vector<struct UploadImageInfo>& Infos,std::string content="",bool allowSave=false,bool addWatermark=true,bool modify=false,bool trans=false,VisibilityType view=VisibilityType::All);
   web::json::value loginWithEmailAndPassword(std::string email,

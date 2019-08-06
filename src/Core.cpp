@@ -392,10 +392,10 @@ web::json::value Core::user_detail(string UID) {
   auto R = POST("api/user/detail", j, true, true);
   return R.extract_json().get();
 }
-web::json::value Core::image_postCover(string item_id, string type) {
+web::json::value Core::image_postCover(string item_id) {
   web::json::value j;
   j["id"] = web::json::value(item_id);
-  j["type"] = web::json::value(type);
+  j["type"] = web::json::value("note");
   auto R = POST("api/image/postCover/", j, true, true);
   return R.extract_json().get();
 }

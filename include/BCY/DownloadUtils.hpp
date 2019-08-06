@@ -14,7 +14,7 @@
 namespace BCY {
     class DownloadFilter;
 class DownloadUtils {
-    
+
 public:
     typedef std::tuple<std::string/*UID*/,std::string/*item_id*/,std::string/*Title*/,std::vector<std::string>/*Tags*/,std::string/*ctime*/,
     std::string/*Description*/,web::json::array/*multi*/,std::string/*videoID*/> Info;

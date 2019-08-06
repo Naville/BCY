@@ -1,6 +1,6 @@
-#include <BCY/DownloadUtils.hpp>
-#include <BCY/DownloadFilter.hpp>
 #include <BCY/Base64.h>
+#include <BCY/DownloadFilter.hpp>
+#include <BCY/DownloadUtils.hpp>
 #include <BCY/Utils.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/lockfree/stack.hpp>
@@ -69,82 +69,84 @@ DownloadUtils::DownloadUtils(string PathBase, int queryThreadCount,
   fs::create_directories(TempPath, ec);
 #warning Remove this after scripting support landed
 
-  filter->addFilterHandler([](DownloadUtils::Info& Inf){
-      std::vector<std::string> tags = std::get<3>(Inf);
-    if( find(tags.begin(),tags.end(),"COS")!=tags.end()){
-        return 0;
-    }
-    else{
-        array<string,4> drawKWs={"动画","漫画","绘画","手绘"};
-        for(string ele:drawKWs){
-            if( find(tags.begin(),tags.end(),ele)!=tags.end()){
-                return -1;
-            }
+  filter->addFilterHandler([](DownloadUtils::Info &Inf) {
+    std::vector<std::string> tags = std::get<3>(Inf);
+    if (find(tags.begin(), tags.end(), "COS") != tags.end()) {
+      return 0;
+    } else {
+      array<string, 4> drawKWs = {"动画", "漫画", "绘画", "手绘"};
+      for (string ele : drawKWs) {
+        if (find(tags.begin(), tags.end(), ele) != tags.end()) {
+          return -1;
         }
-        return 0;
+      }
+      return 0;
     }
   });
 }
-void DownloadUtils::downloadFromAbstractInfo(web::json::value& AbstractInfo) {
+void DownloadUtils::downloadFromAbstractInfo(web::json::value &AbstractInfo) {
   downloadFromAbstractInfo(AbstractInfo, this->enableFilter);
 }
-void DownloadUtils::downloadFromAbstractInfo(web::json::value& AbstractInfo,
+void DownloadUtils::downloadFromAbstractInfo(web::json::value &Inf,
                                              bool runFilter) {
   if (stop) {
     return;
   }
+#ifndef DEBUG
   boost::asio::post(*queryThread, [=]() {
+#endif
     if (stop) {
       return;
     }
+    web::json::value AbstractInfo = Inf;
     boost::this_thread::interruption_point();
+#ifndef DEBUG
     try {
-      if (runFilter == false || filter->shouldBlockAbstract(const_cast<web::json::value&>(AbstractInfo))==false
-          ) {
+#endif
+      if (runFilter == false ||
+          filter->shouldBlockAbstract(
+              const_cast<web::json::value &>(AbstractInfo)) == false) {
+        if (AbstractInfo.has_field("item_detail")) {
+          AbstractInfo = AbstractInfo["item_detail"];
+        }
+        string item_id = ensure_string(AbstractInfo.at("item_id"));
+
         boost::this_thread::interruption_point();
-              optional<DownloadUtils::Info> detail= loadInfo(
-            ensure_string(AbstractInfo.at("item_detail").at("item_id")));
+        optional<DownloadUtils::Info> detail = loadInfo(item_id);
         boost::this_thread::interruption_point();
-        if (detail.has_value()==false) {
+        if (detail.has_value() == false) {
           boost::this_thread::interruption_point();
-          string item_id =
-              ensure_string(AbstractInfo.at("item_detail").at("item_id"));
-          detail.emplace(canonicalizeRawServerDetail(core.item_detail(item_id)["data"]));
+          detail.emplace(
+              canonicalizeRawServerDetail(core.item_detail(item_id)["data"]));
           boost::this_thread::interruption_point();
           try {
-            downloadFromInfo(*detail,runFilter);
+            downloadFromInfo(*detail, runFilter);
           } catch (boost::thread_interrupted) {
             BOOST_LOG_TRIVIAL(debug)
                 << "Cancelling Thread:" << boost::this_thread::get_id() << endl;
             return;
-          } catch (const exception &exc) {
-            BOOST_LOG_TRIVIAL(error)
-              << "Verifying from Info:" << std::get<1>(*detail)
-                << " Raised Exception:" << exc.what() << endl;
           }
         } else {
           try {
-            downloadFromInfo(
-                *detail,
-                runFilter);
+            downloadFromInfo(*detail, runFilter);
           } catch (boost::thread_interrupted) {
             BOOST_LOG_TRIVIAL(debug)
                 << "Cancelling Thread:" << boost::this_thread::get_id() << endl;
             return;
-          } catch (const exception &exc) {
-            BOOST_LOG_TRIVIAL(error)
-              << "Verifying from Info:" << std::get<1>(*detail)
-                << " Raised Exception:" << exc.what() << endl;
           }
         }
       }
+#ifndef DEBUG
     } catch (exception &exp) {
       BOOST_LOG_TRIVIAL(error)
           << exp.what() << __FILE__ << ":" << __LINE__ << endl
           << AbstractInfo.serialize() << endl;
       std::cerr << boost::stacktrace::stacktrace() << '\n';
     }
+#endif
+#ifndef DEBUG
   });
+#endif
 }
 web::json::value DownloadUtils::saveOrLoadUser(string uid, string uname,
                                                string intro, string avatar,
@@ -176,10 +178,10 @@ web::json::value DownloadUtils::saveOrLoadUser(string uid, string uname,
     Q.bind(4, avatar);
     Q.bind(5, (isValueUser == 1) ? "1" : "0");
     vector<web::json::value> vals;
-      web::json::array tagsArr= core.user_getUserTag(uid)["data"].as_array();
-      for(web::json::value x:tagsArr){
-          vals.push_back(x["ut_name"]);
-      }
+    web::json::array tagsArr = core.user_getUserTag(uid)["data"].as_array();
+    for (web::json::value x : tagsArr) {
+      vals.push_back(x["ut_name"]);
+    }
     Q.bind(6, web::json::value::array(vals).serialize());
     Q.executeStep();
     web::json::value j;
@@ -331,36 +333,37 @@ string DownloadUtils::loadTitle(string title, string item_id) {
   }
   return title;
 }
-void DownloadUtils::saveInfo(DownloadUtils::Info Inf){
-    vector<string> vals;
-    string query = "INSERT INTO ItemInfo "
-                   "(uid,item_id,Title,Tags,ctime,Description,Images,VideoID) "
-                   "VALUES(?,?,?,?,?,?,?,?)";
-    vals.push_back(std::get<0>(Inf));
-    vals.push_back(std::get<1>(Inf));
-    vals.push_back(std::get<2>(Inf));
-    vector<string> tags=std::get<3>(Inf);
-    vector<web::json::value> tmps;
-    for(string foo:tags){
-        tmps.push_back(web::json::value(foo));
-    }
-    vals.push_back(web::json::value::array(tmps).serialize());
-    vals.push_back(std::get<4>(Inf));
-      vals.push_back(std::get<5>(Inf));
-    tmps.clear();
-    for(web::json::value x:std::get<6>(Inf)){
-        tmps.push_back(x);
-    }
-    vals.push_back(web::json::value::array(tmps).serialize());
-    vals.push_back(std::get<7>(Inf));
-    std::lock_guard<mutex> guard(dbLock);
-    Database DB(DBPath, SQLite::OPEN_READWRITE);
-    Statement Q(DB, query);
-    for (decltype(vals.size()) i = 0; i < vals.size(); i++) {
-      Q.bind(i + 1, vals[i]);
-    }
-    Q.executeStep();
-} optional<DownloadUtils::Info> DownloadUtils::loadInfo(string item_id) {
+void DownloadUtils::saveInfo(DownloadUtils::Info Inf) {
+  vector<string> vals;
+  string query = "INSERT INTO ItemInfo "
+                 "(uid,item_id,Title,Tags,ctime,Description,Images,VideoID) "
+                 "VALUES(?,?,?,?,?,?,?,?)";
+  vals.push_back(std::get<0>(Inf));
+  vals.push_back(std::get<1>(Inf));
+  vals.push_back(std::get<2>(Inf));
+  vector<string> tags = std::get<3>(Inf);
+  vector<web::json::value> tmps;
+  for (string foo : tags) {
+    tmps.push_back(web::json::value(foo));
+  }
+  vals.push_back(web::json::value::array(tmps).serialize());
+  vals.push_back(std::get<4>(Inf));
+  vals.push_back(std::get<5>(Inf));
+  tmps.clear();
+  for (web::json::value x : std::get<6>(Inf)) {
+    tmps.push_back(x);
+  }
+  vals.push_back(web::json::value::array(tmps).serialize());
+  vals.push_back(std::get<7>(Inf));
+  std::lock_guard<mutex> guard(dbLock);
+  Database DB(DBPath, SQLite::OPEN_READWRITE);
+  Statement Q(DB, query);
+  for (decltype(vals.size()) i = 0; i < vals.size(); i++) {
+    Q.bind(i + 1, vals[i]);
+  }
+  Q.executeStep();
+}
+optional<DownloadUtils::Info> DownloadUtils::loadInfo(string item_id) {
   std::lock_guard<mutex> guard(dbLock);
   Database DB(DBPath, SQLite::OPEN_READONLY);
   Statement Q(
@@ -436,7 +439,7 @@ void DownloadUtils::downloadFromInfo(DownloadUtils::Info Inf, bool runFilter) {
   Title usually contains UTF8 characters which causes trouble on certain
   platforms. (I'm looking at you Windowshit) Migrate to item_id based ones
   */
-  if(runFilter && filter->shouldBlockItem(Inf)){
+  if (runFilter && filter->shouldBlockItem(Inf)) {
     return;
   }
   string uid = std::get<0>(Inf);
@@ -504,30 +507,79 @@ void DownloadUtils::downloadFromInfo(DownloadUtils::Info Inf, bool runFilter) {
       }
     }
   }
+  // Good job on fixing the old bug where a user could just obtain
+  // un-watermarked image by simply stripping the URL a bit, SIX FUCKING YEARS
+  // AGO. Now let's hope someone didn't left un-watermarked image's URL in the
+  // new response because that would be very retarded
+
+  // Wait, Ooooops
+  vector<web::json::value> placeholders;
+  bool shouldInvokeAPI=false;
+  for (web::json::value item : multi) {
+    string URL = item["path"].as_string();
+    if (URL.find("http") != string::npos &&
+        URL.find("bcy.byteimg.com") == string::npos && URL.length() != 0) {
+      // Some old API bug which results in junk URL in response. Good job
+      // ByteDance.
+      web::json::value newEle;
+      string tmp = URL.substr(URL.find_last_of("/"), string::npos);
+      string origURL = URL;
+      if (tmp.find(".") == string::npos) {
+        origURL = URL.substr(0, URL.find_last_of("/"));
+      }
+      string FileName = origURL.substr(origURL.find_last_of("/") + 1);
+      newEle["path"] = web::json::value(origURL);
+      newEle["FileName"] = web::json::value(FileName);
+      BOOST_LOG_TRIVIAL(debug)
+          << "Extracted URL: " << origURL << " from Stripping URL: " << URL
+          << " and FileName: " << FileName << endl;
+
+      placeholders.push_back(newEle);
+    }
+    else if(URL.find("bcy.byteimg.com") != string::npos){
+      shouldInvokeAPI=true;
+    }
+  }
+  if(shouldInvokeAPI){
+    web::json::value covers = core.image_postCover(item_id)["data"]["multi"];
+
+    /*
+      Previously BruteForcing original un-watermarked un-compressed Image URL was
+      as easy as stripping /w650 from the URL. For new works with URL originating
+      from *bcy.byteimg.com,brute-forcing is no longer possible. Until someone
+      figures out the algorithm of the sig, which is likely generated server side unless
+      some employee *wink* leaks it out
+      */
+    regex bdregex("byteimg\\.com\\/img\\/banciyuan\\/([a-zA-Z0-9]*)~tplv");
+
+    for (web::json::value item : covers.as_array()) {
+      string URL = item["path"].as_string();
+      web::json::value newEle;
+      newEle["path"] = web::json::value(URL);
+      smatch matches;
+      if (regex_search(URL, matches, bdregex)) {
+        assert(matches.size() == 2 &&
+               "Regex Finding FileName Met Unexpected Result!");
+        string fileName = matches[1].str() + ".jpg";
+        newEle["FileName"] = web::json::value(fileName);
+        BOOST_LOG_TRIVIAL(debug) << "Extracted FileName: " << fileName
+                                 << " from coverURL: " << URL << endl;
+        placeholders.push_back(newEle);
+      } else {
+        BOOST_LOG_TRIVIAL(error)
+            << "Regex Extracting ByteImage FileName From URL: " << URL
+            << " Failed" << endl;
+        return;
+      }
+    }
+  }
+
+  multi = placeholders;
+
   for (web::json::value item : multi) {
     boost::this_thread::interruption_point();
     string URL = item["path"].as_string();
-    if (URL.find("http") != 0) {
-      // Some old API bug that results in rubbish URL in response
-      // Because ByteDance sucks dick
-      continue;
-    }
-    if (URL.length() == 0) {
-      continue;
-    }
-    string origURL = URL;
-    string tmp = URL.substr(URL.find_last_of("/"), string::npos);
-    if (tmp.find(".") == string::npos) {
-      origURL = URL.substr(0, URL.find_last_of("/"));
-    }
-    string FileName = origURL.substr(origURL.find_last_of("/") + 1);
-
-    if (item.has_field("FileName")) { // Support Video Downloading without
-                                      // Introducing Extra
-      // Code
-      FileName = item["FileName"].as_string();
-      origURL = item["path"].as_string();
-    }
+    string FileName = item["FileName"].as_string();
     fs::path newFilePath = savePath / fs::path(FileName);
     if (!newFilePath.has_extension()) {
       newFilePath.replace_extension(".jpg");
@@ -537,6 +589,8 @@ void DownloadUtils::downloadFromInfo(DownloadUtils::Info Inf, bool runFilter) {
 
     bool shouldDL =
         (!fs::exists(newFilePath, ec2) || fs::exists(newa2confPath, ec2));
+    BOOST_LOG_TRIVIAL(debug)<<"Deciding if should download using item path: "<<newFilePath<<" and Aria2 Config Path: "<<newa2confPath
+    <<" Result: "<<shouldDL<<endl;
     if (shouldDL) {
       if (RPCServer == "") {
         if (stop) {
@@ -550,7 +604,7 @@ void DownloadUtils::downloadFromInfo(DownloadUtils::Info Inf, bool runFilter) {
           }
           try {
             boost::this_thread::interruption_point();
-            auto R = core.GET(origURL);
+            auto R = core.GET(URL);
             boost::this_thread::interruption_point();
             ofstream ofs(newFilePath.string(), ios::binary);
             auto vec = R.extract_vector().get();
@@ -559,7 +613,7 @@ void DownloadUtils::downloadFromInfo(DownloadUtils::Info Inf, bool runFilter) {
             boost::this_thread::interruption_point();
           } catch (const std::exception &exp) {
             BOOST_LOG_TRIVIAL(error)
-                << "Download from " << origURL
+                << "Download from " << URL
                 << " failed with exception:" << exp.what() << endl;
           }
         });
@@ -568,7 +622,7 @@ void DownloadUtils::downloadFromInfo(DownloadUtils::Info Inf, bool runFilter) {
         web::json::value rpcparams;
         vector<web::json::value> params; // Inner Param
         vector<web::json::value> URLs;
-        URLs.push_back(web::json::value(origURL));
+        URLs.push_back(web::json::value(URL));
         if (secret != "") {
           params.push_back(web::json::value("token:" + secret));
         }
@@ -580,16 +634,15 @@ void DownloadUtils::downloadFromInfo(DownloadUtils::Info Inf, bool runFilter) {
         options["allow-overwrite"] = web::json::value("false");
         // options["user-agent"] = "bcy 4.3.2 rv:4.3.2.6146 (iPad; iPhone
         // OS 9.3.3; en_US) Cronet";
-        string gid = md5(origURL).substr(0, 16);
+        string gid = md5(URL).substr(0, 16);
         options["gid"] = web::json::value(gid);
         params.push_back(options);
-        if (item.has_field("FileName")) {
           /*
            Video URLs have a (very short!) valid time window
            so we insert those to the start of download queue
           */
-          params.push_back(web::json::value(1));
-        }
+        //params.push_back(web::json::value(1));
+
         rpcparams["params"] = web::json::value::array(params);
         rpcparams["methodName"] = web::json::value("aria2.addUri");
         a2Methods.push_back(rpcparams);
@@ -629,6 +682,9 @@ void DownloadUtils::downloadFromInfo(DownloadUtils::Info Inf, bool runFilter) {
       BOOST_LOG_TRIVIAL(error)
           << "Posting to Aria2 Error:" << exp.what() << endl;
     }
+  } else {
+    BOOST_LOG_TRIVIAL(debug)
+        << "A2 Params for: " << item_id << " is empty" << endl;
   }
 }
 void DownloadUtils::verifyUID(string UID, bool reverse) {
@@ -661,51 +717,52 @@ void DownloadUtils::unlikeCached() {
   BOOST_LOG_TRIVIAL(info) << "Joining Unlike Threads\n";
   t.join();
 }
-    void DownloadUtils::verify(std::string condition, std::vector<std::string> args,
-                               bool reverse ){
-        
-        BOOST_LOG_TRIVIAL(info) << "Verifying..." << endl;
-        vector<string> IDs;
-        BOOST_LOG_TRIVIAL(info) << "Collecting Cached Infos" << endl;
-        {
-            std::lock_guard<mutex> guard(dbLock);
-            Database DB(DBPath, SQLite::OPEN_READONLY);
-            Statement Q(DB, "SELECT item_id FROM WorkInfo " + condition);
-            for (decltype(args.size()) i = 1; i <= args.size(); i++) {
-                Q.bind(i, args[i - 1]);
-            }
-            while (Q.executeStep()) {
-                IDs.push_back(Q.getColumn(0).getString());
-            }
+void DownloadUtils::verify(std::string condition, std::vector<std::string> args,
+                           bool reverse) {
+
+  BOOST_LOG_TRIVIAL(info) << "Verifying..." << endl;
+  vector<string> IDs;
+  BOOST_LOG_TRIVIAL(info) << "Collecting Cached Infos" << endl;
+  {
+    std::lock_guard<mutex> guard(dbLock);
+    Database DB(DBPath, SQLite::OPEN_READONLY);
+    Statement Q(DB, "SELECT item_id FROM ItemInfo " + condition);
+    for (decltype(args.size()) i = 1; i <= args.size(); i++) {
+      Q.bind(i, args[i - 1]);
+    }
+    while (Q.executeStep()) {
+      IDs.push_back(Q.getColumn(0).getString());
+    }
+  }
+  BOOST_LOG_TRIVIAL(info) << "Found " << IDs.size() << " items" << endl;
+  thread_pool t(16);
+  if (reverse) {
+    vector<string>::iterator i = IDs.end();
+    while (i != IDs.begin()) {
+      --i;
+      string item_id = *i;
+      boost::asio::post(*queryThread, [=] {
+        try {
+          DownloadUtils::Info inf = *(loadInfo(item_id));
+          downloadFromInfo(inf);
+        } catch (const std::exception exp) {
+          BOOST_LOG_TRIVIAL(error) << "Verify Failed: " << exp.what() << endl;
         }
-        BOOST_LOG_TRIVIAL(info) << "Found "<<IDs.size()<<" items" << endl;
-        unsigned long long idx=0;
-        if(reverse){
-            vector<string>::iterator i = IDs.end();
-            while (i != IDs.begin())
-            {
-                --i;
-                string item_id=*i;
-                DownloadUtils::Info inf=*(loadInfo(item_id));
-                downloadFromInfo(inf);
-                idx++;
-                if(idx%500==0){
-                    BOOST_LOG_TRIVIAL(info) << "Verified "<<idx<<" items" << endl;
-                }
-                
-            }
+      });
+    }
+  } else {
+    for (string item_id : IDs) {
+      boost::asio::post(*queryThread, [=] {
+        try {
+          DownloadUtils::Info inf = *(loadInfo(item_id));
+
+          downloadFromInfo(inf);
+        } catch (const std::exception exp) {
+          BOOST_LOG_TRIVIAL(error) << "Verify Failed: " << exp.what() << endl;
         }
-        else{
-            for(string item_id:IDs){
-                DownloadUtils::Info inf=*(loadInfo(item_id));
-                downloadFromInfo(inf);
-                idx++;
-                if(idx%500==0){
-                    BOOST_LOG_TRIVIAL(info) << "Verified "<<idx<<" items" << endl;
-                }
-            }
-        }
-        
+      });
+    }
+  }
 }
 void DownloadUtils::cleanUID(string UID) {
   BOOST_LOG_TRIVIAL(debug) << "Cleaning up UID:" << UID << endl;
@@ -908,32 +965,33 @@ void DownloadUtils::downloadItemID(string item_id) {
       return;
     }
     boost::this_thread::interruption_point();
-      optional<DownloadUtils::Info> detail;
+    optional<DownloadUtils::Info> detail;
     if (useCachedInfo) {
-      detail=loadInfo(item_id);
+      detail = loadInfo(item_id);
     }
-    if (detail.has_value()==false) {
+    if (detail.has_value() == false) {
       boost::this_thread::interruption_point();
-      detail.emplace(canonicalizeRawServerDetail(core.item_detail(item_id)["detail"]));
+      detail.emplace(
+          canonicalizeRawServerDetail(core.item_detail(item_id)["data"]));
       boost::this_thread::interruption_point();
-      if (detail.has_value()==false) {
+      if (detail.has_value() == false) {
         BOOST_LOG_TRIVIAL(error) << "Querying detail for item_id:" << item_id
                                  << " results in null" << endl;
       }
       try {
-        downloadFromInfo(*detail,enableFilter);
+        downloadFromInfo(*detail, enableFilter);
       } catch (boost::thread_interrupted) {
         BOOST_LOG_TRIVIAL(debug)
             << "Cancelling Thread:" << boost::this_thread::get_id() << endl;
         return;
       } catch (const exception &exc) {
         BOOST_LOG_TRIVIAL(error)
-          << "Downloading from Info:" << std::get<1>(*detail)
+            << "Downloading from Info:" << std::get<1>(*detail)
             << " Raised Exception:" << exc.what() << endl;
       }
     } else {
       try {
-        downloadFromInfo(*detail,enableFilter);
+        downloadFromInfo(*detail, enableFilter);
       } catch (boost::thread_interrupted) {
         BOOST_LOG_TRIVIAL(debug)
             << "Cancelling Thread:" << boost::this_thread::get_id() << endl;
