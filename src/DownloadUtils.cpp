@@ -105,14 +105,14 @@ void DownloadUtils::downloadFromAbstractInfo(web::json::value& AbstractInfo,
 #endif
       if (runFilter == false || filter->shouldBlockAbstract(const_cast<web::json::value&>(AbstractInfo))==false
           ) {
+          string item_id =
+              ensure_string(AbstractInfo.at("item_id"));
+
         boost::this_thread::interruption_point();
-              optional<DownloadUtils::Info> detail= loadInfo(
-            ensure_string(AbstractInfo.at("item_detail").at("item_id")));
+              optional<DownloadUtils::Info> detail= loadInfo(item_id);
         boost::this_thread::interruption_point();
         if (detail.has_value()==false) {
           boost::this_thread::interruption_point();
-          string item_id =
-              ensure_string(AbstractInfo.at("item_detail").at("item_id"));
           detail.emplace(canonicalizeRawServerDetail(core.item_detail(item_id)["data"]));
           boost::this_thread::interruption_point();
           try {

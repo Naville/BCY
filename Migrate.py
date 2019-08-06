@@ -53,7 +53,7 @@ if __name__ == '__main__':
         if "cover" in Info.keys():
             xxx=Info["cover"]
             if len(xxx)>0:
-                x.append(xxx)
+                x.append({"path":xxx})
         Multi=x
         #Handle larticle
         content=Info.pop("content","")
