@@ -596,7 +596,6 @@ void DownloadUtils::downloadFromInfo(DownloadUtils::Info Inf, bool runFilter) {
   multi = placeholders;
 
   for (web::json::value item : multi) {
-      cout<<item<<endl;
     boost::this_thread::interruption_point();
     string URL = item["path"].as_string();
     string FileName = item["FileName"].as_string();
