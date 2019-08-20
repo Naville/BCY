@@ -514,6 +514,7 @@ void DownloadUtils::downloadFromInfo(DownloadUtils::Info Inf, bool runFilter) {
 
   // Wait, Ooooops
   vector<web::json::value> placeholders;
+  bool shouldInvokeAPI=false;
   for (web::json::value item : multi) {
     string URL = item["path"].as_string();
     if (URL.find("http") != string::npos &&
@@ -535,35 +536,41 @@ void DownloadUtils::downloadFromInfo(DownloadUtils::Info Inf, bool runFilter) {
 
       placeholders.push_back(newEle);
     }
+    else if(URL.find("bcy.byteimg.com") != string::npos){
+      shouldInvokeAPI=true;
+    }
   }
-  web::json::value covers = core.image_postCover(item_id)["data"]["multi"];
+  if(shouldInvokeAPI){
+    web::json::value covers = core.image_postCover(item_id)["data"]["multi"];
 
-  /*
-    Previously BruteForcing original un-watermarked un-compressed Image URL was
-    as easy as stripping /w650 from the URL. For new works with URL originating
-    from *bcy.byteimg.com,brute-forcing is no longer possible. Until someone
-    figures out the algorithm
-    */
-  regex bdregex("byteimg\\.com\\/img\\/banciyuan\\/([a-zA-Z0-9]*)~tplv");
+    /*
+      Previously BruteForcing original un-watermarked un-compressed Image URL was
+      as easy as stripping /w650 from the URL. For new works with URL originating
+      from *bcy.byteimg.com,brute-forcing is no longer possible. Until someone
+      figures out the algorithm of the sig, which is likely generated server side unless
+      some employee *wink* leaks it out
+      */
+    regex bdregex("byteimg\\.com\\/img\\/banciyuan\\/([a-zA-Z0-9]*)~tplv");
 
-  for (web::json::value item : covers.as_array()) {
-    string URL = item["path"].as_string();
-    web::json::value newEle;
-    newEle["path"] = web::json::value(URL);
-    smatch matches;
-    if (regex_search(URL, matches, bdregex)) {
-      assert(matches.size() == 2 &&
-             "Regex Finding FileName Met Unexpected Result!");
-      string fileName = matches[1].str() + ".jpg";
-      newEle["FileName"] = web::json::value(fileName);
-      BOOST_LOG_TRIVIAL(debug) << "Extracted FileName: " << fileName
-                               << " from coverURL: " << URL << endl;
-      placeholders.push_back(newEle);
-    } else {
-      BOOST_LOG_TRIVIAL(error)
-          << "Regex Extracting ByteImage FileName From URL: " << URL
-          << " Failed" << endl;
-      return;
+    for (web::json::value item : covers.as_array()) {
+      string URL = item["path"].as_string();
+      web::json::value newEle;
+      newEle["path"] = web::json::value(URL);
+      smatch matches;
+      if (regex_search(URL, matches, bdregex)) {
+        assert(matches.size() == 2 &&
+               "Regex Finding FileName Met Unexpected Result!");
+        string fileName = matches[1].str() + ".jpg";
+        newEle["FileName"] = web::json::value(fileName);
+        BOOST_LOG_TRIVIAL(debug) << "Extracted FileName: " << fileName
+                                 << " from coverURL: " << URL << endl;
+        placeholders.push_back(newEle);
+      } else {
+        BOOST_LOG_TRIVIAL(error)
+            << "Regex Extracting ByteImage FileName From URL: " << URL
+            << " Failed" << endl;
+        return;
+      }
     }
   }
 
@@ -571,7 +578,6 @@ void DownloadUtils::downloadFromInfo(DownloadUtils::Info Inf, bool runFilter) {
 
   for (web::json::value item : multi) {
     boost::this_thread::interruption_point();
-    cout<<item<<endl;
     string URL = item["path"].as_string();
     string FileName = item["FileName"].as_string();
     fs::path newFilePath = savePath / fs::path(FileName);
