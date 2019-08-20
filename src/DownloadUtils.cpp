@@ -539,6 +539,9 @@ void DownloadUtils::downloadFromInfo(DownloadUtils::Info Inf, bool runFilter) {
     else if(URL.find("bcy.byteimg.com") != string::npos){
       shouldInvokeAPI=true;
     }
+    else{
+      placeholders.push_back(item);
+    }
   }
   if(shouldInvokeAPI){
     web::json::value covers = core.image_postCover(item_id)["data"]["multi"];
@@ -550,14 +553,14 @@ void DownloadUtils::downloadFromInfo(DownloadUtils::Info Inf, bool runFilter) {
       figures out the algorithm of the sig, which is likely generated server side unless
       some employee *wink* leaks it out
       */
-    regex bdregex("byteimg\\.com\\/img\\/banciyuan\\/([a-zA-Z0-9]*)~tplv");
+    regex byteimgrgx("byteimg\\.com\\/img\\/banciyuan\\/([a-zA-Z0-9]*)~");
 
     for (web::json::value item : covers.as_array()) {
       string URL = item["path"].as_string();
       web::json::value newEle;
       newEle["path"] = web::json::value(URL);
       smatch matches;
-      if (regex_search(URL, matches, bdregex)) {
+      if (regex_search(URL, matches, byteimgrgx)) {
         assert(matches.size() == 2 &&
                "Regex Finding FileName Met Unexpected Result!");
         string fileName = matches[1].str() + ".jpg";
@@ -565,7 +568,14 @@ void DownloadUtils::downloadFromInfo(DownloadUtils::Info Inf, bool runFilter) {
         BOOST_LOG_TRIVIAL(debug) << "Extracted FileName: " << fileName
                                  << " from coverURL: " << URL << endl;
         placeholders.push_back(newEle);
-      } else {
+      }
+      else if(URL.find("img-bcy-qn.pstatp.com")!=string::npos){
+          // Originated from pstatp CDNs which our first step of pre-processing should have already handled.
+          // Ignore it
+          /* Or use pstatp.com\/user.*?\/([a-zA-Z0-9.]*?)\?imageMogr2 as regex to download again. meh*/
+          continue;
+      }
+      else {
         BOOST_LOG_TRIVIAL(error)
             << "Regex Extracting ByteImage FileName From URL: " << URL
             << " Failed" << endl;
