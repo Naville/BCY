@@ -1,8 +1,8 @@
 #include <BCY/Base64.h>
 #include <BCY/Core.hpp>
+#include <BCY/DownloadFilter.hpp>
 #include <BCY/DownloadUtils.hpp>
 #include <BCY/Utils.hpp>
-#include <BCY/DownloadFilter.hpp>
 #include <algorithm>
 #include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
@@ -170,7 +170,7 @@ static void block(string OPType, string arg) {
   if (OPType == "UID") {
     DU->filter->UIDList.push_back(arg);
     DU->cleanUID(arg);
-  }else if (OPType == "TAG") {
+  } else if (OPType == "TAG") {
     DU->filter->TagList.push_back(arg);
   } else if (OPType == "USERNAME") {
     DU->filter->UserNameList.push_back(arg);
@@ -522,8 +522,8 @@ int main(int argc, char **argv) {
         }
         config[K] = web::json::value::array(j);
       }
-      for (string K : {"Verify", "UseCache","DownloadVideo"}) {
-        if (conf.has_field(K)== false) {
+      for (string K : {"Verify", "UseCache", "DownloadVideo"}) {
+        if (conf.has_field(K) == false) {
           if (vm.count(K)) {
             config[K] = web::json::value::boolean(true);
           } else {
