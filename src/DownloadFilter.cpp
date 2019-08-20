@@ -76,6 +76,7 @@ bool DownloadFilter::shouldBlockItem(DownloadUtils::Info& Inf){
     }
     for(BCYFilterHandler handle:filterHandlers){
         if(handle(Inf)<0){
+            BOOST_LOG_TRIVIAL(debug)<<item_id<<" blocked by custom filter handler"<<endl;
             return true;
         }
     }
