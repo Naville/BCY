@@ -1,5 +1,5 @@
-#include <BCY/Core.hpp>
 #include <BCY/Base64.h>
+#include <BCY/Core.hpp>
 #include <BCY/Utils.hpp>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/regex.hpp>

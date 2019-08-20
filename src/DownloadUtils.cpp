@@ -284,7 +284,7 @@ DownloadUtils::canonicalizeRawServerDetail(web::json::value Inf) {
     smatch matches;
     while (regex_search(tmpjson, matches, rgx)) {
       web::json::value j;
-      string URL = matches[0];
+      string URL = matches[1];
       j["type"] = web::json::value("image");
       j["path"] = web::json::value(URL);
       URLs.emplace_back(j);
@@ -514,13 +514,24 @@ void DownloadUtils::downloadFromInfo(DownloadUtils::Info Inf, bool runFilter) {
 
   // Wait, Ooooops
   vector<web::json::value> placeholders;
-  bool shouldInvokeAPI=false;
+  bool shouldInvokeAPI = false;
   for (web::json::value item : multi) {
     string URL = item["path"].as_string();
-    if (URL.find("http") != string::npos &&
-        URL.find("bcy.byteimg.com") == string::npos && URL.length() != 0) {
+    if (URL.find("bcy.byteimg.com") == string::npos && URL.length() != 0) {
       // Some old API bug which results in junk URL in response. Good job
       // ByteDance.
+    if(URL.find("http")==string::npos){
+        if(URL[0]=='/'){
+            URL="https://img-bcy-qn.pstatp.com"+URL;
+        }
+        else if(URL[0]=='u' && URL[1]=='s'){
+            URL="https://img-bcy-qn.pstatp.com/"+URL;
+        }
+        else{
+            BOOST_LOG_TRIVIAL(debug)<<"Potential Junk URL Detected:"<<URL<<endl;
+            continue;
+        }
+      }
       web::json::value newEle;
       string tmp = URL.substr(URL.find_last_of("/"), string::npos);
       string origURL = URL;
@@ -535,23 +546,22 @@ void DownloadUtils::downloadFromInfo(DownloadUtils::Info Inf, bool runFilter) {
           << " and FileName: " << FileName << endl;
 
       placeholders.push_back(newEle);
-    }
-    else if(URL.find("bcy.byteimg.com") != string::npos){
-      shouldInvokeAPI=true;
+    } else if (URL.find("bcy.byteimg.com") != string::npos) {
+      shouldInvokeAPI = true;
     }
     else{
-      placeholders.push_back(item);
+        BOOST_LOG_TRIVIAL(debug)<<"Unhandled URL:"<<URL<<endl;
     }
   }
-  if(shouldInvokeAPI){
+  if (shouldInvokeAPI) {
     web::json::value covers = core.image_postCover(item_id)["data"]["multi"];
 
     /*
-      Previously BruteForcing original un-watermarked un-compressed Image URL was
-      as easy as stripping /w650 from the URL. For new works with URL originating
-      from *bcy.byteimg.com,brute-forcing is no longer possible. Until someone
-      figures out the algorithm of the sig, which is likely generated server side unless
-      some employee *wink* leaks it out
+      Previously BruteForcing original un-watermarked un-compressed Image URL
+      was as easy as stripping /w650 from the URL. For new works with URL
+      originating from *bcy.byteimg.com,brute-forcing is no longer possible.
+      Until someone figures out the algorithm of the sig, which is likely
+      generated server side unless some employee *wink* leaks it out
       */
     regex byteimgrgx("byteimg\\.com\\/img\\/banciyuan\\/([a-zA-Z0-9]*)~");
 
@@ -568,14 +578,13 @@ void DownloadUtils::downloadFromInfo(DownloadUtils::Info Inf, bool runFilter) {
         BOOST_LOG_TRIVIAL(debug) << "Extracted FileName: " << fileName
                                  << " from coverURL: " << URL << endl;
         placeholders.push_back(newEle);
-      }
-      else if(URL.find("img-bcy-qn.pstatp.com")!=string::npos){
-          // Originated from pstatp CDNs which our first step of pre-processing should have already handled.
-          // Ignore it
-          /* Or use pstatp.com\/user.*?\/([a-zA-Z0-9.]*?)\?imageMogr2 as regex to download again. meh*/
-          continue;
-      }
-      else {
+      } else if (URL.find("img-bcy-qn.pstatp.com") != string::npos) {
+        // Originated from pstatp CDNs which our first step of pre-processing
+        // should have already handled. Ignore it
+        /* Or use pstatp.com\/user.*?\/([a-zA-Z0-9.]*?)\?imageMogr2 as regex to
+         * download again. meh*/
+        continue;
+      } else {
         BOOST_LOG_TRIVIAL(error)
             << "Regex Extracting ByteImage FileName From URL: " << URL
             << " Failed" << endl;
@@ -587,6 +596,7 @@ void DownloadUtils::downloadFromInfo(DownloadUtils::Info Inf, bool runFilter) {
   multi = placeholders;
 
   for (web::json::value item : multi) {
+      cout<<item<<endl;
     boost::this_thread::interruption_point();
     string URL = item["path"].as_string();
     string FileName = item["FileName"].as_string();
@@ -599,8 +609,10 @@ void DownloadUtils::downloadFromInfo(DownloadUtils::Info Inf, bool runFilter) {
 
     bool shouldDL =
         (!fs::exists(newFilePath, ec2) || fs::exists(newa2confPath, ec2));
-    BOOST_LOG_TRIVIAL(debug)<<"Deciding if should download using item path: "<<newFilePath<<" and Aria2 Config Path: "<<newa2confPath
-    <<" Result: "<<shouldDL<<endl;
+    BOOST_LOG_TRIVIAL(debug)
+        << "Deciding if should download using item path: " << newFilePath
+        << " and Aria2 Config Path: " << newa2confPath
+        << " Result: " << shouldDL << endl;
     if (shouldDL) {
       if (RPCServer == "") {
         if (stop) {
@@ -647,11 +659,11 @@ void DownloadUtils::downloadFromInfo(DownloadUtils::Info Inf, bool runFilter) {
         string gid = md5(URL).substr(0, 16);
         options["gid"] = web::json::value(gid);
         params.push_back(options);
-          /*
-           Video URLs have a (very short!) valid time window
-           so we insert those to the start of download queue
-          */
-        //params.push_back(web::json::value(1));
+        /*
+         Video URLs have a (very short!) valid time window
+         so we insert those to the start of download queue
+        */
+        // params.push_back(web::json::value(1));
 
         rpcparams["params"] = web::json::value::array(params);
         rpcparams["methodName"] = web::json::value("aria2.addUri");
@@ -755,8 +767,9 @@ void DownloadUtils::verify(std::string condition, std::vector<std::string> args,
         try {
           DownloadUtils::Info inf = *(loadInfo(item_id));
           downloadFromInfo(inf);
-        } catch (const std::exception exp) {
-          BOOST_LOG_TRIVIAL(error) << "Verify Failed: " << exp.what() << endl;
+        } catch (const std::exception &exp) {
+          BOOST_LOG_TRIVIAL(error) << "Verify Failed for item_id: " << item_id
+                                   << " message: " << exp.what() << endl;
         }
       });
     }
@@ -767,8 +780,9 @@ void DownloadUtils::verify(std::string condition, std::vector<std::string> args,
           DownloadUtils::Info inf = *(loadInfo(item_id));
 
           downloadFromInfo(inf);
-        } catch (const std::exception exp) {
-          BOOST_LOG_TRIVIAL(error) << "Verify Failed: " << exp.what() << endl;
+        } catch (const std::exception &exp) {
+          BOOST_LOG_TRIVIAL(error) << "Verify Failed for item_id: " << item_id
+                                   << " message: " << exp.what() << endl;
         }
       });
     }
