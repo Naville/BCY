@@ -575,6 +575,7 @@ void DownloadUtils::downloadFromInfo(DownloadUtils::Info Inf, bool runFilter) {
                "Regex Finding FileName Met Unexpected Result!");
         string fileName = matches[1].str() + ".jpg";
         newEle["FileName"] = web::json::value(fileName);
+
         BOOST_LOG_TRIVIAL(debug) << "Extracted FileName: " << fileName
                                  << " from coverURL: " << URL << endl;
         placeholders.push_back(newEle);
@@ -627,10 +628,13 @@ void DownloadUtils::downloadFromInfo(DownloadUtils::Info Inf, bool runFilter) {
             boost::this_thread::interruption_point();
             auto R = core.GET(URL);
             boost::this_thread::interruption_point();
-            ofstream ofs(newFilePath.string(), ios::binary);
-            auto vec = R.extract_vector().get();
-            ofs.write(reinterpret_cast<const char *>(vec.data()), vec.size());
-            ofs.close();
+            vector<unsigned char> vec = R.extract_vector().get();
+            if(vec.size()>0 && vec[0]!='{'){
+                ofstream ofs(newFilePath.string(), ios::binary);
+                ofs.write(reinterpret_cast<const char *>(vec.data()), vec.size());
+                ofs.close();
+            }
+
             boost::this_thread::interruption_point();
           } catch (const std::exception &exp) {
             BOOST_LOG_TRIVIAL(error)
@@ -652,9 +656,13 @@ void DownloadUtils::downloadFromInfo(DownloadUtils::Info Inf, bool runFilter) {
         options["dir"] = web::json::value(savePath.string());
         options["out"] = web::json::value(newFilePath.filename().string());
         options["auto-file-renaming"] = web::json::value("false");
-        options["allow-overwrite"] = web::json::value("false");
-        // options["user-agent"] = "bcy 4.3.2 rv:4.3.2.6146 (iPad; iPhone
-        // OS 9.3.3; en_US) Cronet";
+        if(URL.find("?sig=")==string::npos){
+          options["allow-overwrite"] = web::json::value("false");
+        }
+        else{
+          options["allow-overwrite"] = web::json::value("true");
+        }
+        options["user-agent"] = web::json::value("bcy 4.5.2 rv:4.5.2.6146 (iPad; iPhoneOS 15.3.3; en_US) Cronet");
         string gid = md5(URL).substr(0, 16);
         options["gid"] = web::json::value(gid);
         params.push_back(options);
