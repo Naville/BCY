@@ -222,8 +222,8 @@ web::json::value Core::ParamByCRC32URL(string FullURL) {
   CRC32Candidate = CRC32Candidate + "?r=" + nonce;
   CRC32 hash;
   unsigned int crc32_hash;
-  CryptoPP::CRC32().CalculateDigest((CryptoPP::byte *)&crc32_hash,
-                                    (CryptoPP::byte *)CRC32Candidate.c_str(),
+  CryptoPP::CRC32().CalculateDigest((unsigned char *)&crc32_hash,
+                                    (unsigned char *)CRC32Candidate.c_str(),
                                     CRC32Candidate.size());
   web::json::value j;
   j["r"] = web::json::value(nonce);
