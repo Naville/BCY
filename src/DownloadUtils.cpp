@@ -213,6 +213,9 @@ string DownloadUtils::loadOrSaveGroupName(string name, string GID) {
 }
 DownloadUtils::Info
 DownloadUtils::canonicalizeRawServerDetail(web::json::value Inf) {
+  if(!Inf.is_object()){
+    BOOST_LOG_TRIVIAL(error)<<"Invalid item detal response:"<<Inf.serialize()<<"\n";
+  }
   web::json::value tagsJSON = Inf["post_tags"];
   string item_id = ensure_string(Inf["item_id"]);
   string uid = ensure_string(Inf["uid"]);
@@ -392,8 +395,10 @@ optional<DownloadUtils::Info> DownloadUtils::loadInfo(string item_id) {
                           std::string /*ctime*/, std::string /*Description*/,
                           web::json::array /*multi*/, std::string /*videoID*/>(
         uid, item_id, title, tags, ctime, desc, multi, videoID);
+    BOOST_LOG_TRIVIAL(debug)<<"Loaded Cached Info for:"<<item_id<<"\n";
     return tup;
   } else {
+    BOOST_LOG_TRIVIAL(debug)<<"Cached Info for:"<<item_id<<" not found\n";
     return {};
   }
 }
