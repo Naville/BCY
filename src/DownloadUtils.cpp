@@ -618,6 +618,12 @@ void DownloadUtils::downloadFromInfo(DownloadUtils::Info Inf, bool runFilter) {
   for (web::json::value item : multi) {
     boost::this_thread::interruption_point();
     string URL = item["path"].as_string();
+    if(httpsLowering){
+	auto idx=URL.find("https://");
+    	if(idx!=string::npos){
+		URL.replace(idx,8,"http://");	
+	}
+    }
     string FileName = item["FileName"].as_string();
     fs::path newFilePath = savePath / fs::path(FileName);
     if (!newFilePath.has_extension()) {

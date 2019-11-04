@@ -21,8 +21,9 @@ public:
   Core core;
   DownloadFilter *filter = nullptr;
   bool useCachedInfo = true;
-  bool downloadVideo = true;
+  bool downloadVideo = false;
   bool enableFilter = true;
+  bool httpsLowering = false;
   std::string secret = "";
   std::string RPCServer = "";
   ~DownloadUtils();

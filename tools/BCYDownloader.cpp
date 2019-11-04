@@ -165,6 +165,9 @@ static void uploadWork(vector<chaiscript::Boxed_Value> paths,
   web::json::value req = DU->core.prepareNoteUploadArg(Tags, Infos, content);
   DU->core.item_doNewPost(NewPostType::NotePost, req);
 }
+static void httpslowering(bool stat){
+	DU->httpsLowering=stat;
+}
 static void block(string OPType, string arg) {
   boost::to_upper(OPType);
   if (OPType == "UID") {
@@ -355,6 +358,7 @@ void Interactive() {
   engine.add(chaiscript::fun(&loginWithSKey), "loginWithSKey");
   engine.add(chaiscript::fun(&uploadWork), "uploadWork");
   engine.add(chaiscript::fun(&toggleFilter), "toggleFilter");
+  engine.add(chaiscript::fun(&httpslowering), "httpslowering");
   string command;
   while (1) {
     cout << Prefix << ":$";
