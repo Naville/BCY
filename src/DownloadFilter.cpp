@@ -10,6 +10,7 @@
 #warning Implementing Scripting Support
 using namespace std;
 using namespace SQLite;
+using namespace chaiscript;
 namespace BCY {
 DownloadFilter::DownloadFilter(string Path) {
   DBPath = Path;
@@ -79,6 +80,13 @@ bool DownloadFilter::shouldBlockItem(DownloadUtils::Info &Inf) {
       return true;
     }
   }
+
+  //Scripting
+  /*if(TagScriptList.size()>0){
+    ChaiScript chai;
+    chai.add(chaiscript::var(somevar), "somevar"); // copied in
+  }*/
+
   return false;
 }
 void DownloadFilter::addFilterHandler(BCYFilterHandler handle) {

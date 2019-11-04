@@ -559,7 +559,7 @@ void DownloadUtils::downloadFromInfo(DownloadUtils::Info Inf, bool runFilter) {
     }
   }
   if (shouldInvokeAPI) {
-    web::json::value covers = core.image_postCover(item_id)["data"]["multi"];
+    web::json::value APIRep = core.image_postCover(item_id);
 
     /*
       Previously BruteForcing original un-watermarked un-compressed Image URL
@@ -568,9 +568,23 @@ void DownloadUtils::downloadFromInfo(DownloadUtils::Info Inf, bool runFilter) {
       Until someone figures out the algorithm of the sig, which is likely
       generated server side unless some employee *wink* leaks it out
       */
+    web::json::array URLs=APIRep["data"]["multi"].as_array();
+    if(URLs.size()==0){
+      BOOST_LOG_TRIVIAL(debug)<<"item_id:"<<item_id<<" is possibly locked"<<endl;
+      /*
+        Emulating sig (which is very likely SHA1 with salt,
+        not even HMAC judging from their long history of crappy crypto implementation
+        They used to just prefix/suffix some magic string and hash it)
+        In all fairness there are multiple server-side implementation exploits
+        to bypass this signature restriction. However none of those helps in our
+        use-case since the CDN itself is protected. You can't download the image
+        even with proper sig if the item itself is locked/deleted.
+        The proper implementation here would be fallback to w650 images.
+        TODO: Cache signatured URLs and see how that works with item_id locking
+      */
+    }
     regex byteimgrgx("byteimg\\.com\\/img\\/banciyuan\\/([a-zA-Z0-9]*)~");
-
-    for (web::json::value item : covers.as_array()) {
+    for (web::json::value item : URLs) {
       string URL = item["path"].as_string();
       web::json::value newEle;
       newEle["path"] = web::json::value(URL);
