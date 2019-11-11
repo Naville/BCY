@@ -1,5 +1,6 @@
 # PyBCY
-This is a Python implementation for the cosplay website bcy.net. Tested on Python2. Should work on Python3 as well
+~~This is a Python implementation for the cosplay website bcy.net. Tested on Python2. Should work on Python3 as well~~
+This package has been deprecated. Please use the C++ version on master instead
 
 ## CHANGELOGS
 
