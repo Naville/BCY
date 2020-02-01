@@ -24,9 +24,9 @@ public:
   std::vector<std::string> TagList;
   std::vector<std::string> UserNameList;
   std::vector<std::string> ItemList;
-    // Each should return an integer value. > 0 for allow, =0 for
-    // defer, <0 for deny. JSON has variable name Info
-  std::vector<std::string> TagScriptList;
+  // Each should return an integer value. > 0 for allow, =0 for
+  // defer, <0 for deny.
+  std::vector<std::string> ScriptList;
 private:
   std::vector<BCYFilterHandler> filterHandlers;
   SQLite::Database *DB = nullptr;
