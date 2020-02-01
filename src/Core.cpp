@@ -198,6 +198,12 @@ web::json::value Core::item_sharePost(string item_id) {
   auto R = POST("api/item/sharePost", j, true, true);
   return R.extract_json().get();
 }
+web::json::value Core::circle_status(std::string name){
+  web::json::value j;
+  j["name"] = name;
+  auto R = POST("apiv2/circle/status", j, true, true);
+  return R.extract_json().get();
+}
 web::json::value Core::ParamByCRC32URL(string FullURL) {
   // First a 16digit random number is generated and appended as param r=
   // So for example if baseurl is https://123456.com/item/detail/a , then random
@@ -721,9 +727,9 @@ Core::circle_itemhottags(string name, BCYListIteratorCallback callback) {
   // j["filter"] = web::json::value("all");
   while (true) {
     if (since == 0) {
-      j["since"] = web::json::value(since);
+      j["since"] = web::json::value("");
     } else {
-      j["since"] = web::json::value("rec:" + to_string(since));
+      j["since"] = web::json::value("hot:" + to_string(since));
     }
     since++;
     auto R = POST("apiv2/circle/itemhottags", j, true, true);

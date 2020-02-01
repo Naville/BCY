@@ -1,3 +1,4 @@
+
 #ifndef BCY_CORE_HPP
 #define BCY_CORE_HPP
 #include <cpprest/http_msg.h>
@@ -122,6 +123,10 @@ public:
     web::json::value user_userTagList(); // A list of all available user tags and their ut_id
 
     web::json::value circle_filterlist(std::string circle_id, CircleType circle_type, std::string circle_name);
+    /**
+     * List Hot items of a tag
+     * \return ``{"status":1,"message":"","debug_info":"","data":{"id":"123456","name":"name","relative_wid":-1,"type":"tag","nickname":"","intro":"圈子欢迎你","cover":"https://p9-bcy.byteimg.com","admin_users":[],"follow_status":true,"follow_count":17,"affiches":[],"announces":[],"members":[{"uid":1,"uname":"X","avatar":"https://"},{"uid":1,"uname":"X","avatar":"https://"},{"uid":1,"uname":"X","avatar":"https://"}]}}``
+     */
     std::vector<web::json::value> circle_itemhottags(std::string name,
                                                      BCYListIteratorCallback callback = BCYListIteratorCallback());
     web::json::value group_detail(std::string GID);
@@ -137,6 +142,11 @@ public:
     web::json::value timeline_friendfeed_hasmore(std::string since);
     std::vector<web::json::value> event_listPosts(std::string event_id, Order ord = Order::Hot,
                                                   BCYListIteratorCallback callback = BCYListIteratorCallback());
+  /**
+   * Status of a circle by its name
+   * \return ``{"status":1,"message":"","debug_info":"","data":{"id":"5320","name":"name","relative_wid":-1,"type":"tag","nickname":"","intro":"圈子欢迎你","cover":"https://p9-bcy.byteimg.com","admin_users":[],"follow_status":true,"follow_count":17,"affiches":[],"announces":[],"members":[{"uid":1,"uname":"X","avatar":"https://"},{"uid":1,"uname":"X","avatar":"https://"},{"uid":1,"uname":"X","avatar":"https://"}]}}``
+   */
+    web::json::value circle_status(std::string name);
     std::vector<web::json::value> circle_itemrecenttags(std::string TagName, std::string Filter,
                                                         BCYListIteratorCallback callback = BCYListIteratorCallback());
     std::vector<web::json::value> item_getReply(std::string item_id,
