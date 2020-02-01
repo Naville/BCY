@@ -4,11 +4,6 @@
 #include <cpprest/json.h>
 #include <BCY/DownloadUtils.hpp>
 namespace BCY {
-enum class ScriptEvalMode {
-    Abstract = 0,
-    Detail,
-    Tags,
-};
 typedef std::function<int(DownloadUtils::Info&)> BCYFilterHandler;
 class DownloadFilter {
 public:
