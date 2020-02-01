@@ -20,7 +20,6 @@ using namespace web::http;         // Common HTTP functionality
 using namespace web::http::client; // HTTP client features
 #define BCY_KEY "com_banciyuan_AI"
 static const string APIBase = "https://api.bcy.net/";
-#warning Add Remaining Video CDN URLs and update CDN choosing Algorithm
 static const vector<string> VideoCDNURLs = {
     "https://ib.365yg.com/video/urls/v/1/toutiao/mp4"};
 namespace BCY {
@@ -945,8 +944,6 @@ vector<web::json::value> Core::search(string keyword, SearchType type,
       ret.push_back(ele);
     }
     if (type == SearchType::Tags || type == SearchType::Works) {
-#warning                                                                       \
-    "Remove this check after dumbasses at ByteDance got their shit straight"
       return ret;
     }
   }

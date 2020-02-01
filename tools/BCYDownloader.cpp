@@ -140,7 +140,7 @@ static void verifyTag(string TagName, bool reverse) {
 }
 static void uploadWork(vector<chaiscript::Boxed_Value> paths,
                        vector<chaiscript::Boxed_Value> tags, string content) {
-  vector<struct UploadImageInfo> Infos;
+  vector<struct Core::UploadImageInfo> Infos;
   vector<string> Tags;
   for (chaiscript::Boxed_Value bv : tags) {
     Tags.push_back(chaiscript::boxed_cast<string>(bv));
@@ -155,7 +155,7 @@ static void uploadWork(vector<chaiscript::Boxed_Value> paths,
     file.seekg(0, std::ios_base::beg);
     file.read(&vec[0], fileSize);
     auto j = DU->core.qiniu_upload(DU->core.item_postUploadToken(), vec);
-    struct UploadImageInfo UII;
+    struct Core::UploadImageInfo UII;
     UII.URL = j["key"].as_string();
     UII.Height = j["h"].as_double();
     UII.Width = j["w"].as_double();
@@ -163,7 +163,7 @@ static void uploadWork(vector<chaiscript::Boxed_Value> paths,
     Infos.push_back(UII);
   }
   web::json::value req = DU->core.prepareNoteUploadArg(Tags, Infos, content);
-  DU->core.item_doNewPost(NewPostType::NotePost, req);
+  DU->core.item_doNewPost(Core::NewPostType::NotePost, req);
 }
 static void httpslowering(bool stat){
 	DU->httpsLowering=stat;
