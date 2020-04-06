@@ -196,13 +196,13 @@ web::json::value Core::item_sharePost(string item_id) {
   web::json::value j;
   j["item_id"] = web::json::value(item_id);
   auto R = POST("api/item/sharePost", j, true, true);
-  return R.extract_json().get();
+  return R.extract_json(true).get();
 }
 web::json::value Core::circle_status(std::string name){
   web::json::value j;
   j["name"] = web::json::value(name);
   auto R = POST("apiv2/circle/status", j, true, true);
-  return R.extract_json().get();
+  return R.extract_json(true).get();
 }
 web::json::value Core::ParamByCRC32URL(string FullURL) {
   // First a 16digit random number is generated and appended as param r=
@@ -245,19 +245,19 @@ web::json::value Core::videoInfo(string video_id) {
   string crc = CRC["s"].as_string();
   map<string, string> P{{"r", nonce}, {"s", crc}};
   auto R = GET(BaseURL + "/" + video_id, json::value::null(), P);
-  return R.extract_json().get();
+  return R.extract_json(true).get();
 }
 web::json::value Core::timeline_friendfeed_hasmore(string since) {
   web::json::value j;
   j["since"] = web::json::value(since);
   auto R = POST("apiv2/timeline/friendfeed_hasmore", j, true, true);
-  return R.extract_json().get();
+  return R.extract_json(true).get();
 }
 web::json::value Core::timeline_stream_refresh() {
   web::json::value j;
   j["direction"] = web::json::value("refresh");
   auto R = POST("apiv2/timeline/stream", j, true, true);
-  return R.extract_json().get();
+  return R.extract_json(true).get();
 }
 web::json::value Core::qiniu_upload(web::json::value token, vector<char> &data,
                                     string extension) {
@@ -320,18 +320,18 @@ web::json::value Core::qiniu_upload(web::json::value token, vector<char> &data,
       "Content-Type",
       "multipart/form-data; boundary=werghnvt54wef654rjuhgb56trtg34tweuyrgf");
   req.set_body(body);
-  return client.request(req).get().extract_json().get();
+  return client.request(req).get().extract_json(true).get();
 } // namespace BCY
 web::json::value Core::item_postUploadToken() {
   web::json::value j;
   auto R = POST("api/item/postUpLoadToken", j, true, true);
-  return R.extract_json().get();
+  return R.extract_json(true).get();
 }
 web::json::value Core::item_postUploadToken(string GID) {
   web::json::value j;
   j["gid"] = web::json::value(GID);
   auto R = POST("api/item/postUpLoadToken", j, true, true);
-  return R.extract_json().get();
+  return R.extract_json(true).get();
 }
 web::json::value Core::timeline_stream_loadmore(string feed_type,
                                                 int first_enter,
@@ -342,7 +342,7 @@ web::json::value Core::timeline_stream_loadmore(string feed_type,
   j["first_enter"] = web::json::value(first_enter);
   j["refresh_num"] = web::json::value(refresh_num);
   auto R = POST("apiv2/timeline/stream", j, true, true);
-  return R.extract_json().get();
+  return R.extract_json(true).get();
 }
 web::json::value Core::EncryptParam(web::json::value Params) {
   string serialized = Params.serialize();
@@ -366,7 +366,7 @@ string Core::bda_hexMixedString(string input) {
 }
 web::json::value Core::space_me() {
   web::json::value j;
-  auto R = POST("api/space/me", j, true, true).extract_json().get();
+  auto R = POST("api/space/me", j, true, true).extract_json(true).get();
   return R;
 }
 web::json::value Core::loginWithEmailAndPassword(string email,
@@ -375,7 +375,7 @@ web::json::value Core::loginWithEmailAndPassword(string email,
   j["email"] = web::json::value(email);
   j["password"] = web::json::value(password);
   web::json::value LoginResponse =
-      POST("passport/email/login/", j, false, false).extract_json().get();
+      POST("passport/email/login/", j, false, false).extract_json(true).get();
   if (LoginResponse["message"].as_string() == "error") {
     string msg = LoginResponse["data"]["description"].as_string();
 
@@ -387,7 +387,7 @@ web::json::value Core::loginWithEmailAndPassword(string email,
 
   Headers["Cookie"] = R.headers()["Set-Cookie"];
 
-  LoginResponse = R.extract_json().get();
+  LoginResponse = R.extract_json(true).get();
   UID = LoginResponse["data"]["uid"].as_string();
   return LoginResponse;
 }
@@ -395,14 +395,14 @@ web::json::value Core::user_detail(string UID) {
   web::json::value j;
   j["uid"] = web::json::value(UID);
   auto R = POST("api/user/detail", j, true, true);
-  return R.extract_json().get();
+  return R.extract_json(true).get();
 }
 web::json::value Core::image_postCover(string item_id) {
   web::json::value j;
   j["id"] = web::json::value(item_id);
   j["type"] = web::json::value("note");
   auto R = POST("api/image/postCover/", j, true, true);
-  return R.extract_json().get();
+  return R.extract_json(true).get();
 }
 bool Core::user_follow(string uid, bool isFollow) {
   web::json::value j;
@@ -413,20 +413,20 @@ bool Core::user_follow(string uid, bool isFollow) {
     j["type"] = web::json::value("unfollow");
   }
   web::json::value R =
-      POST("api/user/follow", j, true, true).extract_json().get();
+      POST("api/user/follow", j, true, true).extract_json(true).get();
   return R["status"].as_integer() == 1;
 }
 web::json::value Core::item_detail(string item_id, bool autoFollow) {
   web::json::value j;
   j["item_id"] = web::json::value(item_id);
   auto R = POST("api/item/detail/", j, true, true);
-  web::json::value r = R.extract_json().get();
+  web::json::value r = R.extract_json(true).get();
   if (r["status"] == 4010 && autoFollow) {
     // Need to Follow
     string UID = r["data"]["profile"]["uid"].as_string();
     user_follow(UID, true);
     R = POST("api/item/detail/", j, true, true);
-    r = R.extract_json().get();
+    r = R.extract_json(true).get();
     user_follow(UID, false);
   }
   return r;
@@ -435,20 +435,20 @@ bool Core::item_doPostLike(string item_id) {
   web::json::value j;
   j["item_id"] = web::json::value(item_id);
   auto R = POST("api/item/doPostLike", j, true, true);
-  web::json::value r = R.extract_json().get();
+  web::json::value r = R.extract_json(true).get();
   return r["status"] == 1;
 }
 bool Core::item_cancelPostLike(string item_id) {
   web::json::value j;
   j["item_id"] = web::json::value(item_id);
   auto R = POST("api/item/cancelPostLike", j, true, true);
-  web::json::value r = R.extract_json().get();
+  web::json::value r = R.extract_json(true).get();
   return r["status"] == 1;
 }
 web::json::value Core::item_postUpLoadParam() {
   web::json::value j;
   auto R = POST("api/item/postUpLoadParam", j, true, true);
-  web::json::value r = R.extract_json().get();
+  web::json::value r = R.extract_json(true).get();
   return r;
 }
 web::json::value Core::item_doNewPost(NewPostType type, web::json::value args) {
@@ -473,7 +473,7 @@ web::json::value Core::item_doNewPost(NewPostType type, web::json::value args) {
   web::json::value token = item_postUpLoadParam()["data"]["post_token"];
   args["post_token"] = token;
   auto R = POST(URL, args, true, true);
-  web::json::value r = R.extract_json().get();
+  web::json::value r = R.extract_json(true).get();
   return r;
 }
 web::json::value
@@ -534,34 +534,34 @@ web::json::value Core::deletePost(string item_id) {
   web::json::value j;
   j["item_id"] = web::json::value(item_id);
   auto R = POST("api/item/deletePost", j, true, true);
-  web::json::value r = R.extract_json().get();
+  web::json::value r = R.extract_json(true).get();
   return r;
 }
 web::json::value Core::tag_status(string TagName) {
   web::json::value j;
   j["name"] = web::json::value(TagName);
   auto R = POST("api/tag/status", j, true, true);
-  web::json::value r = R.extract_json().get();
+  web::json::value r = R.extract_json(true).get();
   return r;
 }
 web::json::value Core::core_status(string WorkID) {
   web::json::value j;
   j["wid"] = web::json::value(WorkID);
   auto R = POST("api/core/status", j, true, true);
-  web::json::value r = R.extract_json().get();
+  web::json::value r = R.extract_json(true).get();
   return r;
 }
 web::json::value Core::user_userTagList() {
   web::json::value j;
   auto R = POST("api/user/userTagList", j, true, true);
-  web::json::value r = R.extract_json().get();
+  web::json::value r = R.extract_json(true).get();
   return r;
 }
 web::json::value Core::user_getUserTag(string uid) {
   web::json::value j;
   j["uid"] = web::json::value(uid);
   auto R = POST("api/user/getUserTag", j, true, true);
-  web::json::value r = R.extract_json().get();
+  web::json::value r = R.extract_json(true).get();
   return r;
 }
 web::json::value Core::circle_filterlist(string circle_id,
@@ -584,7 +584,7 @@ web::json::value Core::circle_filterlist(string circle_id,
   }
   j["circle_name"] = web::json::value(circle_name);
   auto R = POST("apiv2/circle/filterlist/", j, true, true);
-  web::json::value r = R.extract_json().get();
+  web::json::value r = R.extract_json(true).get();
   return r;
 }
 vector<web::json::value>
@@ -605,7 +605,7 @@ Core::search_item_bytag(list<string> TagNames, PType ptype,
     j["p"] = p;
     p++;
     auto R = POST("apiv2/search/item/bytag/", j, true, true);
-    web::json::value foo = R.extract_json().get();
+    web::json::value foo = R.extract_json(true).get();
     web::json::value data = foo["data"]["ItemList"];
     if (data.size() == 0) {
       return ret;
@@ -625,7 +625,7 @@ web::json::value Core::group_detail(string GID) {
   web::json::value j;
   j["gid"] = web::json::value(GID);
   auto R = POST("api/group/detail/", j, true, true);
-  web::json::value r = R.extract_json().get();
+  web::json::value r = R.extract_json(true).get();
   return r;
 }
 vector<web::json::value>
@@ -643,7 +643,7 @@ Core::circle_itemhotworks(string circle_id, BCYListIteratorCallback callback) {
     }
     since++;
     auto R = POST("apiv2/circle/itemhotworks/", j, true, true);
-    web::json::value foo = R.extract_json().get();
+    web::json::value foo = R.extract_json(true).get();
     web::json::value data = foo["data"]["data"];
     if (data.size() == 0) {
       return ret;
@@ -671,7 +671,7 @@ Core::circle_itemrecentworks(uint64_t circle_id, string name,
   while (true) {
     j["since"] = web::json::value(since);
     auto R = POST("apiv2/circle/item/recent/works", j, true, true);
-    web::json::value foo = R.extract_json().get();
+    web::json::value foo = R.extract_json(true).get();
     web::json::value data = foo["data"];
     if (data.size() == 0) {
       return ret;
@@ -700,7 +700,7 @@ Core::circle_itemrecenttags(string name, string filter,
   while (true) {
     j["since"] = web::json::value(since);
     auto R = POST("apiv2/circle/item/recent/tags", j, true, true);
-    web::json::value foo = R.extract_json().get();
+    web::json::value foo = R.extract_json(true).get();
     web::json::value data = foo["data"];
     if (data.size() == 0) {
       return ret;
@@ -733,7 +733,7 @@ Core::circle_itemhottags(string name, BCYListIteratorCallback callback) {
     }
     since++;
     auto R = POST("apiv2/circle/itemhottags", j, true, true);
-    web::json::value foo = R.extract_json().get();
+    web::json::value foo = R.extract_json(true).get();
     web::json::value data = foo["data"]["data"];
     if (data.size() == 0) {
       return ret;
@@ -752,7 +752,7 @@ web::json::value Core::event_detail(string event_id) {
   web::json::value j;
   j["event_id"] = web::json::value(event_id);
   auto R = POST("api/event/detail", j, true, true);
-  web::json::value r = R.extract_json().get();
+  web::json::value r = R.extract_json(true).get();
   return r;
 }
 vector<web::json::value> Core::item_getReply(string item_id,
@@ -765,7 +765,7 @@ vector<web::json::value> Core::item_getReply(string item_id,
     j["p"] = p;
     p++;
     auto R = POST("api/item/getReply", j, true, true);
-    web::json::value foo = R.extract_json().get();
+    web::json::value foo = R.extract_json(true).get();
     web::json::value data = foo["data"];
     if (data.size() == 0) {
       return ret;
@@ -791,7 +791,7 @@ Core::circle_itemRecentWorks(string WorkID, BCYListIteratorCallback callback) {
   while (true) {
     j["since"] = web::json::value(since);
     auto R = POST("api/circle/itemRecentWorks", j, true, true);
-    web::json::value foo = R.extract_json().get();
+    web::json::value foo = R.extract_json(true).get();
     web::json::value data = foo["data"];
     if (data.size() == 0) {
       return ret;
@@ -819,7 +819,7 @@ Core::timeline_getUserPostTimeLine(string UID,
   while (true) {
     j["since"] = web::json::value(since);
     auto R = POST("api/timeline/getUserPostTimeLine/", j, true, true);
-    web::json::value foo = R.extract_json().get();
+    web::json::value foo = R.extract_json(true).get();
     web::json::value data = foo["data"];
     if (data.size() == 0) {
       return ret;
@@ -846,7 +846,7 @@ Core::space_getUserLikeTimeLine(string UID, BCYListIteratorCallback callback) {
   while (true) {
     j["since"] = web::json::value(since);
     auto R = POST("api/space/getUserLikeTimeLine/", j, true, true);
-    web::json::value foo = R.extract_json().get();
+    web::json::value foo = R.extract_json(true).get();
     web::json::value data = foo["data"];
     if (data.size() == 0) {
       return ret;
@@ -887,7 +887,7 @@ Core::event_listPosts(string event_id, Order ord,
     j["p"] = p;
     p++;
     auto R = POST("api/event/listPosts", j, true, true);
-    web::json::value foo = R.extract_json().get();
+    web::json::value foo = R.extract_json(true).get();
     web::json::value data = foo["data"];
     if (data.size() == 0) {
       return ret;
@@ -936,7 +936,7 @@ vector<web::json::value> Core::search(string keyword, SearchType type,
     p++;
     auto R = POST(URL, j, true, true);
 
-    web::json::value foo = R.extract_json().get();
+    web::json::value foo = R.extract_json(true).get();
     web::json::value data = foo["data"]["results"];
     if (data.size() == 0) {
       return ret;
@@ -967,7 +967,7 @@ Core::group_listPosts(string GID, BCYListIteratorCallback callback) {
     j["p"] = p;
     p++;
     auto R = POST("api/group/listPosts", j, true, true);
-    web::json::value foo = R.extract_json().get();
+    web::json::value foo = R.extract_json(true).get();
     web::json::value data = foo["data"];
     if (data.size() == 0) {
       return ret;
@@ -998,7 +998,7 @@ Core::timeline_friendfeed(BCYListIteratorCallback callback) {
     j["since"] = web::json::value(since);
     auto R = POST("apiv2/timeline/friendfeed", j, true, true);
     j["direction"] = web::json::value("loadmore");
-    web::json::value foo = R.extract_json().get();
+    web::json::value foo = R.extract_json(true).get();
     web::json::value data = foo["data"];
     if (data.size() == 0 && firstTime == false) {
       return ret;
@@ -1028,7 +1028,7 @@ Core::item_favor_itemlist(BCYListIteratorCallback callback) {
   while (true) {
     j["since"] = web::json::value(since);
     auto R = POST("apiv2/item/favor/itemlist", j, true, true);
-    web::json::value foo = R.extract_json().get();
+    web::json::value foo = R.extract_json(true).get();
     web::json::value data = foo["data"];
     if (data.size() == 0) {
       return ret;

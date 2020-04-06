@@ -57,13 +57,14 @@ bool DownloadFilter::shouldBlockItem(DownloadUtils::Info &Inf) {
   string title = std::get<2>(Inf);
   vector<string> tags = std::get<3>(Inf);
   struct std::tm tm;
+  BOOST_LOG_TRIVIAL(debug)<<"BUilding time\n";
   std::istringstream ss(std::get<4>(Inf));
   ss >> std::get_time(&tm, "%H:%M:%S"); // or just %T in this case
   std::time_t ctime = mktime(&tm);
   string desc=std::get<5>(Inf);
   vector<string> multi;
   for (web::json::value x : std::get<6>(Inf)) {
-    multi.push_back(x.as_string());
+    multi.push_back(x.serialize());
   }
   if (find(UIDList.begin(), UIDList.end(), uid) != UIDList.end()) {
     BOOST_LOG_TRIVIAL(debug) << item_id << " blocked by uid rules" << endl;
@@ -86,7 +87,6 @@ bool DownloadFilter::shouldBlockItem(DownloadUtils::Info &Inf) {
       return true;
     }
   }
-
   //Scripting
   if(ScriptList.size()>0){
     ChaiScript chai;
