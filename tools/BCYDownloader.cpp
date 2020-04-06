@@ -39,7 +39,9 @@ static string Prefix =
 typedef std::function<void(vector<string>)> commHandle;
 static map<string, commHandle> handlers;
 static map<string, string> handlerMsgs;
+enum class mode { Interactive, JSON, Blocker };
 void JSONMode();
+void blockerMode(vector<string>);
 void cleanup(int sig) {
   if (DU != nullptr) {
     delete DU;
@@ -165,19 +167,21 @@ static void uploadWork(vector<chaiscript::Boxed_Value> paths,
   web::json::value req = DU->core.prepareNoteUploadArg(Tags, Infos, content);
   DU->core.item_doNewPost(NewPostType::NotePost, req);
 }
-static void httpslowering(bool stat){
-	DU->httpsLowering=stat;
-}
+static void httpslowering(bool stat) { DU->httpsLowering = stat; }
 static void block(string OPType, string arg) {
   boost::to_upper(OPType);
   if (OPType == "UID") {
+    BOOST_LOG_TRIVIAL(debug) << "Blocking UID:" << arg << endl;
     DU->filter->UIDList.push_back(arg);
     DU->cleanUID(arg);
   } else if (OPType == "TAG") {
+    BOOST_LOG_TRIVIAL(debug) << "Blocking Tag:" << arg << endl;
     DU->filter->TagList.push_back(arg);
   } else if (OPType == "USERNAME") {
+    BOOST_LOG_TRIVIAL(debug) << "Blocking UserName:" << arg << endl;
     DU->filter->UserNameList.push_back(arg);
   } else if (OPType == "ITEM") {
+    BOOST_LOG_TRIVIAL(debug) << "Blocking item_id:" << arg << endl;
     DU->filter->ItemList.push_back(arg);
     DU->cleanItem(arg);
   } else {
@@ -399,11 +403,34 @@ std::istream &operator>>(std::istream &in,
   }
   return in;
 }
-static bool containsTag(web::json::value inf, string key) {
-  if (inf.has_field(key)) {
-    return true;
+std::istream &operator>>(std::istream &in, mode &m) {
+  std::string token;
+  in >> token;
+  transform(token.begin(), token.end(), token.begin(), ::tolower);
+  if (token == "i" || token == "interactive") {
+    m = mode::Interactive;
+  } else if (token == "json") {
+    m = mode::JSON;
+  } else if (token == "block") {
+    m = mode::Blocker;
+  } else {
+    in.setstate(std::ios_base::failbit);
   }
-  return false;
+  return in;
+}
+
+std::ostream& operator<<(std::ostream &out, const mode &m)
+{
+    if(m==mode::Interactive){
+      out<<"Interactive";
+    }
+    else if(m==mode::JSON){
+      out<<"JSON";
+    }
+    else if(m==mode::Blocker){
+      out<<"Blocker";
+    }
+    return out;
 }
 int main(int argc, char **argv) {
   logging::add_common_attributes();
@@ -411,8 +438,12 @@ int main(int argc, char **argv) {
   desc.add_options()("help", "Print Usage")(
       "config",
       po::value<string>()->default_value(BCY::expand_user("~/BCY.json")),
-      "Initialize Downloader using JSON at provided path")(
-      "i", "Interactive Console")(
+      "Initialize Downloader using JSON at provided path")
+      (
+      "mode",
+      po::value<mode>()->default_value(
+          mode::Interactive),"Execution Mode")
+      (
       "log-level",
       po::value<logging::trivial::severity_level>()->default_value(
           logging::trivial::info),
@@ -445,10 +476,13 @@ int main(int argc, char **argv) {
       "password", po::value<string>(), "BCY Account password")(
       "DBPath", po::value<string>()->default_value(""), "BCY Database Path")(
       "UID", po::value<string>()->default_value(""), "BCY UID")(
-      "sessionKey", po::value<string>()->default_value(""), "BCY sessionKey");
+      "sessionKey", po::value<string>()->default_value(""), "BCY sessionKey")
+      ("paths", po::value<vector<string>>(), "paths to blocker");
+      pos.add("paths", -1);
+
   try {
     po::store(
-        po::command_line_parser(argc, argv).options(desc).positional(pos).run(),
+        po::command_line_parser(argc, argv).options(desc).positional(pos).allow_unregistered().run(),
         vm);
     po::notify(vm);
   } catch (std::exception &exp) {
@@ -633,10 +667,34 @@ int main(int argc, char **argv) {
       cout << "Failed to Open File at:" << JSONPath << "!" << endl;
     }
   }
-  if (vm.count("i") || DU == nullptr) {
+  if (vm["mode"].as<mode>()==mode::Interactive || DU == nullptr) {
     Interactive();
-  } else {
+  } else if(vm["mode"].as<mode>()==mode::JSON){
     JSONMode();
   }
+  else{
+    blockerMode(vm["paths"].as<vector<string>>());
+  }
   return 0;
+}
+void blockerMode(vector<string> paths) {
+  for (string arg:paths) {
+    auto savebase = config["SaveBase"].as_string();
+    auto idx = arg.compare(0, savebase.length(), savebase);
+    if (idx == 0) {
+      arg.replace(idx, savebase.length(), "");
+      stringstream ss(arg);
+      vector<string> result;
+      while (ss.good()) {
+        string substr;
+        getline(ss, substr, '/');
+        result.push_back(substr);
+      }
+      if (result.size() == 3) {
+        block("UID", result[2]);
+      } else if (result.size() == 4) {
+        block("ITEM", result[2]);
+      }
+    }
+  }
 }

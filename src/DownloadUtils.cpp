@@ -621,7 +621,7 @@ void DownloadUtils::downloadFromInfo(DownloadUtils::Info Inf, bool runFilter) {
     if(httpsLowering){
 	auto idx=URL.find("https://");
     	if(idx!=string::npos){
-		URL.replace(idx,8,"http://");	
+		URL.replace(idx,8,"http://");
 	}
     }
     string FileName = item["FileName"].as_string();
@@ -725,16 +725,16 @@ void DownloadUtils::downloadFromInfo(DownloadUtils::Info Inf, bool runFilter) {
         BOOST_LOG_TRIVIAL(debug)
             << item_id
             << " Registered in Aria2 with GID:" << rep["result"].serialize()
-            << " Query:" << arg.serialize() << endl;
+            << " Query:" << arg.serialize()<<" item_id:"<<item_id << endl;
       } else {
         BOOST_LOG_TRIVIAL(error)
             << item_id << " Failed to Register with Aria2. Response:"
             << rep["error"]["message"].as_string()
-            << " Query:" << arg.serialize() << endl;
+            << " Query:" << arg.serialize()<<" item_id:"<<item_id << endl;
       }
     } catch (const std::exception &exp) {
       BOOST_LOG_TRIVIAL(error)
-          << "Posting to Aria2 Error:" << exp.what() << endl;
+          << "Posting to Aria2 Error:" << exp.what()<<" item_id:"<<item_id << endl;
     }
   } else {
     BOOST_LOG_TRIVIAL(debug)
