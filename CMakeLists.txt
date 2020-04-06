@@ -7,10 +7,12 @@ set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O2 -D NDEBUG -Wall")
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_DEBUG} -Wall -g -O2 -D DEBUG -Wall")
 set(CMAKE_CXX_FLAGS_MINSIZEREL "${CMAKE_CXX_FLAGS_RELEASE} -O3 -D NDEBUG -Wall")
 option(SQLITECPP_INTERNAL_SQLITE "" OFF)
+option(BCY_BUILD_DOCS "Generate Documentation" OFF)
 add_compile_definitions("SQLITE_OMIT_LOAD_EXTENSION")
-add_compile_definitions("BOOST_LOG_DYN_LINK")
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/SQLiteCpp EXCLUDE_FROM_ALL)
 find_package(PkgConfig REQUIRED)
+SET(Boost_USE_STATIC_LIBS ON)
+SET(Boost_USE_MULTITHREADED ON)
 find_package(Boost 1.67.0 REQUIRED COMPONENTS system filesystem thread regex program_options log)
 find_library(CRYPTOPP_LIB cryptopp)
 find_package(cpprestsdk REQUIRED)
@@ -18,17 +20,17 @@ if(NOT CRYPTOPP_LIB)
   message(FATAL_ERROR "CryptoPP not found")
 endif()
 file(GLOB BCYCORE_SRC
-    "include/Core.hpp"
-    "src/Utils.cpp"
-    "include/Base64.h"
-    "include/Utils.hpp"
-    "src/Core.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/include/BCY/Core.hpp"
+    "${CMAKE_CURRENT_LIST_DIR}/src/Utils.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/include/BCY/Base64.h"
+    "${CMAKE_CURRENT_LIST_DIR}/include/BCY/Utils.hpp"
+    "${CMAKE_CURRENT_LIST_DIR}/src/Core.cpp"
 )
 file(GLOB BCYDOWNLOADUTILS_SRC
-    "include/DownloadUtils.hpp"
-    "include/DownloadFilter.hpp"
-    "src/DownloadUtils.cpp"
-    "src/DownloadFilter.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/include/BCY/DownloadUtils.hpp"
+    "${CMAKE_CURRENT_LIST_DIR}/include/BCY/DownloadFilter.hpp"
+    "${CMAKE_CURRENT_LIST_DIR}/src/DownloadUtils.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/src/DownloadFilter.cpp"
 )
 add_library(BCYCore STATIC ${BCYCORE_SRC})
 add_library(BCYDownloadUtils STATIC ${BCYDOWNLOADUTILS_SRC})
@@ -45,8 +47,9 @@ target_link_libraries(BCYDownloadUtils BCYCore SQLiteCpp sqlite3 pthread z)
 
 target_include_directories(BCYDownloader PUBLIC ${CMAKE_CURRENT_LIST_DIR}/SQLiteCpp/include)
 target_link_libraries(BCYDownloader BCYDownloadUtils)
+
 IF(UNIX)
-target_link_libraries(BCYDownloader -ldl)
+  target_link_libraries(BCYDownloader -ldl)
 ENDIF()
 
 install(TARGETS BCYDownloader DESTINATION bin COMPONENT BCYDownloader)
@@ -55,3 +58,14 @@ install(TARGETS BCYCore BCYDownloadUtils
         LIBRARY DESTINATION lib
         PUBLIC_HEADER DESTINATION include/BCY/
 )
+
+IF(BCY_BUILD_DOCS)
+  find_package(Doxygen REQUIRED)
+  SET(BCY_HEADERS_TO_GEN_DOCS
+    "${CMAKE_CURRENT_LIST_DIR}/include/BCY/Core.hpp"
+    "${CMAKE_CURRENT_LIST_DIR}/include/BCY/Utils.hpp"
+    "${CMAKE_CURRENT_LIST_DIR}/include/BCY/DownloadUtils.hpp"
+    "${CMAKE_CURRENT_LIST_DIR}/include/BCY/DownloadFilter.hpp"
+  )
+  doxygen_add_docs(BCYDOCS ${BCY_HEADERS_TO_GEN_DOCS} WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+ENDIF()

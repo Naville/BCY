@@ -20,7 +20,6 @@ using namespace web::http;         // Common HTTP functionality
 using namespace web::http::client; // HTTP client features
 #define BCY_KEY "com_banciyuan_AI"
 static const string APIBase = "https://api.bcy.net/";
-#warning Add Remaining Video CDN URLs and update CDN choosing Algorithm
 static const vector<string> VideoCDNURLs = {
     "https://ib.365yg.com/video/urls/v/1/toutiao/mp4"};
 namespace BCY {
@@ -197,6 +196,12 @@ web::json::value Core::item_sharePost(string item_id) {
   web::json::value j;
   j["item_id"] = web::json::value(item_id);
   auto R = POST("api/item/sharePost", j, true, true);
+  return R.extract_json().get();
+}
+web::json::value Core::circle_status(std::string name){
+  web::json::value j;
+  j["name"] = name;
+  auto R = POST("apiv2/circle/status", j, true, true);
   return R.extract_json().get();
 }
 web::json::value Core::ParamByCRC32URL(string FullURL) {
@@ -722,9 +727,9 @@ Core::circle_itemhottags(string name, BCYListIteratorCallback callback) {
   // j["filter"] = web::json::value("all");
   while (true) {
     if (since == 0) {
-      j["since"] = web::json::value(since);
+      j["since"] = web::json::value("");
     } else {
-      j["since"] = web::json::value("rec:" + to_string(since));
+      j["since"] = web::json::value("hot:" + to_string(since));
     }
     since++;
     auto R = POST("apiv2/circle/itemhottags", j, true, true);
@@ -945,8 +950,6 @@ vector<web::json::value> Core::search(string keyword, SearchType type,
       ret.push_back(ele);
     }
     if (type == SearchType::Tags || type == SearchType::Works) {
-#warning                                                                       \
-    "Remove this check after dumbasses at ByteDance got their shit straight"
       return ret;
     }
   }

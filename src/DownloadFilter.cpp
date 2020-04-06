@@ -26,9 +26,9 @@ DownloadFilter::~DownloadFilter() {
   web::json::value j;
   vector<web::json::value> tmp;
   const std::array<string, 7> names = {"UID", "Tag", "UserName", "Items",
-                                       "TagScriptList"};
+                                       "ScriptList"};
   const std::array<vector<string>, 7> elements = {
-      UIDList, TagList, UserNameList, ItemList, TagScriptList};
+      UIDList, TagList, UserNameList, ItemList, ScriptList};
   static_assert(names.size() == elements.size(), "Array Size Mismatch");
   for (decltype(names.size()) i = 0; i < names.size(); i++) {
     vector<string> element = elements[i];
@@ -54,10 +54,16 @@ DownloadFilter::~DownloadFilter() {
 bool DownloadFilter::shouldBlockItem(DownloadUtils::Info &Inf) {
   string uid = std::get<0>(Inf);
   string item_id = std::get<1>(Inf);
-  std::vector<std::string> tags = std::get<3>(Inf);
-  vector<web::json::value> multi;
+  string title = std::get<2>(Inf);
+  vector<string> tags = std::get<3>(Inf);
+  struct std::tm tm;
+  std::istringstream ss(std::get<4>(Inf));
+  ss >> std::get_time(&tm, "%H:%M:%S"); // or just %T in this case
+  std::time_t ctime = mktime(&tm);
+  string desc=std::get<5>(Inf);
+  vector<string> multi;
   for (web::json::value x : std::get<6>(Inf)) {
-    multi.push_back(x);
+    multi.push_back(x.as_string());
   }
   if (find(UIDList.begin(), UIDList.end(), uid) != UIDList.end()) {
     BOOST_LOG_TRIVIAL(debug) << item_id << " blocked by uid rules" << endl;
@@ -82,10 +88,28 @@ bool DownloadFilter::shouldBlockItem(DownloadUtils::Info &Inf) {
   }
 
   //Scripting
-  /*if(TagScriptList.size()>0){
+  if(ScriptList.size()>0){
     ChaiScript chai;
-    chai.add(chaiscript::var(somevar), "somevar"); // copied in
-  }*/
+    chai.add(chaiscript::const_var(uid), "uid");
+    chai.add(chaiscript::const_var(item_id), "item_id");
+    chai.add(chaiscript::const_var(title), "title");
+    chai.add(chaiscript::const_var(tags), "tags");
+    chai.add(chaiscript::const_var(ctime),"ctime");
+    chai.add(chaiscript::const_var(desc),"desc");
+    chai.add(chaiscript::const_var(multi),"multi");
+    for(std::string script:ScriptList){
+      int res=chai.eval<int>(script);
+      if(res>0){
+        return false;
+      }
+      else if(res<0){
+        return true;
+      }
+      else{
+        continue;
+      }
+    }
+  }
 
   return false;
 }
@@ -141,13 +165,13 @@ void DownloadFilter::loadRulesFromJSON(web::json::value rules) {
       UserNameList.push_back(item.as_string());
     }
   }
-  if (rules.has_field("TagScriptList")) {
-    auto foo = rules["TagScriptList"].as_array();
+  if (rules.has_field("ScriptList")) {
+    auto foo = rules["ScriptList"].as_array();
     for (auto item : foo) {
       string SRC = item.as_string();
       string dec;
       Base64::Decode(SRC, &dec);
-      TagScriptList.push_back(dec);
+      ScriptList.push_back(dec);
     }
   }
 }

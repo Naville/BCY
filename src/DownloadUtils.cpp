@@ -411,7 +411,7 @@ void DownloadUtils::downloadEvent(string event_id) {
     det = core.event_detail(event_id)["data"];
     insertEventInfo(det);
   }
-  core.event_listPosts(event_id, Order::Index, downloadCallback);
+  core.event_listPosts(event_id, Core::Order::Index, downloadCallback);
 }
 web::json::value DownloadUtils::loadEventInfo(string event_id) {
   std::lock_guard<mutex> guard(dbLock);
@@ -924,7 +924,7 @@ void DownloadUtils::downloadLiked() {
 void DownloadUtils::downloadSearchKeyword(string KW) {
   BOOST_LOG_TRIVIAL(info) << "Iterating Searched Works For Keyword:" << KW
                           << endl;
-  auto l = core.search(KW, SearchType::Content, downloadCallback);
+  auto l = core.search(KW, Core::SearchType::Content, downloadCallback);
 
   BOOST_LOG_TRIVIAL(info) << "Found " << l.size()
                           << " Searched Works For Keyword:" << KW << endl;
@@ -952,7 +952,7 @@ void DownloadUtils::downloadTag(string TagName) {
     int foo = rep["data"]["tag_id"].as_integer();
     string circle_id = to_string(foo);
     web::json::value FilterList =
-        core.circle_filterlist(circle_id, CircleType::Tag, TagName);
+        core.circle_filterlist(circle_id, Core::CircleType::Tag, TagName);
     if (FilterList.is_null()) {
       BOOST_LOG_TRIVIAL(error)
           << "FilterList For Tag:" << TagName << " is null";
@@ -971,7 +971,7 @@ void DownloadUtils::downloadTag(string TagName) {
         if (id >= 1 && id <= 3) { // First class
           BOOST_LOG_TRIVIAL(info) << "Iterating Works For Tag:" << TagName
                                   << " and Filter:" << name << endl;
-          auto foo = core.search_item_bytag({name}, static_cast<PType>(id),
+          auto foo = core.search_item_bytag({name}, static_cast<Core::PType>(id),
                                             downloadCallback);
           BOOST_LOG_TRIVIAL(info)
               << "Found " << foo.size() << " Works For Tag:" << TagName
@@ -979,7 +979,7 @@ void DownloadUtils::downloadTag(string TagName) {
         } else {
           BOOST_LOG_TRIVIAL(info) << "Iterating Works For Tag:" << TagName
                                   << " and Filter:" << name << endl;
-          auto foo = core.search_item_bytag({TagName, name}, PType::Undef,
+          auto foo = core.search_item_bytag({TagName, name}, Core::PType::Undef,
                                             downloadCallback);
           BOOST_LOG_TRIVIAL(info)
               << "Found " << foo.size() << " Works For Tag:" << TagName
@@ -1086,7 +1086,7 @@ void DownloadUtils::downloadWorkID(string item) {
     }
     string WorkName = rep["data"]["real_name"].as_string();
     web::json::value FilterList =
-        core.circle_filterlist(item, CircleType::Work, WorkName);
+        core.circle_filterlist(item, Core::CircleType::Work, WorkName);
     if (FilterList.is_null()) {
       BOOST_LOG_TRIVIAL(error)
           << "FilterList For WorkID:" << item << " is null";
@@ -1105,7 +1105,7 @@ void DownloadUtils::downloadWorkID(string item) {
         if (id >= 1 && id <= 3) { // First class
           BOOST_LOG_TRIVIAL(info) << "Iterating Works For WorkID:" << item
                                   << " and Filter:" << name << endl;
-          auto foo = core.search_item_bytag({name}, static_cast<PType>(id),
+          auto foo = core.search_item_bytag({name}, static_cast<Core::PType>(id),
                                             downloadCallback);
           BOOST_LOG_TRIVIAL(info)
               << "Found " << foo.size() << " Works For WorkID:" << item
@@ -1113,7 +1113,7 @@ void DownloadUtils::downloadWorkID(string item) {
         } else {
           BOOST_LOG_TRIVIAL(info) << "Iterating Works For WorkID:" << item
                                   << " and Filter:" << name << endl;
-          auto foo = core.search_item_bytag({WorkName, name}, PType::Undef,
+          auto foo = core.search_item_bytag({WorkName, name}, Core::PType::Undef,
                                             downloadCallback);
           BOOST_LOG_TRIVIAL(info)
               << "Found " << foo.size() << " Works For WorkID:" << item

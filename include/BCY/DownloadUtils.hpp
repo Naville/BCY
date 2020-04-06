@@ -12,10 +12,15 @@
 #include <tuple>
 #include <optional>
 namespace BCY {
-    class DownloadFilter;
+class DownloadFilter;
 class DownloadUtils {
 
 public:
+  /**
+   * \typedef Info
+   * Tuple describing detail of a work
+   * @param item An item in the list. Corresponding structure:<uid,item_id,Title,Tags,ctime,Description,image URL list,videoID>
+   */
     typedef std::tuple<std::string/*UID*/,std::string/*item_id*/,std::string/*Title*/,std::vector<std::string>/*Tags*/,std::string/*ctime*/,
     std::string/*Description*/,web::json::array/*multi*/,std::string/*videoID*/> Info;
   Core core;
@@ -32,14 +37,17 @@ public:
   DownloadUtils(std::string PathBase, int queryThreadCount = -1,
                 int downloadThreadCount = -1,
                 std::string DBPath = ""); //-1 to use hardware thread count
-    Info  canonicalizeRawServerDetail(web::json::value);
+  /**
+   * Canonicalize Raw Server Detail JSON and construct Info object
+   * \param detail Raw detail json from the server
+   * \return Canonicalized Info object
+   */
+  Info canonicalizeRawServerDetail(web::json::value detail);
   void downloadFromAbstractInfo(web::json::value& Inf, bool runFilter);
   void downloadFromAbstractInfo(web::json::value& Inf);
   void downloadFromInfo(DownloadUtils::Info Inf,bool runFilter = true);
-  // Will try to extract item_id from info first, if not it loads from the
-  // argument,if still invalid an error is displayed and download cancelled
   std::string loadTitle(std::string title,std::string item_id);
-    void saveInfo(Info);
+  void saveInfo(Info);
   std::optional<Info> loadInfo(std::string item_id);
   std::string loadOrSaveGroupName(std::string name, std::string GID);
   web::json::value loadEventInfo(std::string event_id);
