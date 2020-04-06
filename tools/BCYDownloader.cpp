@@ -167,9 +167,6 @@ static void uploadWork(vector<chaiscript::Boxed_Value> paths,
   web::json::value req = DU->core.prepareNoteUploadArg(Tags, Infos, content);
   DU->core.item_doNewPost(Core::NewPostType::NotePost, req);
 }
-static void httpslowering(bool stat){
-	DU->httpsLowering=stat;
-}
 static void httpslowering(bool stat) { DU->httpsLowering = stat; }
 static void block(string OPType, string arg) {
   boost::to_upper(OPType);

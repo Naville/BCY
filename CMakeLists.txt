@@ -49,7 +49,7 @@ target_include_directories(BCYDownloader PUBLIC ${CMAKE_CURRENT_LIST_DIR}/SQLite
 target_link_libraries(BCYDownloader BCYDownloadUtils)
 
 IF(UNIX)
-  target_link_libraries(BCYDownloader -ldl)
+  target_link_libraries(BCYDownloader -ldl -lcrypto)
 ENDIF()
 
 install(TARGETS BCYDownloader DESTINATION bin COMPONENT BCYDownloader)

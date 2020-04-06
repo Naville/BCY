@@ -200,7 +200,7 @@ web::json::value Core::item_sharePost(string item_id) {
 }
 web::json::value Core::circle_status(std::string name){
   web::json::value j;
-  j["name"] = name;
+  j["name"] = web::json::value(name);
   auto R = POST("apiv2/circle/status", j, true, true);
   return R.extract_json().get();
 }
