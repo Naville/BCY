@@ -419,18 +419,15 @@ std::istream &operator>>(std::istream &in, mode &m) {
   return in;
 }
 
-std::ostream& operator<<(std::ostream &out, const mode &m)
-{
-    if(m==mode::Interactive){
-      out<<"Interactive";
-    }
-    else if(m==mode::JSON){
-      out<<"JSON";
-    }
-    else if(m==mode::Blocker){
-      out<<"Blocker";
-    }
-    return out;
+std::ostream &operator<<(std::ostream &out, const mode &m) {
+  if (m == mode::Interactive) {
+    out << "Interactive";
+  } else if (m == mode::JSON) {
+    out << "JSON";
+  } else if (m == mode::Blocker) {
+    out << "Blocker";
+  }
+  return out;
 }
 int main(int argc, char **argv) {
   logging::add_common_attributes();
@@ -438,12 +435,9 @@ int main(int argc, char **argv) {
   desc.add_options()("help", "Print Usage")(
       "config",
       po::value<string>()->default_value(BCY::expand_user("~/BCY.json")),
-      "Initialize Downloader using JSON at provided path")
-      (
-      "mode",
-      po::value<mode>()->default_value(
-          mode::Interactive),"Execution Mode")
-      (
+      "Initialize Downloader using JSON at provided path")(
+      "mode", po::value<mode>()->default_value(mode::Interactive),
+      "Execution Mode")(
       "log-level",
       po::value<logging::trivial::severity_level>()->default_value(
           logging::trivial::info),
@@ -476,14 +470,17 @@ int main(int argc, char **argv) {
       "password", po::value<string>(), "BCY Account password")(
       "DBPath", po::value<string>()->default_value(""), "BCY Database Path")(
       "UID", po::value<string>()->default_value(""), "BCY UID")(
-      "sessionKey", po::value<string>()->default_value(""), "BCY sessionKey")
-      ("paths", po::value<vector<string>>(), "paths to blocker");
-      pos.add("paths", -1);
+      "sessionKey", po::value<string>()->default_value(""), "BCY sessionKey")(
+      "paths", po::value<vector<string>>(), "paths to blocker");
+  pos.add("paths", -1);
 
   try {
-    po::store(
-        po::command_line_parser(argc, argv).options(desc).positional(pos).allow_unregistered().run(),
-        vm);
+    po::store(po::command_line_parser(argc, argv)
+                  .options(desc)
+                  .positional(pos)
+                  .allow_unregistered()
+                  .run(),
+              vm);
     po::notify(vm);
   } catch (std::exception &exp) {
     cout << "Parsing Option Error:" << exp.what() << endl;
@@ -667,18 +664,17 @@ int main(int argc, char **argv) {
       cout << "Failed to Open File at:" << JSONPath << "!" << endl;
     }
   }
-  if (vm["mode"].as<mode>()==mode::Interactive || DU == nullptr) {
+  if (vm["mode"].as<mode>() == mode::Interactive || DU == nullptr) {
     Interactive();
-  } else if(vm["mode"].as<mode>()==mode::JSON){
+  } else if (vm["mode"].as<mode>() == mode::JSON) {
     JSONMode();
-  }
-  else{
+  } else {
     blockerMode(vm["paths"].as<vector<string>>());
   }
   return 0;
 }
 void blockerMode(vector<string> paths) {
-  for (string arg:paths) {
+  for (string arg : paths) {
     auto savebase = config["SaveBase"].as_string();
     auto idx = arg.compare(0, savebase.length(), savebase);
     if (idx == 0) {

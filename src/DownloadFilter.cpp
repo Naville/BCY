@@ -57,13 +57,14 @@ bool DownloadFilter::shouldBlockItem(DownloadUtils::Info &Inf) {
   vector<string> tags = std::get<3>(Inf);
   struct std::tm tm;
   std::istringstream ss(std::get<4>(Inf));
+  vector<web::json::value> multis;
+  for(web::json::value v:std::get<6>(Inf)){
+    multis.push_back(v);
+  }
+  web::json::value multi=web::json::value::array(multis);
   ss >> std::get_time(&tm, "%H:%M:%S"); // or just %T in this case
   std::time_t ctime = mktime(&tm);
-  string desc=std::get<5>(Inf);
-  vector<string> multi;
-  for (web::json::value x : std::get<6>(Inf)) {
-    multi.push_back(x.serialize());
-  }
+  string desc = std::get<5>(Inf);
   if (find(UIDList.begin(), UIDList.end(), uid) != UIDList.end()) {
     BOOST_LOG_TRIVIAL(debug) << item_id << " blocked by uid rules" << endl;
     return true;
@@ -85,25 +86,25 @@ bool DownloadFilter::shouldBlockItem(DownloadUtils::Info &Inf) {
       return true;
     }
   }
-  //Scripting
-  if(ScriptList.size()>0){
+  // Scripting
+  if (ScriptList.size() > 0) {
     ChaiScript chai;
     chai.add(chaiscript::const_var(uid), "uid");
     chai.add(chaiscript::const_var(item_id), "item_id");
     chai.add(chaiscript::const_var(title), "title");
     chai.add(chaiscript::const_var(tags), "tags");
-    chai.add(chaiscript::const_var(ctime),"ctime");
-    chai.add(chaiscript::const_var(desc),"desc");
-    chai.add(chaiscript::const_var(multi),"multi");
-    for(std::string script:ScriptList){
-      int res=chai.eval<int>(script);
-      if(res>0){
+    chai.add(chaiscript::const_var(ctime), "ctime");
+    chai.add(chaiscript::const_var(desc), "desc");
+    chai.add(chaiscript::const_var(multi.serialize()), "multi");
+    for (std::string script : ScriptList) {
+      int res = chai.eval<int>(script);
+      if (res > 0) {
         return false;
-      }
-      else if(res<0){
+      } else if (res < 0) {
+        BOOST_LOG_TRIVIAL(debug)
+            << item_id << " blocked by script: "<<chai.boxed_cast<string>(chai.get_locals()["ScriptName"])  << endl;
         return true;
-      }
-      else{
+      } else {
         continue;
       }
     }
