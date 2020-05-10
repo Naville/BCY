@@ -7,7 +7,6 @@
 #include <fstream>
 #include <iostream>
 #include <regex>
-#warning Implementing Scripting Support
 using namespace std;
 using namespace SQLite;
 using namespace chaiscript;
@@ -25,9 +24,9 @@ DownloadFilter::DownloadFilter(string Path) {
 DownloadFilter::~DownloadFilter() {
   web::json::value j;
   vector<web::json::value> tmp;
-  const std::array<string, 7> names = {"UID", "Tag", "UserName", "Items",
+  const std::array<string, 5> names = {"UID", "Tag", "UserName", "Items",
                                        "ScriptList"};
-  const std::array<vector<string>, 7> elements = {
+  const std::array<vector<string>, 5> elements = {
       UIDList, TagList, UserNameList, ItemList, ScriptList};
   static_assert(names.size() == elements.size(), "Array Size Mismatch");
   for (decltype(names.size()) i = 0; i < names.size(); i++) {
@@ -57,7 +56,6 @@ bool DownloadFilter::shouldBlockItem(DownloadUtils::Info &Inf) {
   string title = std::get<2>(Inf);
   vector<string> tags = std::get<3>(Inf);
   struct std::tm tm;
-  BOOST_LOG_TRIVIAL(debug)<<"BUilding time\n";
   std::istringstream ss(std::get<4>(Inf));
   ss >> std::get_time(&tm, "%H:%M:%S"); // or just %T in this case
   std::time_t ctime = mktime(&tm);

@@ -48,9 +48,11 @@ target_link_libraries(BCYDownloadUtils BCYCore SQLiteCpp sqlite3 pthread z)
 target_include_directories(BCYDownloader PUBLIC ${CMAKE_CURRENT_LIST_DIR}/SQLiteCpp/include)
 target_link_libraries(BCYDownloader BCYDownloadUtils)
 
-IF(UNIX)
+IF(UNIX AND NOT APPLE)
+  # Ubuntu had some issues with this sort of stuff
   target_link_libraries(BCYDownloader -ldl -lcrypto)
 ENDIF()
+target_link_libraries(BCYDownloader -ldl -L/usr/local/Cellar/openssl@1.1/1.1.1f/lib -lssl -lcrypto)
 
 install(TARGETS BCYDownloader DESTINATION bin COMPONENT BCYDownloader)
 install(TARGETS BCYCore BCYDownloadUtils
