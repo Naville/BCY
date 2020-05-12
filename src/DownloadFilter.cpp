@@ -96,7 +96,9 @@ bool DownloadFilter::shouldBlockItem(DownloadUtils::Info &Inf) {
     chai.add(chaiscript::const_var(ctime), "ctime");
     chai.add(chaiscript::const_var(desc), "desc");
     chai.add(chaiscript::const_var(multi.serialize()), "multi");
+    auto locals=chai.get_locals();
     for (std::string script : ScriptList) {
+      chai.set_locals(locals);//Reset Script State
       int res = chai.eval<int>(script);
       if (res > 0) {
         return false;

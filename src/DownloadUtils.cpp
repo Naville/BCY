@@ -213,8 +213,9 @@ string DownloadUtils::loadOrSaveGroupName(string name, string GID) {
 }
 DownloadUtils::Info
 DownloadUtils::canonicalizeRawServerDetail(web::json::value Inf) {
-  if(!Inf.is_object()){
-    BOOST_LOG_TRIVIAL(error)<<"Invalid item detal response:"<<Inf.serialize()<<"\n";
+  if (!Inf.is_object()) {
+    BOOST_LOG_TRIVIAL(error)
+        << "Invalid item detal response:" << Inf.serialize() << "\n";
   }
   web::json::value tagsJSON = Inf["post_tags"];
   string item_id = ensure_string(Inf["item_id"]);
@@ -395,10 +396,10 @@ optional<DownloadUtils::Info> DownloadUtils::loadInfo(string item_id) {
                           std::string /*ctime*/, std::string /*Description*/,
                           web::json::array /*multi*/, std::string /*videoID*/>(
         uid, item_id, title, tags, ctime, desc, multi, videoID);
-    BOOST_LOG_TRIVIAL(debug)<<"Loaded Cached Info for:"<<item_id<<"\n";
+    BOOST_LOG_TRIVIAL(debug) << "Loaded Cached Info for:" << item_id << "\n";
     return tup;
   } else {
-    BOOST_LOG_TRIVIAL(debug)<<"Cached Info for:"<<item_id<<" not found\n";
+    BOOST_LOG_TRIVIAL(debug) << "Cached Info for:" << item_id << " not found\n";
     return {};
   }
 }
@@ -525,16 +526,15 @@ void DownloadUtils::downloadFromInfo(DownloadUtils::Info Inf, bool runFilter) {
     if (URL.find("bcy.byteimg.com") == string::npos && URL.length() != 0) {
       // Some old API bug which results in junk URL in response. Good job
       // ByteDance.
-    if(URL.find("http")==string::npos){
-        if(URL[0]=='/'){
-            URL="https://img-bcy-qn.pstatp.com"+URL;
-        }
-        else if(URL[0]=='u' && URL[1]=='s'){
-            URL="https://img-bcy-qn.pstatp.com/"+URL;
-        }
-        else{
-            BOOST_LOG_TRIVIAL(debug)<<"Potential Junk URL Detected:"<<URL<<endl;
-            continue;
+      if (URL.find("http") == string::npos) {
+        if (URL[0] == '/') {
+          URL = "https://img-bcy-qn.pstatp.com" + URL;
+        } else if (URL[0] == 'u' && URL[1] == 's') {
+          URL = "https://img-bcy-qn.pstatp.com/" + URL;
+        } else {
+          BOOST_LOG_TRIVIAL(debug)
+              << "Potential Junk URL Detected:" << URL << endl;
+          continue;
         }
       }
       web::json::value newEle;
@@ -553,9 +553,8 @@ void DownloadUtils::downloadFromInfo(DownloadUtils::Info Inf, bool runFilter) {
       placeholders.push_back(newEle);
     } else if (URL.find("bcy.byteimg.com") != string::npos) {
       shouldInvokeAPI = true;
-    }
-    else{
-        BOOST_LOG_TRIVIAL(debug)<<"Unhandled URL:"<<URL<<endl;
+    } else {
+      BOOST_LOG_TRIVIAL(debug) << "Unhandled URL:" << URL << endl;
     }
   }
   if (shouldInvokeAPI) {
@@ -568,18 +567,20 @@ void DownloadUtils::downloadFromInfo(DownloadUtils::Info Inf, bool runFilter) {
       Until someone figures out the algorithm of the sig, which is likely
       generated server side unless some employee *wink* leaks it out
       */
-    web::json::array URLs=APIRep["data"]["multi"].as_array();
-    if(URLs.size()==0){
-      BOOST_LOG_TRIVIAL(debug)<<"item_id:"<<item_id<<" is possibly locked"<<endl;
+    web::json::array URLs = APIRep["data"]["multi"].as_array();
+    if (URLs.size() == 0) {
+      BOOST_LOG_TRIVIAL(debug)
+          << "item_id:" << item_id << " is possibly locked" << endl;
       /*
         Emulating sig (which is very likely SHA1 with salt,
-        not even HMAC judging from their long history of crappy crypto implementation
-        They used to just prefix/suffix some magic string and hash it)
-        In all fairness there are multiple server-side implementation exploits
-        to bypass this signature restriction. However none of those helps in our
-        use-case since the CDN itself is protected. You can't download the image
-        even with proper sig if the item itself is locked/deleted.
-        The proper implementation here would be fallback to w650 images.
+        not even HMAC judging from their long history of crappy crypto
+        implementation They used to just prefix/suffix some magic string and
+        hash it) In all fairness there are multiple server-side implementation
+        exploits to bypass this signature restriction. However none of those
+        helps in our use-case since the CDN itself is protected. You can't
+        download the image even with proper sig if the item itself is
+        locked/deleted. The proper implementation here would be fallback to w650
+        images.
         TODO: Cache signatured URLs and see how that works with item_id locking
       */
     }
@@ -618,11 +619,12 @@ void DownloadUtils::downloadFromInfo(DownloadUtils::Info Inf, bool runFilter) {
   for (web::json::value item : multi) {
     boost::this_thread::interruption_point();
     string URL = item["path"].as_string();
-    if(httpsLowering){
-	auto idx=URL.find("https://");
-    	if(idx!=string::npos){
-		URL.replace(idx,8,"http://");
-	}
+    if(URL.find("bcyimg")!=string::npos){
+      // Old CDN's SSL Certificate is invalid after 2019/12/13
+      auto idx = URL.find("https://");
+      if (idx != string::npos) {
+        URL.replace(idx, 8, "http://");
+      }
     }
     string FileName = item["FileName"].as_string();
     fs::path newFilePath = savePath / fs::path(FileName);
@@ -654,10 +656,10 @@ void DownloadUtils::downloadFromInfo(DownloadUtils::Info Inf, bool runFilter) {
             auto R = core.GET(URL);
             boost::this_thread::interruption_point();
             vector<unsigned char> vec = R.extract_vector().get();
-            if(vec.size()>0 && vec[0]!='{'){
-                ofstream ofs(newFilePath.string(), ios::binary);
-                ofs.write(reinterpret_cast<const char *>(vec.data()), vec.size());
-                ofs.close();
+            if (vec.size() > 0 && vec[0] != '{') {
+              ofstream ofs(newFilePath.string(), ios::binary);
+              ofs.write(reinterpret_cast<const char *>(vec.data()), vec.size());
+              ofs.close();
             }
 
             boost::this_thread::interruption_point();
@@ -681,13 +683,13 @@ void DownloadUtils::downloadFromInfo(DownloadUtils::Info Inf, bool runFilter) {
         options["dir"] = web::json::value(savePath.string());
         options["out"] = web::json::value(newFilePath.filename().string());
         options["auto-file-renaming"] = web::json::value("false");
-        if(URL.find("?sig=")==string::npos){
+        if (URL.find("?sig=") == string::npos) {
           options["allow-overwrite"] = web::json::value("false");
-        }
-        else{
+        } else {
           options["allow-overwrite"] = web::json::value("true");
         }
-        options["user-agent"] = web::json::value("bcy 4.5.2 rv:4.5.2.6146 (iPad; iPhoneOS 15.3.3; en_US) Cronet");
+        options["user-agent"] = web::json::value(
+            "bcy 4.5.2 rv:4.5.2.6146 (iPad; iPhoneOS 15.3.3; en_US) Cronet");
         string gid = md5(URL).substr(0, 16);
         options["gid"] = web::json::value(gid);
         params.push_back(options);
@@ -725,16 +727,16 @@ void DownloadUtils::downloadFromInfo(DownloadUtils::Info Inf, bool runFilter) {
         BOOST_LOG_TRIVIAL(debug)
             << item_id
             << " Registered in Aria2 with GID:" << rep["result"].serialize()
-            << " Query:" << arg.serialize()<<" item_id:"<<item_id << endl;
+            << " Query:" << arg.serialize() << " item_id:" << item_id << endl;
       } else {
         BOOST_LOG_TRIVIAL(error)
             << item_id << " Failed to Register with Aria2. Response:"
             << rep["error"]["message"].as_string()
-            << " Query:" << arg.serialize()<<" item_id:"<<item_id << endl;
+            << " Query:" << arg.serialize() << " item_id:" << item_id << endl;
       }
     } catch (const std::exception &exp) {
-      BOOST_LOG_TRIVIAL(error)
-          << "Posting to Aria2 Error:" << exp.what()<<" item_id:"<<item_id << endl;
+      BOOST_LOG_TRIVIAL(error) << "Posting to Aria2 Error:" << exp.what()
+                               << " item_id:" << item_id << endl;
     }
   } else {
     BOOST_LOG_TRIVIAL(debug)
@@ -971,8 +973,8 @@ void DownloadUtils::downloadTag(string TagName) {
         if (id >= 1 && id <= 3) { // First class
           BOOST_LOG_TRIVIAL(info) << "Iterating Works For Tag:" << TagName
                                   << " and Filter:" << name << endl;
-          auto foo = core.search_item_bytag({name}, static_cast<Core::PType>(id),
-                                            downloadCallback);
+          auto foo = core.search_item_bytag(
+              {name}, static_cast<Core::PType>(id), downloadCallback);
           BOOST_LOG_TRIVIAL(info)
               << "Found " << foo.size() << " Works For Tag:" << TagName
               << " and Filter:" << name << endl;
@@ -1105,16 +1107,16 @@ void DownloadUtils::downloadWorkID(string item) {
         if (id >= 1 && id <= 3) { // First class
           BOOST_LOG_TRIVIAL(info) << "Iterating Works For WorkID:" << item
                                   << " and Filter:" << name << endl;
-          auto foo = core.search_item_bytag({name}, static_cast<Core::PType>(id),
-                                            downloadCallback);
+          auto foo = core.search_item_bytag(
+              {name}, static_cast<Core::PType>(id), downloadCallback);
           BOOST_LOG_TRIVIAL(info)
               << "Found " << foo.size() << " Works For WorkID:" << item
               << " and Filter:" << name << endl;
         } else {
           BOOST_LOG_TRIVIAL(info) << "Iterating Works For WorkID:" << item
                                   << " and Filter:" << name << endl;
-          auto foo = core.search_item_bytag({WorkName, name}, Core::PType::Undef,
-                                            downloadCallback);
+          auto foo = core.search_item_bytag(
+              {WorkName, name}, Core::PType::Undef, downloadCallback);
           BOOST_LOG_TRIVIAL(info)
               << "Found " << foo.size() << " Works For WorkID:" << item
               << " and Filter:" << name << endl;

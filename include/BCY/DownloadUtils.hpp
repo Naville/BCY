@@ -28,7 +28,6 @@ public:
   bool useCachedInfo = true;
   bool downloadVideo = false;
   bool enableFilter = true;
-  bool httpsLowering = false;
   std::string secret = "";
   std::string RPCServer = "";
   ~DownloadUtils();
