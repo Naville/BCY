@@ -718,7 +718,7 @@ void DownloadUtils::downloadFromInfo(DownloadUtils::Info Inf, bool runFilter) {
       arg["params"] = web::json::value::array(tmp);
       web::http::client::http_client client(RPCServer);
       web::json::value rep =
-          client.request(web::http::methods::POST, U("/"), arg)
+          client.request(web::http::methods::POST, _XPLATSTR("/"), arg)
               .get()
               .extract_json(true)
               .get();

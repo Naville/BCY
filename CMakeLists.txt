@@ -9,6 +9,7 @@ set(CMAKE_CXX_FLAGS_MINSIZEREL "${CMAKE_CXX_FLAGS_RELEASE} -O3 -D NDEBUG -Wall")
 option(SQLITECPP_INTERNAL_SQLITE "" OFF)
 option(BCY_BUILD_DOCS "Generate Documentation" OFF)
 add_compile_definitions("SQLITE_OMIT_LOAD_EXTENSION")
+add_compile_definitions("_TURN_OFF_PLATFORM_STRING=1")
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/SQLiteCpp EXCLUDE_FROM_ALL)
 find_package(PkgConfig REQUIRED)
 SET(Boost_USE_STATIC_LIBS ON)
@@ -48,11 +49,9 @@ target_link_libraries(BCYDownloadUtils BCYCore SQLiteCpp sqlite3 pthread z)
 target_include_directories(BCYDownloader PUBLIC ${CMAKE_CURRENT_LIST_DIR}/SQLiteCpp/include)
 target_link_libraries(BCYDownloader BCYDownloadUtils)
 
-IF(UNIX AND NOT APPLE)
-  # Ubuntu had some issues with this sort of stuff
-  target_link_libraries(BCYDownloader -ldl -lcrypto)
-ENDIF()
-target_link_libraries(BCYDownloader -ldl -L/usr/local/Cellar/openssl@1.1/1.1.1f/lib -lssl -lcrypto)
+set(OPENSSL_USE_STATIC_LIBS TRUE)
+find_package(OpenSSL REQUIRED)
+target_link_libraries(BCYDownloader OpenSSL::Crypto)
 
 install(TARGETS BCYDownloader DESTINATION bin COMPONENT BCYDownloader)
 install(TARGETS BCYCore BCYDownloadUtils

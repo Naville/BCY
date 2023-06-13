@@ -27,7 +27,7 @@ Core::Core() {
   string alp = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
   string width = generateRandomString("1234567890", 4);
   string height = generateRandomString("1234567890", 4);
-  Params = {{"version_code", "4.4.1"},
+  Params = {{"version_code", "5.4.6"},
             {"mix_mode", "1"},
             {"account_sdk_source", "app"},
             {"language", "en-US"},
@@ -37,7 +37,7 @@ Core::Core() {
             {"screen_width", width},
             {"os_api", "18"},
             {"ac", "WIFI"},
-            {"os_version", "19.0.0"},
+            {"os_version", "14.0.0"},
             {"device_platform", "iphone"},
             {"device_type", "iPhone14,5"},
             {"vid", ""},
@@ -45,7 +45,7 @@ Core::Core() {
             {"openudid", generateRandomString(alp, 40)},
             {"idfa", generateRandomString(alp, 40)}};
   this->Headers["User-Agent"] =
-      "bcy 4.3.2 rv:4.3.2.6146 (iPad; iPhone OS 9.3.3; en_US) Cronet";
+      "bcy 5.4.6 rv:5.4.6.2 (iPad; iPhone OS 14.0.0; en_US) Cronet";
   this->Headers["Cookie"] = "";
 }
 string Core::EncryptData(string Input) {
@@ -75,12 +75,12 @@ http_response Core::GET(string URL, web::json::value Para,
   cfg.set_validate_certificates(false);
 #endif
   cfg.set_timeout(std::chrono::seconds(this->timeout));
-  http_client client(U(URL), cfg);
+  http_client client(_XPLATSTR(URL), cfg);
   uri_builder builder;
   for (map<string, string>::iterator it = Par.begin(); it != Par.end(); it++) {
     string key = it->first;
     string val = it->second;
-    builder.append_query(U(key), U(val));
+    builder.append_query(_XPLATSTR(key), _XPLATSTR(val));
   }
   string body = "";
   if (Para.is_null() == false) {
@@ -144,12 +144,12 @@ http_response Core::POST(string URL, web::json::value Para, bool Auth,
     web::web_proxy proxy(this->proxy);
     cfg.set_proxy(proxy);
   }
-  http_client client(U(URL), cfg);
+  http_client client(_XPLATSTR(URL), cfg);
   uri_builder builder;
   for (map<string, string>::iterator it = Par.begin(); it != Par.end(); it++) {
     string key = it->first;
     string val = it->second;
-    builder.append_query(U(key), U(val));
+    builder.append_query(_XPLATSTR(key), _XPLATSTR(val));
   }
   string body = "";
   for (auto iter = Para.as_object().cbegin(); iter != Para.as_object().cend();
@@ -313,7 +313,7 @@ web::json::value Core::qiniu_upload(web::json::value token, vector<char> &data,
   copy(part2.begin(), part2.end(), back_inserter(body));
 
   http_request req;
-  http_client client(U(cloud_uploader));
+  http_client client(_XPLATSTR(cloud_uploader));
   req.set_method(methods::POST);
   req.headers().add("Content-Length", to_string(body.size()));
   req.headers().add(
@@ -1044,5 +1044,33 @@ Core::item_favor_itemlist(BCYListIteratorCallback callback) {
     }
   }
   return ret;
+}
+std::vector<web::json::value> Core::user_followlist(std::string UID,std::string type,BCYListIteratorCallback callback){
+    vector<web::json::value> ret;
+    uint64_t p = 0;
+    web::json::value j;
+    j["uid"] = web::json::value(UID);
+    j["type"] = web::json::value(type);
+    j["limit"] = web::json::value(20);
+    while (true) {
+        j["p"] = p;
+        p++;
+        auto R = POST("apiv2/user/followlist", j, true, true);
+        cout<<R.extract_string().get()<<" XXX\n";
+        web::json::value foo = R.extract_json(true).get();
+        web::json::value data = foo["data"]["ItemList"];
+        if (data.size() == 0) {
+            return ret;
+        }
+        for (web::json::value &ele : data.as_array()) {
+            if (callback) {
+                if (!callback(ele)) {
+                    return ret;
+                }
+            }
+            ret.push_back(ele);
+        }
+    }
+
 }
 } // namespace BCY

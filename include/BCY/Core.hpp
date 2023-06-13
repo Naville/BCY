@@ -171,7 +171,7 @@ public:
     std::vector<web::json::value> circle_itemhotworks(std::string circle_id,
                                                       BCYListIteratorCallback callback = BCYListIteratorCallback());
     std::vector<web::json::value> item_favor_itemlist(BCYListIteratorCallback callback = BCYListIteratorCallback());
-
+    std::vector<web::json::value> user_followlist(std::string UID,std::string type,BCYListIteratorCallback callback= BCYListIteratorCallback());
 private:
     std::string bda_hexMixedString(std::string input);
     std::map<std::string, std::string> Params;

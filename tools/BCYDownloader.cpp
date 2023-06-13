@@ -434,7 +434,7 @@ int main(int argc, char **argv) {
       "config",
       po::value<string>()->default_value(BCY::expand_user("~/BCY.json")),
       "Initialize Downloader using JSON at provided path")(
-      "mode", po::value<mode>()->default_value(mode::Interactive),
+      "mode", po::value<mode>()->default_value(mode::JSON),
       "Execution Mode")(
       "log-level",
       po::value<logging::trivial::severity_level>()->default_value(
@@ -467,8 +467,8 @@ int main(int argc, char **argv) {
       "email", po::value<string>(), "BCY Account email")(
       "password", po::value<string>(), "BCY Account password")(
       "DBPath", po::value<string>()->default_value(""), "BCY Database Path")(
-      "UID", po::value<string>()->default_value(""), "BCY UID")(
-      "sessionKey", po::value<string>()->default_value(""), "BCY sessionKey")(
+      "UID", "BCY UID")(
+      "sessionKey", "BCY sessionKey")(
       "paths", po::value<vector<string>>(), "paths to blocker");
   pos.add("paths", -1);
 
@@ -566,7 +566,7 @@ int main(int argc, char **argv) {
           config[K] = conf[K];
         }
       }
-      for (string K : {"email", "password", "SaveBase"}) {
+      for (string K : {"email", "password", "SaveBase","sessionKey","UID"}) {
         if (vm.count(K)) {
           config[K] = web::json::value(vm[K].as<string>());
         } else if (conf.has_field(K)) {
@@ -657,6 +657,8 @@ int main(int argc, char **argv) {
                  config.at("sessionKey").is_null() == false) {
         loginWithSKey(config["UID"].as_string(),
                       config["sessionKey"].as_string());
+        DU->core.user_followlist("20121","follow");
+        abort();
       }
     } else {
       cout << "Failed to Open File at:" << JSONPath << "!" << endl;
